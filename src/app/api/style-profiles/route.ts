@@ -1,6 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/api/auth";
-import { getSystemPresets, getByUserId } from "@/lib/models/styleProfile";
+import { jsonError } from "@/lib/api/errors";
+import {
+  getSystemPresets,
+  getByUserId,
+  create as createStyleProfile,
+} from "@/lib/models/styleProfile";
+import { validateCreateStyleProfile } from "@/lib/validators/styleProfile";
+import { analyzeTone } from "@/lib/style/analyzeTone";
 import type { StyleProfile } from "@/lib/models/modelTypes";
 
 type StyleProfileSummary = {
@@ -29,4 +36,45 @@ export async function GET(request: NextRequest) {
   const customs = getByUserId(auth.userId).map(toSummary);
 
   return NextResponse.json({ presets, customs });
+}
+
+export async function POST(request: NextRequest) {
+  const auth = requireAuthUser(request);
+  if (!auth.ok) return auth.response;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError(
+      400,
+      "VALIDATION_ERROR",
+      "Request body must be valid JSON"
+    );
+  }
+
+  const validation = validateCreateStyleProfile(body);
+  if (!validation.valid) {
+    return jsonError(
+      400,
+      validation.error.code,
+      validation.error.message,
+      validation.error.fields
+    );
+  }
+
+  const { name, sampleTexts } = validation.data;
+  const analyzedTone = analyzeTone(sampleTexts);
+
+  const styleProfile = createStyleProfile({
+    userId: auth.userId,
+    name,
+    sampleTexts,
+    analyzedTone,
+  });
+
+  return NextResponse.json(
+    { styleProfile },
+    { status: 201 }
+  );
 }
