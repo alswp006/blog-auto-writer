@@ -1,0 +1,36 @@
+{
+  "id": "0004",
+  "title": "API foundation: auth + JSON error helpers + health route",
+  "epic": "Epic 2 (API routes)",
+  "task": {
+    "description": "Add shared API utilities for enforcing authenticated session and emitting SPEC-compliant error JSON. Include a small authenticated-only health route to manually verify 401 behavior when logged out and 200 when logged in.",
+    "acceptance_criteria": [
+      "requireAuthUser(request) returns an object containing userId for authenticated requests; unauthenticated requests receive status 401 with body.error.code as a non-empty string.",
+      "jsonError(status, code, message, fields?) returns JSON matching {error:{code,message}} and includes fields only when provided.",
+      "GET /api/_health-auth returns 401 when logged out and 200 with {ok:true} when logged in.",
+      "pnpm build succeeds."
+    ]
+  },
+  "covers": [
+    "F1-AC6 (enabler)",
+    "F2-AC8 (enabler)",
+    "F3-AC7 (enabler)",
+    "F4-AC7 (enabler)"
+  ],
+  "files": [
+    "src/lib/api/errors.ts",
+    "src/lib/api/auth.ts",
+    "src/app/api/_health-auth/route.ts"
+  ],
+  "definition_of_done": [
+    "All API errors follow the documented error shape.",
+    "Auth enforcement is server-side and reusable across routes."
+  ],
+  "depends_on": [
+    "0001"
+  ],
+  "db_schema": "",
+  "api_contract": "GET /api/_health-auth {} → {ok:true} | 401 {error}",
+  "dependencies": [],
+  "ui_requirements": ""
+}

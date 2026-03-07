@@ -1,0 +1,29 @@
+{
+  "id": "0003",
+  "title": "App schema: posts table (schema only)",
+  "epic": "Epic 1 (DB/models)",
+  "task": {
+    "description": "Add posts table to app schema for completeness, matching SPEC columns, JSON defaults, status check, and FK delete rules. No API/UI yet; only ensure DB can store drafts and generated content safely.",
+    "acceptance_criteria": [
+      "DB contains posts table with CHECK(status IN ('draft','generated')).",
+      "hashtags_ko_json and hashtags_en_json default to the literal string '[]' when omitted on insert.",
+      "FKs exist for user_id (ON DELETE CASCADE), place_id (ON DELETE RESTRICT), style_profile_id (ON DELETE RESTRICT).",
+      "pnpm build succeeds."
+    ]
+  },
+  "covers": [],
+  "files": [
+    "src/lib/db/appSchema.ts"
+  ],
+  "definition_of_done": [
+    "Schema applies cleanly on startup for existing and fresh DBs.",
+    "No runtime errors in schema init due to FK order."
+  ],
+  "depends_on": [
+    "0002"
+  ],
+  "db_schema": "CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, place_id INTEGER NOT NULL, style_profile_id INTEGER NOT NULL, title_ko TEXT NULL, content_ko TEXT NULL, hashtags_ko_json TEXT NOT NULL DEFAULT '[]', title_en TEXT NULL, content_en TEXT NULL, hashtags_en_json TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL CHECK(status IN ('draft','generated')), generation_error TEXT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(place_id) REFERENCES places(id) ON DELETE RESTRICT, FOREIGN KEY(style_profile_id) REFERENCES style_profiles(id) ON DELETE RESTRICT);",
+  "api_contract": "",
+  "dependencies": [],
+  "ui_requirements": ""
+}

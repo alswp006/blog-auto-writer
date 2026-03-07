@@ -1,0 +1,33 @@
+{
+  "id": "0007",
+  "title": "API: GET /api/style-profiles (presets + customs list)",
+  "epic": "Epic 2 (API routes)",
+  "task": {
+    "description": "Implement GET /api/style-profiles to return exactly two buckets: system presets (readable by any authenticated user) and the caller’s custom profiles. Return only summary fields in camelCase and enforce auth.",
+    "acceptance_criteria": [
+      "Unauthenticated GET /api/style-profiles returns 401 with JSON containing error.code.",
+      "Authenticated GET /api/style-profiles returns 200 and body.presets.length===2 on a fresh DB.",
+      "Returned objects are camelCase and include only summary fields (id, name, isSystemPreset, createdAt, updatedAt).",
+      "Customs list contains only rows where userId matches the session user id (no cross-user rows).",
+      "pnpm build succeeds."
+    ]
+  },
+  "covers": [
+    "F2-AC1",
+    "F2-AC8"
+  ],
+  "files": [
+    "src/app/api/style-profiles/route.ts"
+  ],
+  "definition_of_done": [
+    "Route uses shared auth helper and model list function.",
+    "System presets are included even when caller has no customs."
+  ],
+  "depends_on": [
+    "0004"
+  ],
+  "db_schema": "",
+  "api_contract": "GET /api/style-profiles {} → {presets: StyleProfileSummary[], customs: StyleProfileSummary[]} | 401 {error}",
+  "dependencies": [],
+  "ui_requirements": ""
+}

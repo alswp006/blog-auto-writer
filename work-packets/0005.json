@@ -1,0 +1,33 @@
+{
+  "id": "0005",
+  "title": "API: GET /api/profile (read current user profile)",
+  "epic": "Epic 2 (API routes)",
+  "task": {
+    "description": "Implement GET /api/profile to return the authenticated user’s profile in camelCase, or null when no row exists. Enforce auth via shared helper and ensure response includes only contract fields.",
+    "acceptance_criteria": [
+      "Unauthenticated GET /api/profile returns 401 with JSON containing error.code.",
+      "Authenticated user with no user_profiles row receives 200 with body.profile === null.",
+      "Authenticated user with a profile receives 200 with body.profile.nickname as a string and body.profile.ageGroup/preferredTone/primaryPlatform matching stored values.",
+      "Response uses camelCase keys (ageGroup, preferredTone, primaryPlatform, createdAt, updatedAt) and does not include userId or id.",
+      "pnpm build succeeds."
+    ]
+  },
+  "covers": [
+    "F1-AC1",
+    "F1-AC6"
+  ],
+  "files": [
+    "src/app/api/profile/route.ts"
+  ],
+  "definition_of_done": [
+    "Route uses requireAuthUser and model helper (no raw session handling inside handler).",
+    "No data from other users can be returned."
+  ],
+  "depends_on": [
+    "0004"
+  ],
+  "db_schema": "",
+  "api_contract": "GET /api/profile {} → {profile: {nickname, ageGroup, preferredTone, primaryPlatform, createdAt, updatedAt} | null} | 401 {error}",
+  "dependencies": [],
+  "ui_requirements": ""
+}

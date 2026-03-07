@@ -1,0 +1,40 @@
+{
+  "id": "0001",
+  "title": "App schema + models: user_profiles + style_profiles (with 2 seeded presets)",
+  "epic": "Epic 1 (DB/models)",
+  "task": {
+    "description": "Create app-specific schema module and wire DB init to apply it. Add user_profiles + style_profiles tables with SPEC constraints and seed exactly 2 system preset rows. Provide strict TS model helpers + snake↔camel mapping types.",
+    "acceptance_criteria": [
+      "Running the app creates tables user_profiles and style_profiles with CHECK constraints matching SPEC (enums, length, is_system_preset in 0/1).",
+      "On a fresh DB, querying style_profiles where is_system_preset=1 returns exactly 2 rows and both have user_id IS NULL.",
+      "userProfile.getByUserId(userId) returns null when no row exists and returns a typed object when a row exists.",
+      "Creating a second user_profiles row for the same user_id throws/returns a DB error due to UNIQUE(user_id).",
+      "pnpm build succeeds with TypeScript strict enabled."
+    ]
+  },
+  "covers": [
+    "F1-AC1 (data support)",
+    "F1-AC2 (data support)",
+    "F1-AC3 (data support)",
+    "F1-AC4 (data support)",
+    "F2-AC1 (data support)"
+  ],
+  "files": [
+    "src/lib/db/appSchema.ts",
+    "src/lib/db.ts",
+    "src/lib/models/modelTypes.ts",
+    "src/lib/models/userProfile.ts",
+    "src/lib/models/styleProfile.ts"
+  ],
+  "definition_of_done": [
+    "Tables created via schema init without manual migration steps.",
+    "Seed executes idempotently (no duplicate presets on restart).",
+    "All model helpers compile under TypeScript strict.",
+    "No changes to template auth flows."
+  ],
+  "depends_on": [],
+  "db_schema": "CREATE TABLE IF NOT EXISTS user_profiles (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE, nickname TEXT NOT NULL CHECK(length(nickname) BETWEEN 1 AND 30), age_group TEXT NOT NULL CHECK(age_group IN ('20s','30s','40plus')), preferred_tone TEXT NOT NULL CHECK(preferred_tone IN ('casual','detailed')), primary_platform TEXT NOT NULL CHECK(primary_platform IN ('naver','tistory','medium')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);\n\nCREATE TABLE IF NOT EXISTS style_profiles (id INTEGER PRIMARY KEY, user_id INTEGER NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 40), is_system_preset INTEGER NOT NULL CHECK(is_system_preset IN (0,1)), sample_texts_json TEXT NOT NULL, analyzed_tone_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,\n  CHECK((is_system_preset=1 AND user_id IS NULL) OR (is_system_preset=0 AND user_id IS NOT NULL)));\n\n-- Seed: insert exactly 2 system presets (user_id NULL, is_system_preset=1) if missing.",
+  "api_contract": "",
+  "dependencies": [],
+  "ui_requirements": ""
+}

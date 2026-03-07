@@ -1,0 +1,34 @@
+{
+  "id": "0010",
+  "title": "UI: Onboarding Profile page (create/update settings)",
+  "epic": "Epic 3 (UI pages)",
+  "task": {
+    "description": "Create a responsive onboarding page that loads existing profile via GET /api/profile and allows creating/updating via POST/PATCH. Include loading skeleton, validation error rendering from API fields, and a clear success state.",
+    "acceptance_criteria": [
+      "When logged in and no profile exists, the page shows an empty form and submitting valid values results in a visible success message without a full page reload.",
+      "When a profile exists, the form fields are prefilled with the current values from GET /api/profile.",
+      "When the API returns 400 with error.fields, each field message is rendered under the matching input/select.",
+      "While the initial GET request is pending, a skeleton (animate-pulse) is visible and the submit button is disabled.",
+      "Layout is mobile-responsive with inputs full-width and buttons meeting min-h-[44px]."
+    ]
+  },
+  "covers": [
+    "F1-AC2",
+    "F1-AC4",
+    "F1-AC5"
+  ],
+  "files": [
+    "src/app/(app)/onboarding/profile/page.tsx"
+  ],
+  "definition_of_done": [
+    "Uses existing UI components (Card, Input, Button, Textarea/Select equivalents) and Tailwind v4 vars.",
+    "No horizontal scroll on mobile; content is within max-w-6xl container sections."
+  ],
+  "depends_on": [
+    "0006"
+  ],
+  "db_schema": "",
+  "api_contract": "",
+  "dependencies": [],
+  "ui_requirements": "Full-width sections; content in max-w-6xl mx-auto px-4 md:px-6 lg:px-8. Card form with nickname + 3 enum selects. States: loading skeleton, inline field errors, success banner. CTA to dashboard link."
+}

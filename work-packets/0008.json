@@ -1,0 +1,38 @@
+{
+  "id": "0008",
+  "title": "API: POST /api/style-profiles (create custom + analyzedTone heuristic)",
+  "epic": "Epic 2 (API routes)",
+  "task": {
+    "description": "Add POST /api/style-profiles for custom creation. Validate sampleTexts length is 3–5 and each text is non-empty. Compute analyzedTone via an MVP heuristic that always returns a non-null object and persist JSON strings in DB.",
+    "acceptance_criteria": [
+      "POST with sampleTexts length 3 returns 200 and response.styleProfile.sampleTexts.length===3.",
+      "Response includes styleProfile.analyzedTone where typeof is 'object' and value is not null.",
+      "POST with sampleTexts length 2 returns 400 with error.code==='VALIDATION_ERROR' and error.fields.sampleTexts as a non-empty string.",
+      "POST with sampleTexts length 6 returns 400 with error.fields.sampleTexts as a non-empty string.",
+      "Created style profile appears in subsequent GET /api/style-profiles under customs for the same user."
+    ]
+  },
+  "covers": [
+    "F2-AC2",
+    "F2-AC3",
+    "F2-AC5",
+    "F2-AC6"
+  ],
+  "files": [
+    "src/app/api/style-profiles/route.ts",
+    "src/lib/validators/styleProfile.ts",
+    "src/lib/style/analyzeTone.ts"
+  ],
+  "definition_of_done": [
+    "POST handler enforces auth and ownership (isSystemPreset=0, userId=session user).",
+    "DB stores sample_texts_json and analyzed_tone_json as JSON strings.",
+    "pnpm build succeeds."
+  ],
+  "depends_on": [
+    "0007"
+  ],
+  "db_schema": "",
+  "api_contract": "POST /api/style-profiles {name:string, sampleTexts:string[]} → {styleProfile:{id,name,isSystemPreset:false,sampleTexts:string[],analyzedTone:object,createdAt,updatedAt}} | 401 {error} | 400 {error}",
+  "dependencies": [],
+  "ui_requirements": ""
+}

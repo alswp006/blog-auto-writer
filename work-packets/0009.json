@@ -1,0 +1,33 @@
+{
+  "id": "0009",
+  "title": "API: GET /api/style-profiles/:id (detail + authorization)",
+  "epic": "Epic 2 (API routes)",
+  "task": {
+    "description": "Implement GET /api/style-profiles/:id to return full style profile data. System presets are readable by any authenticated user. Custom profiles are readable only when the row’s userId matches session user id; otherwise return 404.",
+    "acceptance_criteria": [
+      "Unauthenticated request returns 401 with JSON containing error.code.",
+      "Requesting a system preset id as any authenticated user returns 200 with styleProfile.isSystemPreset===true and styleProfile.sampleTexts as an array.",
+      "Requesting a custom profile id owned by the caller returns 200 with styleProfile.sampleTexts.length between 3 and 5 inclusive.",
+      "Requesting a custom profile id owned by a different user returns 404 with error.code==='NOT_FOUND'.",
+      "pnpm build succeeds."
+    ]
+  },
+  "covers": [
+    "F2-AC4",
+    "F2-AC7"
+  ],
+  "files": [
+    "src/app/api/style-profiles/[id]/route.ts"
+  ],
+  "definition_of_done": [
+    "Handler never leaks existence of another user’s custom profile (404 instead of 403).",
+    "Response uses camelCase and excludes userId field."
+  ],
+  "depends_on": [
+    "0008"
+  ],
+  "db_schema": "",
+  "api_contract": "GET /api/style-profiles/:id {} → {styleProfile:{id,name,isSystemPreset,sampleTexts:string[],analyzedTone:object,createdAt,updatedAt}} | 401 {error} | 404 {error}",
+  "dependencies": [],
+  "ui_requirements": ""
+}

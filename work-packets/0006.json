@@ -1,0 +1,37 @@
+{
+  "id": "0006",
+  "title": "API: POST+PATCH /api/profile (create + partial update + validation)",
+  "epic": "Epic 2 (API routes)",
+  "task": {
+    "description": "Extend /api/profile route to support POST create and PATCH partial update with strict validation per SPEC. Prevent duplicates (one profile per user) and return NOT_FOUND on PATCH when the profile row is missing.",
+    "acceptance_criteria": [
+      "POST with valid input creates a row and returns 200 with profile.nickname exactly equal to request.nickname.",
+      "POST when a profile already exists returns 400 with error.code==='VALIDATION_ERROR'.",
+      "POST with invalid ageGroup (e.g., '10s') returns 400 with error.code==='VALIDATION_ERROR' and error.fields.ageGroup as a non-empty string.",
+      "PATCH when no profile exists returns 404 with error.code==='NOT_FOUND'.",
+      "PATCH with {preferredTone:'detailed'} returns 200 and profile.preferredTone==='detailed'."
+    ]
+  },
+  "covers": [
+    "F1-AC2",
+    "F1-AC3",
+    "F1-AC4",
+    "F1-AC5"
+  ],
+  "files": [
+    "src/app/api/profile/route.ts",
+    "src/lib/validators/profile.ts"
+  ],
+  "definition_of_done": [
+    "Validator enforces nickname length 1..30 and enum membership for all enum fields.",
+    "Handlers return only contract fields and camelCase keys.",
+    "No unauthenticated access path exists (401 on missing session)."
+  ],
+  "depends_on": [
+    "0005"
+  ],
+  "db_schema": "",
+  "api_contract": "POST /api/profile {nickname,ageGroup,preferredTone,primaryPlatform} → {profile} | 401 {error} | 400 {error}\nPATCH /api/profile {nickname?,ageGroup?,preferredTone?,primaryPlatform?} → {profile} | 401 {error} | 400 {error} | 404 {error}",
+  "dependencies": [],
+  "ui_requirements": ""
+}

@@ -1,0 +1,35 @@
+{
+  "id": "0011",
+  "title": "UI: Style Profiles page (list presets/customs + create custom)",
+  "epic": "Epic 3 (UI pages)",
+  "task": {
+    "description": "Build a responsive page to list system preset and custom style profiles from GET /api/style-profiles, and a create form that submits POST /api/style-profiles with 3–5 sample texts. Show empty, loading, and error states.",
+    "acceptance_criteria": [
+      "On load, the page fetches GET /api/style-profiles and renders two sections: Presets and Your styles; presets render exactly 2 cards on a fresh DB.",
+      "Submitting the create form with 3 sample texts creates a new custom card that appears after refresh (re-fetch).",
+      "Submitting with 2 or 6 sample texts shows the API validation message from error.fields.sampleTexts on the page.",
+      "If the GET request fails (non-2xx), an error banner with a Retry button is shown and Retry re-attempts the fetch.",
+      "Grid is responsive: 1 column on mobile, 2 on sm, 3 on lg, with card hover shadow."
+    ]
+  },
+  "covers": [
+    "F2-AC1",
+    "F2-AC2",
+    "F2-AC5",
+    "F2-AC6"
+  ],
+  "files": [
+    "src/app/(app)/style-profiles/page.tsx"
+  ],
+  "definition_of_done": [
+    "Uses Tailwind color vars only and lucide-react icons if available in repo.",
+    "All interactions work without leaving the page (client-side fetch)."
+  ],
+  "depends_on": [
+    "0008"
+  ],
+  "db_schema": "",
+  "api_contract": "",
+  "dependencies": [],
+  "ui_requirements": "Sections: header + create card (Textarea list inputs) + grids for presets/customs. States: skeleton, empty state (icon+CTA), error banner+retry. Buttons min-h-[44px], inputs w-full."
+}
