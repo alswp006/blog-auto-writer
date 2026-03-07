@@ -327,7 +327,7 @@ export default function StyleProfilesPage() {
         </div>
 
         {/* Create form + contextual info */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <div className="space-y-4">
             <CreateForm onCreated={fetchProfiles} />
             {error && (

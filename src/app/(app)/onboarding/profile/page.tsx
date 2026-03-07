@@ -28,7 +28,7 @@ function LoadingSkeleton() {
   return (
     <section className="w-full py-20">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
-        <div className="max-w-lg mx-auto animate-pulse space-y-6">
+        <div className="max-w-2xl mx-auto animate-pulse space-y-6">
           <div>
             <div className="h-7 bg-[var(--bg-elevated)] rounded w-48" />
             <div className="h-4 bg-[var(--bg-elevated)] rounded w-64 mt-2" />
@@ -123,7 +123,7 @@ export default function OnboardingProfilePage() {
   return (
     <section className="w-full py-20">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
-        <div className="max-w-lg mx-auto space-y-6">
+        <div className="max-w-2xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-bold">
               {hasProfile ? "프로필 수정" : "프로필 설정"}
