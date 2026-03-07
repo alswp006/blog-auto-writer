@@ -21,6 +21,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ hasAccess: false });
   }
 
-  const hasAccess = canAccessFeature(user.id, feature);
+  const hasAccess = await canAccessFeature(user.id, feature);
   return NextResponse.json({ hasAccess });
 }

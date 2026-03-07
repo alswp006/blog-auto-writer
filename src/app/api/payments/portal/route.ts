@@ -16,7 +16,7 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const subscription = getSubscriptionByUserId(user.id);
+  const subscription = await getSubscriptionByUserId(user.id);
   if (!subscription?.stripe_customer_id) {
     return NextResponse.json(
       { error: "No billing account found" },

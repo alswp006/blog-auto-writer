@@ -5,7 +5,7 @@ import * as platformConnectionModel from "@/lib/models/platformConnection";
 
 // Save Medium connection
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   const meData = await meRes.json();
   const mediumUser = meData.data;
 
-  const connection = platformConnectionModel.upsert(auth.userId, "medium", {
+  const connection = await platformConnectionModel.upsert(auth.userId, "medium", {
     accessToken: integrationToken,
     platformUserId: mediumUser.id,
     platformUsername: mediumUser.username,
@@ -53,9 +53,9 @@ export async function POST(request: NextRequest) {
 
 // Disconnect Medium
 export async function DELETE(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  platformConnectionModel.remove(auth.userId, "medium");
+  await platformConnectionModel.remove(auth.userId, "medium");
   return NextResponse.json({ success: true });
 }

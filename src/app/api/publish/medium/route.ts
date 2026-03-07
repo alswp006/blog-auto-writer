@@ -7,11 +7,11 @@ import { publishToMedium } from "@/lib/publish/medium";
 import { recordPublish } from "@/lib/models/publishHistory";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   // Try DB connection first, then fall back to env vars
-  const connection = platformConnectionModel.getByUserAndPlatform(auth.userId, "medium");
+  const connection = await platformConnectionModel.getByUserAndPlatform(auth.userId, "medium");
   const integrationToken = connection?.accessToken ?? process.env.MEDIUM_INTEGRATION_TOKEN;
 
   if (!integrationToken) {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "postId is required" }, { status: 400 });
   }
 
-  const post = postModel.getById(postId);
+  const post = await postModel.getById(postId);
   if (!post || post.userId !== auth.userId) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
@@ -48,11 +48,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await publishToMedium({ integrationToken }, title, content, tags);
-    recordPublish(postId, "medium", lang as "ko" | "en", result.url);
+    await recordPublish(postId, "medium", lang as "ko" | "en", result.url);
     return NextResponse.json({ url: result.url, mediumPostId: result.postId });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Publish failed";
-    recordPublish(postId, "medium", lang as "ko" | "en", null, msg);
+    await recordPublish(postId, "medium", lang as "ko" | "en", null, msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

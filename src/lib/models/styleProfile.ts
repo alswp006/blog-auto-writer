@@ -12,32 +12,32 @@ export type CreateStyleProfileInput = {
   analyzedTone: Record<string, string>;
 };
 
-export function getSystemPresets(): StyleProfile[] {
-  const rows = query<StyleProfileRow>(
+export async function getSystemPresets(): Promise<StyleProfile[]> {
+  const rows = await query<StyleProfileRow>(
     "SELECT * FROM style_profiles WHERE is_system_preset = 1",
   );
   return rows.map(rowToStyleProfile);
 }
 
-export function getByUserId(userId: number): StyleProfile[] {
-  const rows = query<StyleProfileRow>(
+export async function getByUserId(userId: number): Promise<StyleProfile[]> {
+  const rows = await query<StyleProfileRow>(
     "SELECT * FROM style_profiles WHERE user_id = ? AND is_system_preset = 0",
     userId,
   );
   return rows.map(rowToStyleProfile);
 }
 
-export function getById(id: number): StyleProfile | null {
-  const row = queryOne<StyleProfileRow>(
+export async function getById(id: number): Promise<StyleProfile | null> {
+  const row = await queryOne<StyleProfileRow>(
     "SELECT * FROM style_profiles WHERE id = ?",
     id,
   );
   return row ? rowToStyleProfile(row) : null;
 }
 
-export function create(input: CreateStyleProfileInput): StyleProfile {
+export async function create(input: CreateStyleProfileInput): Promise<StyleProfile> {
   const now = new Date().toISOString();
-  const result = execute(
+  const result = await execute(
     `INSERT INTO style_profiles (user_id, name, is_system_preset, sample_texts_json, analyzed_tone_json, created_at, updated_at)
      VALUES (?, ?, 0, ?, ?, ?, ?)`,
     input.userId,
@@ -47,7 +47,7 @@ export function create(input: CreateStyleProfileInput): StyleProfile {
     now,
     now,
   );
-  const row = queryOne<StyleProfileRow>(
+  const row = await queryOne<StyleProfileRow>(
     "SELECT * FROM style_profiles WHERE id = ?",
     result.lastInsertRowid,
   );

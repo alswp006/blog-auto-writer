@@ -21,10 +21,10 @@ function profileToResponse(profile: any) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  const profile = getByUserId(auth.userId);
+  const profile = await getByUserId(auth.userId);
 
   if (!profile) {
     return NextResponse.json({ profile: null });
@@ -36,11 +36,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   // Check if profile already exists
-  const existing = getByUserId(auth.userId);
+  const existing = await getByUserId(auth.userId);
   if (existing) {
     return jsonError(
       400,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const profile = create({
+  const profile = await create({
     userId: auth.userId,
     nickname: validation.data.nickname,
     ageGroup: validation.data.ageGroup,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: unknown;
@@ -98,7 +98,7 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const updated = update(auth.userId, {
+  const updated = await update(auth.userId, {
     ...validation.data,
     watermarkText: validation.data.watermarkText,
     watermarkPosition: validation.data.watermarkPosition,

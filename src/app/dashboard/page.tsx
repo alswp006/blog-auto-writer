@@ -40,14 +40,14 @@ export default async function DashboardPage() {
     redirect("/login?logged_out");
   }
 
-  const profile = userProfileModel.getByUserId(user.id);
+  const profile = await userProfileModel.getByUserId(user.id);
   if (!profile) {
     redirect("/onboarding/profile");
   }
 
-  const posts = postModel.listByUserWithMeta(user.id);
-  const monthCount = postModel.countByUserThisMonth(user.id);
-  const publishedPlatforms = publishHistoryModel.getPublishedPlatformsByPostIds(posts.map((p) => p.id));
+  const posts = await postModel.listByUserWithMeta(user.id);
+  const monthCount = await postModel.countByUserThisMonth(user.id);
+  const publishedPlatforms = await publishHistoryModel.getPublishedPlatformsByPostIds(posts.map((p) => p.id));
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8 py-8 space-y-8">

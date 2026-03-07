@@ -7,26 +7,26 @@ import * as postModel from "@/lib/models/post";
 import { getTistoryConfig } from "@/lib/publish/tistory";
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  const topPosts = postAnalytics.getTopPosts(auth.userId);
+  const topPosts = await postAnalytics.getTopPosts(auth.userId);
   return NextResponse.json({ topPosts });
 }
 
 // POST: Fetch latest stats from platforms and save
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  const posts = postModel.listByUser(auth.userId);
+  const posts = await postModel.listByUser(auth.userId);
   const allPostIds = posts.map((p) => p.id);
 
   if (allPostIds.length === 0) {
     return NextResponse.json({ updated: 0 });
   }
 
-  const publishedPlatforms = publishHistoryModel.getPublishedPlatformsByPostIds(allPostIds);
+  const publishedPlatforms = await publishHistoryModel.getPublishedPlatformsByPostIds(allPostIds);
   let updated = 0;
 
   // Try to fetch Tistory stats
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       if (!platforms.includes("tistory")) continue;
 
       // Get the published URL from history
-      const history = publishHistoryModel.getByPostId(post.id);
+      const history = await publishHistoryModel.getByPostId(post.id);
       const tistoryEntry = history.find((h) => h.platform === "tistory" && h.status === "published" && h.publishedUrl);
       if (!tistoryEntry?.publishedUrl) continue;
 
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
           const data = await res.json();
           const item = data.tistory?.item;
           if (item) {
-            postAnalytics.upsert(post.id, "tistory", {
+            await postAnalytics.upsert(post.id, "tistory", {
               views: parseInt(item.visited ?? "0", 10),
               likes: parseInt(item.likeCount ?? "0", 10),
               comments: parseInt(item.commentCount ?? "0", 10),
@@ -80,6 +80,6 @@ export async function POST(request: NextRequest) {
   // WordPress - could use REST API to fetch views if Jetpack is installed
   // For now, manual input is the fallback for non-Tistory platforms
 
-  const topPosts = postAnalytics.getTopPosts(auth.userId);
+  const topPosts = await postAnalytics.getTopPosts(auth.userId);
   return NextResponse.json({ updated, topPosts });
 }

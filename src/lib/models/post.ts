@@ -72,9 +72,9 @@ export type CreatePostInput = {
   isRevisit?: boolean;
 };
 
-export function create(input: CreatePostInput): Post {
+export async function create(input: CreatePostInput): Promise<Post> {
   const now = new Date().toISOString();
-  const result = execute(
+  const result = await execute(
     `INSERT INTO posts (user_id, place_id, style_profile_id, status, is_revisit, hashtags_ko_json, hashtags_en_json, created_at, updated_at)
      VALUES (?, ?, ?, 'draft', ?, '[]', '[]', ?, ?)`,
     input.userId,
@@ -84,24 +84,24 @@ export function create(input: CreatePostInput): Post {
     now,
     now,
   );
-  const row = queryOne<PostRow>("SELECT * FROM posts WHERE id = ?", result.lastInsertRowid);
+  const row = await queryOne<PostRow>("SELECT * FROM posts WHERE id = ?", result.lastInsertRowid);
   if (!row) throw new Error("Failed to create post");
   return rowToPost(row);
 }
 
-export function getById(id: number): Post | null {
-  const row = queryOne<PostRow>("SELECT * FROM posts WHERE id = ?", id);
+export async function getById(id: number): Promise<Post | null> {
+  const row = await queryOne<PostRow>("SELECT * FROM posts WHERE id = ?", id);
   return row ? rowToPost(row) : null;
 }
 
-export function listByUser(userId: number): Post[] {
-  return query<PostRow>(
+export async function listByUser(userId: number): Promise<Post[]> {
+  return (await query<PostRow>(
     "SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC, rowid DESC",
     userId,
-  ).map(rowToPost);
+  )).map(rowToPost);
 }
 
-export function updateGenerated(
+export async function updateGenerated(
   id: number,
   data: {
     titleKo: string;
@@ -111,9 +111,9 @@ export function updateGenerated(
     contentEn: string;
     hashtagsEn: string[];
   },
-): Post | null {
+): Promise<Post | null> {
   const now = new Date().toISOString();
-  execute(
+  await execute(
     `UPDATE posts SET title_ko = ?, content_ko = ?, hashtags_ko_json = ?,
      title_en = ?, content_en = ?, hashtags_en_json = ?,
      status = 'generated', generation_error = NULL, updated_at = ?
@@ -127,10 +127,10 @@ export function updateGenerated(
     now,
     id,
   );
-  return getById(id);
+  return await getById(id);
 }
 
-export function updateContent(
+export async function updateContent(
   id: number,
   data: {
     titleKo?: string;
@@ -140,12 +140,12 @@ export function updateContent(
     contentEn?: string;
     hashtagsEn?: string[];
   },
-): Post | null {
-  const existing = queryOne<PostRow>("SELECT * FROM posts WHERE id = ?", id);
+): Promise<Post | null> {
+  const existing = await queryOne<PostRow>("SELECT * FROM posts WHERE id = ?", id);
   if (!existing) return null;
 
   const now = new Date().toISOString();
-  execute(
+  await execute(
     `UPDATE posts SET title_ko = ?, content_ko = ?, hashtags_ko_json = ?,
      title_en = ?, content_en = ?, hashtags_en_json = ?, updated_at = ?
      WHERE id = ?`,
@@ -158,12 +158,12 @@ export function updateContent(
     now,
     id,
   );
-  return getById(id);
+  return await getById(id);
 }
 
-export function setError(id: number, error: string): void {
+export async function setError(id: number, error: string): Promise<void> {
   const now = new Date().toISOString();
-  execute(
+  await execute(
     "UPDATE posts SET generation_error = ?, updated_at = ? WHERE id = ?",
     error,
     now,
@@ -171,14 +171,14 @@ export function setError(id: number, error: string): void {
   );
 }
 
-export function schedule(
+export async function schedule(
   id: number,
   scheduledAt: string,
   platform: string,
   lang: string,
-): Post | null {
+): Promise<Post | null> {
   const now = new Date().toISOString();
-  execute(
+  await execute(
     `UPDATE posts SET scheduled_at = ?, scheduled_platform = ?, scheduled_lang = ?, updated_at = ? WHERE id = ?`,
     scheduledAt,
     platform,
@@ -186,33 +186,33 @@ export function schedule(
     now,
     id,
   );
-  return getById(id);
+  return await getById(id);
 }
 
-export function unschedule(id: number): Post | null {
+export async function unschedule(id: number): Promise<Post | null> {
   const now = new Date().toISOString();
-  execute(
+  await execute(
     `UPDATE posts SET scheduled_at = NULL, scheduled_platform = NULL, scheduled_lang = NULL, updated_at = ? WHERE id = ?`,
     now,
     id,
   );
-  return getById(id);
+  return await getById(id);
 }
 
-export function listDueForPublish(): Post[] {
+export async function listDueForPublish(): Promise<Post[]> {
   const now = new Date().toISOString();
-  return query<PostRow>(
+  return (await query<PostRow>(
     `SELECT * FROM posts
      WHERE scheduled_at IS NOT NULL
        AND scheduled_at <= ?
        AND status = 'generated'
      ORDER BY scheduled_at ASC`,
     now,
-  ).map(rowToPost);
+  )).map(rowToPost);
 }
 
-export function remove(id: number): boolean {
-  const result = execute("DELETE FROM posts WHERE id = ?", id);
+export async function remove(id: number): Promise<boolean> {
+  const result = await execute("DELETE FROM posts WHERE id = ?", id);
   return result.changes > 0;
 }
 
@@ -222,8 +222,8 @@ export type PostWithMeta = Post & {
   thumbnailPath: string | null;
 };
 
-export function listByUserWithMeta(userId: number): PostWithMeta[] {
-  const rows = query<PostRow & { place_name: string; place_category: string; thumbnail_path: string | null }>(
+export async function listByUserWithMeta(userId: number): Promise<PostWithMeta[]> {
+  const rows = await query<PostRow & { place_name: string; place_category: string; thumbnail_path: string | null }>(
     `SELECT p.*, pl.name as place_name, pl.category as place_category,
      (SELECT ph.file_path FROM photos ph WHERE ph.place_id = p.place_id ORDER BY ph.order_index ASC LIMIT 1) as thumbnail_path
      FROM posts p
@@ -240,10 +240,10 @@ export function listByUserWithMeta(userId: number): PostWithMeta[] {
   }));
 }
 
-export function countByUserThisMonth(userId: number): number {
+export async function countByUserThisMonth(userId: number): Promise<number> {
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const result = queryOne<{ cnt: number }>(
+  const result = await queryOne<{ cnt: number }>(
     "SELECT COUNT(*) as cnt FROM posts WHERE user_id = ? AND created_at >= ?",
     userId,
     firstDay,

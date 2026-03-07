@@ -34,9 +34,9 @@ function resolveTier(subscription: StripeSubscription): Tier {
   return "pro"; // Default paid subscription to pro
 }
 
-function resolveUserId(customerId: string, email?: string): number | null {
+async function resolveUserId(customerId: string, email?: string): Promise<number | null> {
   // Try finding by existing subscription
-  const sub = queryOne<{ user_id: number }>(
+  const sub = await queryOne<{ user_id: number }>(
     "SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?",
     customerId
   );
@@ -44,7 +44,7 @@ function resolveUserId(customerId: string, email?: string): number | null {
 
   // Try by email
   if (email) {
-    const user = queryOne<{ id: number }>(
+    const user = await queryOne<{ id: number }>(
       "SELECT id FROM users WHERE email = ?",
       email
     );
@@ -85,14 +85,14 @@ export async function POST(request: NextRequest) {
       const session = event.data.object as unknown as StripeCheckoutSession;
 
       if (session.mode === "subscription" && session.subscription) {
-        const userId = resolveUserId(
+        const userId = await resolveUserId(
           session.customer,
           session.customer_email || undefined
         );
         if (userId) {
           // We'll get full subscription details from the subscription.updated event
           // but set up the customer mapping now
-          upsertSubscription({
+          await upsertSubscription({
             userId,
             stripeCustomerId: session.customer,
             stripeSubscriptionId: session.subscription,
@@ -107,11 +107,11 @@ export async function POST(request: NextRequest) {
 
     case "customer.subscription.updated": {
       const subscription = event.data.object as unknown as StripeSubscription;
-      const userId = resolveUserId(subscription.customer);
+      const userId = await resolveUserId(subscription.customer);
       if (userId) {
         const tier = resolveTier(subscription);
         const isActive = ["active", "trialing"].includes(subscription.status);
-        upsertSubscription({
+        await upsertSubscription({
           userId,
           stripeCustomerId: subscription.customer,
           stripeSubscriptionId: subscription.id,
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     case "customer.subscription.deleted": {
       const subscription = event.data.object as unknown as StripeSubscription;
-      deactivateSubscription(subscription.id);
+      await deactivateSubscription(subscription.id);
       break;
     }
   }

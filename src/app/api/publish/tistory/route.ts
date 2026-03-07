@@ -7,11 +7,11 @@ import { publishToTistory } from "@/lib/publish/tistory";
 import { recordPublish } from "@/lib/models/publishHistory";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   // Try DB connection first, then fall back to env vars
-  const connection = platformConnectionModel.getByUserAndPlatform(auth.userId, "tistory");
+  const connection = await platformConnectionModel.getByUserAndPlatform(auth.userId, "tistory");
   const accessToken = connection?.accessToken ?? process.env.TISTORY_ACCESS_TOKEN;
   const blogName = connection?.blogName ?? process.env.TISTORY_BLOG_NAME;
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "postId is required" }, { status: 400 });
   }
 
-  const post = postModel.getById(postId);
+  const post = await postModel.getById(postId);
   if (!post || post.userId !== auth.userId) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
@@ -49,11 +49,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await publishToTistory({ accessToken, blogName }, title, content, tags);
-    recordPublish(postId, "tistory", lang as "ko" | "en", result.url);
+    await recordPublish(postId, "tistory", lang as "ko" | "en", result.url);
     return NextResponse.json({ url: result.url, tistoryPostId: result.postId });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Publish failed";
-    recordPublish(postId, "tistory", lang as "ko" | "en", null, msg);
+    await recordPublish(postId, "tistory", lang as "ko" | "en", null, msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -10,7 +10,7 @@ export type RequireAuthReturn =
   | { ok: true; userId: number }
   | { ok: false; response: ReturnType<typeof jsonError> };
 
-export function requireAuthUser(request: NextRequest): RequireAuthReturn {
+export async function requireAuthUser(request: NextRequest): Promise<RequireAuthReturn> {
   const cookieHeader = request.headers.get("cookie") ?? "";
   const match = cookieHeader.match(/session_token=([^;]+)/);
   const token = match?.[1] ?? null;
@@ -22,7 +22,7 @@ export function requireAuthUser(request: NextRequest): RequireAuthReturn {
     };
   }
 
-  const userId = getSessionUserId(token);
+  const userId = await getSessionUserId(token);
   if (!userId) {
     return {
       ok: false,

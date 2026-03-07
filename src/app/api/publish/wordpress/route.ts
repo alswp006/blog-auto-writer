@@ -6,7 +6,7 @@ import { publishToWordPress, getWordPressConfig } from "@/lib/publish/wordpress"
 import { recordPublish } from "@/lib/models/publishHistory";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const config = getWordPressConfig();
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "postId is required" }, { status: 400 });
   }
 
-  const post = postModel.getById(postId);
+  const post = await postModel.getById(postId);
   if (!post || post.userId !== auth.userId) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
@@ -44,11 +44,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await publishToWordPress(config, title, content, tags);
-    recordPublish(postId, "wordpress", lang as "ko" | "en", result.url);
+    await recordPublish(postId, "wordpress", lang as "ko" | "en", result.url);
     return NextResponse.json({ url: result.url, wordpressPostId: result.postId });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Publish failed";
-    recordPublish(postId, "wordpress", lang as "ko" | "en", null, msg);
+    await recordPublish(postId, "wordpress", lang as "ko" | "en", null, msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

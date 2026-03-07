@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "priceId is required" }, { status: 400 });
   }
 
-  const existing = getSubscriptionByUserId(user.id);
+  const existing = await getSubscriptionByUserId(user.id);
 
   const session = await createCheckoutSession({
     priceId,

@@ -29,17 +29,17 @@ function toSummary(profile: StyleProfile): StyleProfileSummary {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  const presets = getSystemPresets().map(toSummary);
-  const customs = getByUserId(auth.userId).map(toSummary);
+  const presets = (await getSystemPresets()).map(toSummary);
+  const customs = (await getByUserId(auth.userId)).map(toSummary);
 
   return NextResponse.json({ presets, customs });
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: unknown;
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   const { name, sampleTexts } = validation.data;
   const analyzedTone = analyzeTone(sampleTexts);
 
-  const styleProfile = createStyleProfile({
+  const styleProfile = await createStyleProfile({
     userId: auth.userId,
     name,
     sampleTexts,

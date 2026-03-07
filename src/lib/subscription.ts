@@ -14,8 +14,8 @@ export type Subscription = {
   updated_at: string;
 };
 
-export function getSubscriptionTier(userId: number): Tier {
-  const sub = queryOne<Subscription>(
+export async function getSubscriptionTier(userId: number): Promise<Tier> {
+  const sub = await queryOne<Subscription>(
     "SELECT * FROM subscriptions WHERE user_id = ? AND status = 'active'",
     userId
   );
@@ -29,38 +29,38 @@ export function isPremiumFeature(featureKey: string): boolean {
   return config.requiredTier !== "free";
 }
 
-export function canAccessFeature(userId: number, featureKey: string): boolean {
+export async function canAccessFeature(userId: number, featureKey: string): Promise<boolean> {
   const config = FEATURE_MAP[featureKey];
   if (!config) return true; // Unknown features are free by default
-  const userTier = getSubscriptionTier(userId);
+  const userTier = await getSubscriptionTier(userId);
   return hasAccess(userTier, config.requiredTier);
 }
 
-export function getSubscriptionByUserId(userId: number): Subscription | undefined {
-  return queryOne<Subscription>(
+export async function getSubscriptionByUserId(userId: number): Promise<Subscription | undefined> {
+  return await queryOne<Subscription>(
     "SELECT * FROM subscriptions WHERE user_id = ?",
     userId
   );
 }
 
-export function getSubscriptionByCustomerId(customerId: string): Subscription | undefined {
-  return queryOne<Subscription>(
+export async function getSubscriptionByCustomerId(customerId: string): Promise<Subscription | undefined> {
+  return await queryOne<Subscription>(
     "SELECT * FROM subscriptions WHERE stripe_customer_id = ?",
     customerId
   );
 }
 
-export function upsertSubscription(params: {
+export async function upsertSubscription(params: {
   userId: number;
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   status: string;
   tier: Tier;
   currentPeriodEnd: string | null;
-}): void {
-  const existing = getSubscriptionByUserId(params.userId);
+}): Promise<void> {
+  const existing = await getSubscriptionByUserId(params.userId);
   if (existing) {
-    execute(
+    await execute(
       `UPDATE subscriptions SET
         stripe_customer_id = ?,
         stripe_subscription_id = ?,
@@ -77,7 +77,7 @@ export function upsertSubscription(params: {
       params.userId
     );
   } else {
-    execute(
+    await execute(
       `INSERT INTO subscriptions (user_id, stripe_customer_id, stripe_subscription_id, status, tier, current_period_end)
        VALUES (?, ?, ?, ?, ?, ?)`,
       params.userId,
@@ -90,8 +90,8 @@ export function upsertSubscription(params: {
   }
 }
 
-export function deactivateSubscription(stripeSubscriptionId: string): void {
-  execute(
+export async function deactivateSubscription(stripeSubscriptionId: string): Promise<void> {
+  await execute(
     `UPDATE subscriptions SET status = 'canceled', tier = 'free', updated_at = datetime('now')
      WHERE stripe_subscription_id = ?`,
     stripeSubscriptionId

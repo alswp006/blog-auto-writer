@@ -12,7 +12,7 @@ type NaverSearchItem = {
 };
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const query = request.nextUrl.searchParams.get("q")?.trim();

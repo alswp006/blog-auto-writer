@@ -1,7 +1,7 @@
-import type Database from "better-sqlite3";
+import type { Client } from "@libsql/client";
 
-export function applyAppSchema(db: Database.Database): void {
-  db.exec(`
+export async function applyAppSchema(client: Client): Promise<void> {
+  await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS places (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 80),
@@ -123,44 +123,48 @@ export function applyAppSchema(db: Database.Database): void {
     );
   `);
 
-  seedSystemPresets(db);
+  await seedSystemPresets(client);
 }
 
-function seedSystemPresets(db: Database.Database): void {
+async function seedSystemPresets(client: Client): Promise<void> {
   const now = new Date().toISOString();
 
-  const insert = db.prepare(
-    `INSERT INTO style_profiles (user_id, name, is_system_preset, sample_texts_json, analyzed_tone_json, created_at, updated_at)
-     VALUES (NULL, ?, 1, ?, ?, ?, ?)`,
+  const existing = await client.execute(
+    "SELECT name FROM style_profiles WHERE is_system_preset = 1",
   );
-
-  const existingNames = (
-    db.prepare("SELECT name FROM style_profiles WHERE is_system_preset = 1").all() as { name: string }[]
-  ).map((r) => r.name);
+  const existingNames = existing.rows.map((r) => r.name as string);
 
   if (!existingNames.includes("Casual Blogger")) {
-    insert.run(
-      "Casual Blogger",
-      JSON.stringify([
-        "오늘 정말 재미있는 경험을 했어요! 솔직히 처음엔 걱정됐는데 결과가 너무 좋았어요.",
-        "이건 꼭 써봐야 해요. 생각보다 훨씬 편하고 가성비도 최고예요.",
-      ]),
-      JSON.stringify({ tone: "casual", formality: "low", emotion: "warm" }),
-      now,
-      now,
-    );
+    await client.execute({
+      sql: `INSERT INTO style_profiles (user_id, name, is_system_preset, sample_texts_json, analyzed_tone_json, created_at, updated_at)
+            VALUES (NULL, ?, 1, ?, ?, ?, ?)`,
+      args: [
+        "Casual Blogger",
+        JSON.stringify([
+          "오늘 정말 재미있는 경험을 했어요! 솔직히 처음엔 걱정됐는데 결과가 너무 좋았어요.",
+          "이건 꼭 써봐야 해요. 생각보다 훨씬 편하고 가성비도 최고예요.",
+        ]),
+        JSON.stringify({ tone: "casual", formality: "low", emotion: "warm" }),
+        now,
+        now,
+      ],
+    });
   }
 
   if (!existingNames.includes("Professional Writer")) {
-    insert.run(
-      "Professional Writer",
-      JSON.stringify([
-        "본 포스팅에서는 최신 트렌드를 심층적으로 분석하겠습니다.",
-        "데이터를 기반으로 객관적인 시각을 제시하며 독자의 이해를 돕겠습니다.",
-      ]),
-      JSON.stringify({ tone: "detailed", formality: "high", emotion: "neutral" }),
-      now,
-      now,
-    );
+    await client.execute({
+      sql: `INSERT INTO style_profiles (user_id, name, is_system_preset, sample_texts_json, analyzed_tone_json, created_at, updated_at)
+            VALUES (NULL, ?, 1, ?, ?, ?, ?)`,
+      args: [
+        "Professional Writer",
+        JSON.stringify([
+          "본 포스팅에서는 최신 트렌드를 심층적으로 분석하겠습니다.",
+          "데이터를 기반으로 객관적인 시각을 제시하며 독자의 이해를 돕겠습니다.",
+        ]),
+        JSON.stringify({ tone: "detailed", formality: "high", emotion: "neutral" }),
+        now,
+        now,
+      ],
+    });
   }
 }

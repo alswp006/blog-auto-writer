@@ -18,22 +18,22 @@ function toSafe(user: User): SafeUser {
 }
 
 export async function createUser(email: string, password: string, name: string): Promise<SafeUser> {
-  const existing = queryOne<User>("SELECT * FROM users WHERE email = ?", email);
+  const existing = await queryOne<User>("SELECT * FROM users WHERE email = ?", email);
   if (existing) throw new Error("Email already in use");
 
   const hash = await hashPassword(password);
-  const result = execute(
+  const result = await execute(
     "INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)",
     email, hash, name,
   );
 
-  const user = queryOne<User>("SELECT * FROM users WHERE id = ?", result.lastInsertRowid);
+  const user = await queryOne<User>("SELECT * FROM users WHERE id = ?", result.lastInsertRowid);
   if (!user) throw new Error("Failed to create user");
   return toSafe(user);
 }
 
 export async function authenticateUser(email: string, password: string): Promise<SafeUser | null> {
-  const user = queryOne<User>("SELECT * FROM users WHERE email = ?", email);
+  const user = await queryOne<User>("SELECT * FROM users WHERE email = ?", email);
   if (!user) return null;
 
   const valid = await verifyPassword(password, user.password_hash);
@@ -42,14 +42,14 @@ export async function authenticateUser(email: string, password: string): Promise
   return toSafe(user);
 }
 
-export function getUserById(id: number): SafeUser | null {
-  const user = queryOne<User>("SELECT * FROM users WHERE id = ?", id);
+export async function getUserById(id: number): Promise<SafeUser | null> {
+  const user = await queryOne<User>("SELECT * FROM users WHERE id = ?", id);
   if (!user) return null;
   return toSafe(user);
 }
 
-export function getUserByEmail(email: string): SafeUser | null {
-  const user = queryOne<User>("SELECT * FROM users WHERE email = ?", email);
+export async function getUserByEmail(email: string): Promise<SafeUser | null> {
+  const user = await queryOne<User>("SELECT * FROM users WHERE email = ?", email);
   if (!user) return null;
   return toSafe(user);
 }

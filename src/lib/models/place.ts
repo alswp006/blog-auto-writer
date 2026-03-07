@@ -16,18 +16,18 @@ export type CreatePlaceInput = {
 
 export type UpdatePlaceInput = Partial<CreatePlaceInput>;
 
-export function getById(id: number): Place | null {
-  const row = queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", id);
+export async function getById(id: number): Promise<Place | null> {
+  const row = await queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", id);
   return row ? rowToPlace(row) : null;
 }
 
-export function list(): Place[] {
-  return query<PlaceRow>("SELECT * FROM places ORDER BY created_at DESC, rowid DESC").map(rowToPlace);
+export async function list(): Promise<Place[]> {
+  return (await query<PlaceRow>("SELECT * FROM places ORDER BY created_at DESC, rowid DESC")).map(rowToPlace);
 }
 
-export function create(input: CreatePlaceInput): Place {
+export async function create(input: CreatePlaceInput): Promise<Place> {
   const now = new Date().toISOString();
-  const result = execute(
+  const result = await execute(
     `INSERT INTO places (name, category, address, rating, memo, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     input.name,
@@ -38,17 +38,17 @@ export function create(input: CreatePlaceInput): Place {
     now,
     now,
   );
-  const row = queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", result.lastInsertRowid);
+  const row = await queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", result.lastInsertRowid);
   if (!row) throw new Error("Failed to create place");
   return rowToPlace(row);
 }
 
-export function update(id: number, input: UpdatePlaceInput): Place | null {
-  const existing = queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", id);
+export async function update(id: number, input: UpdatePlaceInput): Promise<Place | null> {
+  const existing = await queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", id);
   if (!existing) return null;
 
   const now = new Date().toISOString();
-  execute(
+  await execute(
     `UPDATE places SET name = ?, category = ?, address = ?, rating = ?, memo = ?, updated_at = ? WHERE id = ?`,
     input.name ?? existing.name,
     input.category ?? existing.category,
@@ -59,20 +59,20 @@ export function update(id: number, input: UpdatePlaceInput): Place | null {
     id,
   );
 
-  return getById(id);
+  return await getById(id);
 }
 
-export function listByUser(userId: number): Place[] {
-  return query<PlaceRow>(
+export async function listByUser(userId: number): Promise<Place[]> {
+  return (await query<PlaceRow>(
     `SELECT DISTINCT pl.* FROM places pl
      JOIN posts p ON p.place_id = pl.id
      WHERE p.user_id = ?
      ORDER BY pl.name ASC`,
     userId,
-  ).map(rowToPlace);
+  )).map(rowToPlace);
 }
 
-export function remove(id: number): boolean {
-  const result = execute("DELETE FROM places WHERE id = ?", id);
+export async function remove(id: number): Promise<boolean> {
+  const result = await execute("DELETE FROM places WHERE id = ?", id);
   return result.changes > 0;
 }

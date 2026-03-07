@@ -4,7 +4,7 @@ import { requireAuthUser } from "@/lib/api/auth";
 import * as placeModel from "@/lib/models/place";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const place = placeModel.create({
+    const place = await placeModel.create({
       name: name.trim(),
       category: category as "restaurant" | "cafe" | "accommodation" | "attraction",
       address: address?.trim() || null,
@@ -48,9 +48,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  const places = placeModel.list();
+  const places = await placeModel.list();
   return NextResponse.json({ places });
 }

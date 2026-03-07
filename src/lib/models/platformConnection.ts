@@ -38,11 +38,11 @@ function rowToConnection(row: PlatformConnectionRow): PlatformConnection {
   };
 }
 
-export function getByUserAndPlatform(
+export async function getByUserAndPlatform(
   userId: number,
   platform: "tistory" | "medium",
-): PlatformConnection | null {
-  const row = queryOne<PlatformConnectionRow>(
+): Promise<PlatformConnection | null> {
+  const row = await queryOne<PlatformConnectionRow>(
     "SELECT * FROM platform_connections WHERE user_id = ? AND platform = ?",
     userId,
     platform,
@@ -50,14 +50,14 @@ export function getByUserAndPlatform(
   return row ? rowToConnection(row) : null;
 }
 
-export function listByUser(userId: number): PlatformConnection[] {
-  return query<PlatformConnectionRow>(
+export async function listByUser(userId: number): Promise<PlatformConnection[]> {
+  return (await query<PlatformConnectionRow>(
     "SELECT * FROM platform_connections WHERE user_id = ? ORDER BY platform",
     userId,
-  ).map(rowToConnection);
+  )).map(rowToConnection);
 }
 
-export function upsert(
+export async function upsert(
   userId: number,
   platform: "tistory" | "medium",
   data: {
@@ -66,12 +66,12 @@ export function upsert(
     platformUserId?: string | null;
     platformUsername?: string | null;
   },
-): PlatformConnection {
+): Promise<PlatformConnection> {
   const now = new Date().toISOString();
-  const existing = getByUserAndPlatform(userId, platform);
+  const existing = await getByUserAndPlatform(userId, platform);
 
   if (existing) {
-    execute(
+    await execute(
       `UPDATE platform_connections SET access_token = ?, blog_name = ?, platform_user_id = ?, platform_username = ?, updated_at = ?
        WHERE user_id = ? AND platform = ?`,
       data.accessToken,
@@ -83,7 +83,7 @@ export function upsert(
       platform,
     );
   } else {
-    execute(
+    await execute(
       `INSERT INTO platform_connections (user_id, platform, access_token, blog_name, platform_user_id, platform_username, connected_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       userId,
@@ -97,11 +97,11 @@ export function upsert(
     );
   }
 
-  return getByUserAndPlatform(userId, platform)!;
+  return (await getByUserAndPlatform(userId, platform))!;
 }
 
-export function remove(userId: number, platform: "tistory" | "medium"): boolean {
-  const result = execute(
+export async function remove(userId: number, platform: "tistory" | "medium"): Promise<boolean> {
+  const result = await execute(
     "DELETE FROM platform_connections WHERE user_id = ? AND platform = ?",
     userId,
     platform,

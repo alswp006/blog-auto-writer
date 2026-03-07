@@ -9,7 +9,7 @@ import path from "path";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Maximum 20 photos" }, { status: 400 });
   }
 
-  const profile = userProfileModel.getByUserId(auth.userId);
+  const profile = await userProfileModel.getByUserId(auth.userId);
   if (!profile || !profile.watermarkText) {
     return NextResponse.json({ error: "No watermark text configured" }, { status: 400 });
   }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const results: { photoId: number; filePath: string }[] = [];
 
   for (const photoId of photoIds) {
-    const photo = photoModel.getById(photoId);
+    const photo = await photoModel.getById(photoId);
     if (!photo) continue;
 
     const srcPath = path.join(process.cwd(), "public", photo.filePath);
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
 
     // Update photo record with new file path
     const newFilePath = `/uploads/${newFilename}`;
-    photoModel.updateFilePath(photoId, newFilePath);
+    await photoModel.updateFilePath(photoId, newFilePath);
 
     results.push({ photoId, filePath: newFilePath });
   }

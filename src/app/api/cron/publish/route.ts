@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const duePosts = postModel.listDueForPublish();
+  const duePosts = await postModel.listDueForPublish();
   const results: { postId: number; platform: string; success: boolean; url?: string; error?: string }[] = [];
 
   for (const post of duePosts) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     if (!title || !content || !platform) {
       // Clear schedule, can't publish without content
-      postModel.unschedule(post.id);
+      await postModel.unschedule(post.id);
       results.push({ postId: post.id, platform: platform ?? "unknown", success: false, error: "Missing title or content" });
       continue;
     }
@@ -54,30 +54,30 @@ export async function POST(request: NextRequest) {
         url = result.url;
       } else if (platform === "naver") {
         // Naver doesn't have API publish — skip
-        postModel.unschedule(post.id);
+        await postModel.unschedule(post.id);
         results.push({ postId: post.id, platform, success: false, error: "Naver does not support API publishing" });
         continue;
       }
 
       // Record success
-      recordPublish(
+      await recordPublish(
         post.id,
         platform as "tistory" | "medium" | "wordpress" | "naver",
         lang as "ko" | "en",
         url,
       );
-      postModel.unschedule(post.id);
+      await postModel.unschedule(post.id);
       results.push({ postId: post.id, platform, success: true, url });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Unknown error";
-      recordPublish(
+      await recordPublish(
         post.id,
         platform as "tistory" | "medium" | "wordpress" | "naver",
         lang as "ko" | "en",
         undefined,
         errorMsg,
       );
-      postModel.unschedule(post.id);
+      await postModel.unschedule(post.id);
       results.push({ postId: post.id, platform, success: false, error: errorMsg });
     }
   }

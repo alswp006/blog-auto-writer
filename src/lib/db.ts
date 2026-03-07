@@ -1,20 +1,26 @@
-import Database from "better-sqlite3";
-import path from "path";
-import { applyAppSchema } from "@/lib/db/appSchema";
+import { createClient, type Client } from "@libsql/client";
 
-const DB_PATH = path.join(process.cwd(), "app.db");
+const DB_URL = process.env.TURSO_DATABASE_URL || "file:app.db";
+const AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
-let _db: Database.Database | null = null;
+let _client: Client | null = null;
+let _schemaReady = false;
 
-export function getDb(): Database.Database {
-  if (_db) return _db;
+function getClient(): Client {
+  if (_client) return _client;
+  _client = createClient({
+    url: DB_URL,
+    authToken: AUTH_TOKEN,
+  });
+  return _client;
+}
 
-  _db = new Database(DB_PATH);
-  _db.pragma("journal_mode = WAL");
-  _db.pragma("foreign_keys = ON");
+async function ensureSchema(): Promise<void> {
+  if (_schemaReady) return;
+  const client = getClient();
 
-  // Auto-migrate: create tables if they don't exist
-  _db.exec(`
+  // Core tables
+  await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
@@ -44,23 +50,34 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_sessions_userId ON sessions(userId);
   `);
 
-  // Apply app-specific schema (places, photos, posts, profiles, etc.)
-  applyAppSchema(_db);
+  // App-specific schema
+  const { applyAppSchema } = await import("@/lib/db/appSchema");
+  await applyAppSchema(client);
 
-  return _db;
+  _schemaReady = true;
 }
 
-/** Helper: run a query and return all rows */
-export function query<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T[] {
-  return getDb().prepare(sql).all(...params) as T[];
+/** Run a query and return all rows */
+export async function query<T = Record<string, unknown>>(sql: string, ...params: unknown[]): Promise<T[]> {
+  await ensureSchema();
+  const client = getClient();
+  const result = await client.execute({ sql, args: params as any[] });
+  return result.rows as unknown as T[];
 }
 
-/** Helper: run a query and return one row */
-export function queryOne<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T | undefined {
-  return getDb().prepare(sql).get(...params) as T | undefined;
+/** Run a query and return one row */
+export async function queryOne<T = Record<string, unknown>>(sql: string, ...params: unknown[]): Promise<T | undefined> {
+  const rows = await query<T>(sql, ...params);
+  return rows[0];
 }
 
-/** Helper: run an insert/update/delete and return changes info */
-export function execute(sql: string, ...params: unknown[]) {
-  return getDb().prepare(sql).run(...params);
+/** Run an insert/update/delete and return changes info */
+export async function execute(sql: string, ...params: unknown[]) {
+  await ensureSchema();
+  const client = getClient();
+  const result = await client.execute({ sql, args: params as any[] });
+  return {
+    lastInsertRowid: Number(result.lastInsertRowid),
+    changes: result.rowsAffected,
+  };
 }

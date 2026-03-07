@@ -9,21 +9,21 @@ export type CreateMenuItemInput = {
 
 export type UpdateMenuItemInput = Partial<Pick<CreateMenuItemInput, "name" | "priceKrw">>;
 
-export function getById(id: number): MenuItem | null {
-  const row = queryOne<MenuItemRow>("SELECT * FROM menu_items WHERE id = ?", id);
+export async function getById(id: number): Promise<MenuItem | null> {
+  const row = await queryOne<MenuItemRow>("SELECT * FROM menu_items WHERE id = ?", id);
   return row ? rowToMenuItem(row) : null;
 }
 
-export function listByPlace(placeId: number): MenuItem[] {
-  return query<MenuItemRow>(
+export async function listByPlace(placeId: number): Promise<MenuItem[]> {
+  return (await query<MenuItemRow>(
     "SELECT * FROM menu_items WHERE place_id = ? ORDER BY created_at ASC, rowid ASC",
     placeId,
-  ).map(rowToMenuItem);
+  )).map(rowToMenuItem);
 }
 
-export function create(input: CreateMenuItemInput): MenuItem {
+export async function create(input: CreateMenuItemInput): Promise<MenuItem> {
   const now = new Date().toISOString();
-  const result = execute(
+  const result = await execute(
     `INSERT INTO menu_items (place_id, name, price_krw, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
     input.placeId,
     input.name,
@@ -31,17 +31,17 @@ export function create(input: CreateMenuItemInput): MenuItem {
     now,
     now,
   );
-  const row = queryOne<MenuItemRow>("SELECT * FROM menu_items WHERE id = ?", result.lastInsertRowid);
+  const row = await queryOne<MenuItemRow>("SELECT * FROM menu_items WHERE id = ?", result.lastInsertRowid);
   if (!row) throw new Error("Failed to create menu item");
   return rowToMenuItem(row);
 }
 
-export function update(id: number, input: UpdateMenuItemInput): MenuItem | null {
-  const existing = queryOne<MenuItemRow>("SELECT * FROM menu_items WHERE id = ?", id);
+export async function update(id: number, input: UpdateMenuItemInput): Promise<MenuItem | null> {
+  const existing = await queryOne<MenuItemRow>("SELECT * FROM menu_items WHERE id = ?", id);
   if (!existing) return null;
 
   const now = new Date().toISOString();
-  execute(
+  await execute(
     `UPDATE menu_items SET name = ?, price_krw = ?, updated_at = ? WHERE id = ?`,
     input.name ?? existing.name,
     input.priceKrw ?? existing.price_krw,
@@ -49,10 +49,10 @@ export function update(id: number, input: UpdateMenuItemInput): MenuItem | null 
     id,
   );
 
-  return getById(id);
+  return await getById(id);
 }
 
-export function remove(id: number): boolean {
-  const result = execute("DELETE FROM menu_items WHERE id = ?", id);
+export async function remove(id: number): Promise<boolean> {
+  const result = await execute("DELETE FROM menu_items WHERE id = ?", id);
   return result.changes > 0;
 }

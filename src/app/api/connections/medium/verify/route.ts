@@ -4,7 +4,7 @@ import { requireAuthUser } from "@/lib/api/auth";
 
 // Verify a Medium integration token without saving
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;

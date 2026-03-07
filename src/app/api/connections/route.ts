@@ -4,10 +4,10 @@ import { requireAuthUser } from "@/lib/api/auth";
 import * as platformConnectionModel from "@/lib/models/platformConnection";
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  const connections = platformConnectionModel.listByUser(auth.userId);
+  const connections = await platformConnectionModel.listByUser(auth.userId);
 
   // Mask tokens in response
   const masked = connections.map((c) => ({

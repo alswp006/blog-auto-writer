@@ -32,22 +32,22 @@ function rowToAnalytics(row: PostAnalyticsRow): PostAnalytics {
   };
 }
 
-export function upsert(
+export async function upsert(
   postId: number,
   platform: string,
   data: { views: number; likes: number; comments: number },
-): PostAnalytics {
+): Promise<PostAnalytics> {
   const now = new Date().toISOString();
 
   // Check existing
-  const existing = queryOne<PostAnalyticsRow>(
+  const existing = await queryOne<PostAnalyticsRow>(
     "SELECT * FROM post_analytics WHERE post_id = ? AND platform = ? ORDER BY fetched_at DESC LIMIT 1",
     postId,
     platform,
   );
 
   if (existing) {
-    execute(
+    await execute(
       "UPDATE post_analytics SET views = ?, likes = ?, comments = ?, fetched_at = ? WHERE id = ?",
       data.views,
       data.likes,
@@ -55,11 +55,11 @@ export function upsert(
       now,
       existing.id,
     );
-    const updated = queryOne<PostAnalyticsRow>("SELECT * FROM post_analytics WHERE id = ?", existing.id);
+    const updated = await queryOne<PostAnalyticsRow>("SELECT * FROM post_analytics WHERE id = ?", existing.id);
     return rowToAnalytics(updated!);
   }
 
-  const result = execute(
+  const result = await execute(
     "INSERT INTO post_analytics (post_id, platform, views, likes, comments, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
     postId,
     platform,
@@ -68,12 +68,12 @@ export function upsert(
     data.comments,
     now,
   );
-  const row = queryOne<PostAnalyticsRow>("SELECT * FROM post_analytics WHERE id = ?", result.lastInsertRowid);
+  const row = await queryOne<PostAnalyticsRow>("SELECT * FROM post_analytics WHERE id = ?", result.lastInsertRowid);
   return rowToAnalytics(row!);
 }
 
-export function getLatestByPost(postId: number): PostAnalytics[] {
-  return query<PostAnalyticsRow>(
+export async function getLatestByPost(postId: number): Promise<PostAnalytics[]> {
+  return (await query<PostAnalyticsRow>(
     `SELECT pa.* FROM post_analytics pa
      INNER JOIN (
        SELECT post_id, platform, MAX(fetched_at) as max_fetched
@@ -82,7 +82,7 @@ export function getLatestByPost(postId: number): PostAnalytics[] {
        GROUP BY post_id, platform
      ) latest ON pa.post_id = latest.post_id AND pa.platform = latest.platform AND pa.fetched_at = latest.max_fetched`,
     postId,
-  ).map(rowToAnalytics);
+  )).map(rowToAnalytics);
 }
 
 export type TopPost = {
@@ -96,8 +96,8 @@ export type TopPost = {
   fetchedAt: string;
 };
 
-export function getTopPosts(userId: number, limit = 10): TopPost[] {
-  return query<{
+export async function getTopPosts(userId: number, limit = 10): Promise<TopPost[]> {
+  return (await query<{
     post_id: number;
     title_ko: string | null;
     place_name: string;
@@ -116,7 +116,7 @@ export function getTopPosts(userId: number, limit = 10): TopPost[] {
      LIMIT ?`,
     userId,
     limit,
-  ).map((row) => ({
+  )).map((row) => ({
     postId: row.post_id,
     titleKo: row.title_ko,
     placeName: row.place_name ?? "",

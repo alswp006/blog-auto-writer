@@ -14,7 +14,7 @@ type DailyRevenue = {
 };
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const clientId = process.env.GOOGLE_ADSENSE_CLIENT_ID;

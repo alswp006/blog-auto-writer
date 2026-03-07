@@ -10,7 +10,7 @@ import * as userProfileModel from "@/lib/models/userProfile";
 import { generateBlogPost } from "@/lib/ai/generate";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;
@@ -34,18 +34,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const place = placeModel.getById(placeId);
+  const place = await placeModel.getById(placeId);
   if (!place) {
     return NextResponse.json({ error: "Place not found" }, { status: 404 });
   }
 
-  const style = styleProfileModel.getById(styleProfileId);
+  const style = await styleProfileModel.getById(styleProfileId);
   if (!style) {
     return NextResponse.json({ error: "Style profile not found" }, { status: 404 });
   }
 
   // Create draft post
-  const post = postModel.create({
+  const post = await postModel.create({
     userId: auth.userId,
     placeId,
     styleProfileId,
@@ -53,18 +53,18 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const menuItems = menuItemModel.listByPlace(placeId);
-    const photos = photoModel.listPhotos(placeId);
-    const userProfile = userProfileModel.getByUserId(auth.userId);
+    const menuItems = await menuItemModel.listByPlace(placeId);
+    const photos = await photoModel.listPhotos(placeId);
+    const userProfile = await userProfileModel.getByUserId(auth.userId);
     const userMemo = typeof memo === "string" ? memo : (place.memo ?? "");
 
     const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit);
 
-    const updated = postModel.updateGenerated(post.id, generated);
+    const updated = await postModel.updateGenerated(post.id, generated);
     return NextResponse.json({ post: updated }, { status: 201 });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Generation failed";
-    postModel.setError(post.id, msg);
+    await postModel.setError(post.id, msg);
     return NextResponse.json({ error: msg, postId: post.id }, { status: 500 });
   }
 }

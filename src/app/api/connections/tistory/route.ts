@@ -5,7 +5,7 @@ import * as platformConnectionModel from "@/lib/models/platformConnection";
 
 // Save Tistory connection (after OAuth callback)
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "blogName is required" }, { status: 400 });
   }
 
-  const connection = platformConnectionModel.upsert(auth.userId, "tistory", {
+  const connection = await platformConnectionModel.upsert(auth.userId, "tistory", {
     accessToken,
     blogName,
   });
@@ -40,9 +40,9 @@ export async function POST(request: NextRequest) {
 
 // Disconnect Tistory
 export async function DELETE(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  platformConnectionModel.remove(auth.userId, "tistory");
+  await platformConnectionModel.remove(auth.userId, "tistory");
   return NextResponse.json({ success: true });
 }

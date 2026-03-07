@@ -7,12 +7,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const postId = parseInt(id, 10);
-  const post = postModel.getById(postId);
+  const post = await postModel.getById(postId);
   if (!post || post.userId !== auth.userId) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
@@ -54,7 +54,7 @@ export async function POST(
     return NextResponse.json({ error: "scheduledAt must be in the future" }, { status: 400 });
   }
 
-  const updated = postModel.schedule(postId, scheduleDate.toISOString(), platform, lang);
+  const updated = await postModel.schedule(postId, scheduleDate.toISOString(), platform, lang);
   return NextResponse.json({ post: updated });
 }
 
@@ -62,16 +62,16 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const postId = parseInt(id, 10);
-  const post = postModel.getById(postId);
+  const post = await postModel.getById(postId);
   if (!post || post.userId !== auth.userId) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
-  const updated = postModel.unschedule(postId);
+  const updated = await postModel.unschedule(postId);
   return NextResponse.json({ post: updated });
 }

@@ -4,7 +4,7 @@ import { requireAuthUser } from "@/lib/api/auth";
 
 // Get list of Tistory blogs for a given access token
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;

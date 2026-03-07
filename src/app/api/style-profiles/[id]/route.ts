@@ -7,7 +7,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -16,7 +16,7 @@ export async function GET(
     return jsonError(404, "NOT_FOUND", "Style profile not found");
   }
 
-  const profile = getById(numericId);
+  const profile = await getById(numericId);
   if (!profile) {
     return jsonError(404, "NOT_FOUND", "Style profile not found");
   }

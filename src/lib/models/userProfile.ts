@@ -21,17 +21,17 @@ export type CreateUserProfileInput = {
 
 export type UpdateUserProfileInput = Partial<Omit<CreateUserProfileInput, "userId">>;
 
-export function getByUserId(userId: number): UserProfile | null {
-  const row = queryOne<UserProfileRow>(
+export async function getByUserId(userId: number): Promise<UserProfile | null> {
+  const row = await queryOne<UserProfileRow>(
     "SELECT * FROM user_profiles WHERE user_id = ?",
     userId,
   );
   return row ? rowToUserProfile(row) : null;
 }
 
-export function create(input: CreateUserProfileInput): UserProfile {
+export async function create(input: CreateUserProfileInput): Promise<UserProfile> {
   const now = new Date().toISOString();
-  const result = execute(
+  const result = await execute(
     `INSERT INTO user_profiles (user_id, nickname, age_group, preferred_tone, primary_platform, watermark_text, watermark_position, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     input.userId,
@@ -44,7 +44,7 @@ export function create(input: CreateUserProfileInput): UserProfile {
     now,
     now,
   );
-  const row = queryOne<UserProfileRow>(
+  const row = await queryOne<UserProfileRow>(
     "SELECT * FROM user_profiles WHERE id = ?",
     result.lastInsertRowid,
   );
@@ -52,15 +52,15 @@ export function create(input: CreateUserProfileInput): UserProfile {
   return rowToUserProfile(row);
 }
 
-export function update(userId: number, input: UpdateUserProfileInput): UserProfile | null {
-  const existing = queryOne<UserProfileRow>(
+export async function update(userId: number, input: UpdateUserProfileInput): Promise<UserProfile | null> {
+  const existing = await queryOne<UserProfileRow>(
     "SELECT * FROM user_profiles WHERE user_id = ?",
     userId,
   );
   if (!existing) return null;
 
   const now = new Date().toISOString();
-  execute(
+  await execute(
     `UPDATE user_profiles
      SET nickname = ?, age_group = ?, preferred_tone = ?, primary_platform = ?,
          watermark_text = ?, watermark_position = ?, updated_at = ?
@@ -75,5 +75,5 @@ export function update(userId: number, input: UpdateUserProfileInput): UserProfi
     userId,
   );
 
-  return getByUserId(userId);
+  return await getByUserId(userId);
 }

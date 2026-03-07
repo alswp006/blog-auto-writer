@@ -12,7 +12,7 @@ const MAX_WIDTH = 1200;
 const MAX_PHOTOS_PER_PLACE = 20;
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   try {
@@ -34,13 +34,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid placeId" }, { status: 400 });
     }
 
-    const place = placeModel.getById(placeId);
+    const place = await placeModel.getById(placeId);
     if (!place) {
       return NextResponse.json({ error: "Place not found" }, { status: 404 });
     }
 
     // Check max photos per place
-    const existingPhotos = photoModel.listPhotos(placeId);
+    const existingPhotos = await photoModel.listPhotos(placeId);
     if (existingPhotos.length >= MAX_PHOTOS_PER_PLACE) {
       return NextResponse.json(
         { error: `Maximum ${MAX_PHOTOS_PER_PLACE} photos per place` },
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     const filePath = path.join(uploadDir, filename);
     await writeFile(filePath, buffer);
 
-    const photo = photoModel.create({
+    const photo = await photoModel.create({
       placeId,
       filePath: `/uploads/${filename}`,
       caption: caption?.trim() || null,

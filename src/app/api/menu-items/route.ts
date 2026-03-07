@@ -5,7 +5,7 @@ import * as menuItemModel from "@/lib/models/menuItem";
 import * as placeModel from "@/lib/models/place";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;
@@ -25,13 +25,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "placeId and name are required" }, { status: 400 });
   }
 
-  const place = placeModel.getById(placeId);
+  const place = await placeModel.getById(placeId);
   if (!place) {
     return NextResponse.json({ error: "Place not found" }, { status: 404 });
   }
 
   try {
-    const item = menuItemModel.create({
+    const item = await menuItemModel.create({
       placeId,
       name: name.trim(),
       priceKrw: priceKrw ?? 0,

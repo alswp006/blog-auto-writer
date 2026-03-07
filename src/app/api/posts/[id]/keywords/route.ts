@@ -7,7 +7,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -17,7 +17,7 @@ export async function POST(
 
   const { id } = await params;
   const postId = parseInt(id, 10);
-  const post = postModel.getById(postId);
+  const post = await postModel.getById(postId);
   if (!post || post.userId !== auth.userId) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }

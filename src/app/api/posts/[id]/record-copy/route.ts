@@ -8,12 +8,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = requireAuthUser(request);
+  const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const postId = parseInt(id, 10);
-  const post = postModel.getById(postId);
+  const post = await postModel.getById(postId);
   if (!post || post.userId !== auth.userId) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
@@ -28,7 +28,7 @@ export async function POST(
   const platform = (body.platform as string) ?? "naver";
   const lang = (body.lang as string) ?? "ko";
 
-  const entry = recordPublish(
+  const entry = await recordPublish(
     postId,
     platform as "naver" | "tistory" | "medium" | "wordpress",
     lang as "ko" | "en",

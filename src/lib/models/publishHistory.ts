@@ -35,17 +35,17 @@ function rowToPublishHistory(row: PublishHistoryRow): PublishHistory {
   };
 }
 
-export function recordPublish(
+export async function recordPublish(
   postId: number,
   platform: "tistory" | "medium" | "wordpress" | "naver",
   lang: "ko" | "en",
   url?: string | null,
   error?: string | null,
-): PublishHistory {
+): Promise<PublishHistory> {
   const now = new Date().toISOString();
   const status = error ? "failed" : platform === "naver" ? "copied" : "published";
 
-  const result = execute(
+  const result = await execute(
     `INSERT INTO publish_history (post_id, platform, lang, published_url, status, error, published_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     postId,
@@ -56,22 +56,22 @@ export function recordPublish(
     now,
   );
 
-  const rows = query<PublishHistoryRow>(
+  const rows = await query<PublishHistoryRow>(
     "SELECT * FROM publish_history WHERE id = ?",
     result.lastInsertRowid,
   );
   return rowToPublishHistory(rows[0]);
 }
 
-export function getByPostId(postId: number): PublishHistory[] {
-  return query<PublishHistoryRow>(
+export async function getByPostId(postId: number): Promise<PublishHistory[]> {
+  return (await query<PublishHistoryRow>(
     "SELECT * FROM publish_history WHERE post_id = ? ORDER BY published_at DESC",
     postId,
-  ).map(rowToPublishHistory);
+  )).map(rowToPublishHistory);
 }
 
-export function getLatestByPost(postId: number): Map<string, PublishHistory> {
-  const rows = query<PublishHistoryRow>(
+export async function getLatestByPost(postId: number): Promise<Map<string, PublishHistory>> {
+  const rows = await query<PublishHistoryRow>(
     `SELECT * FROM publish_history
      WHERE id IN (
        SELECT MAX(id) FROM publish_history WHERE post_id = ? AND status != 'failed' GROUP BY platform
@@ -85,10 +85,10 @@ export function getLatestByPost(postId: number): Map<string, PublishHistory> {
   return map;
 }
 
-export function getPublishedPlatformsByPostIds(postIds: number[]): Map<number, string[]> {
+export async function getPublishedPlatformsByPostIds(postIds: number[]): Promise<Map<number, string[]>> {
   if (postIds.length === 0) return new Map();
   const placeholders = postIds.map(() => "?").join(",");
-  const rows = query<{ post_id: number; platform: string }>(
+  const rows = await query<{ post_id: number; platform: string }>(
     `SELECT DISTINCT post_id, platform FROM publish_history
      WHERE post_id IN (${placeholders}) AND status != 'failed'`,
     ...postIds,
