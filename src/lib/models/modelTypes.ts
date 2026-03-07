@@ -1,5 +1,36 @@
 // ── DB row types (snake_case, mirrors SQLite columns) ──────────────────────
 
+export type PlaceRow = {
+  id: number;
+  name: string;
+  category: "restaurant" | "cafe" | "accommodation" | "attraction";
+  address: string | null;
+  rating: number | null;
+  memo: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MenuItemRow = {
+  id: number;
+  place_id: number;
+  name: string;
+  price_krw: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PhotoRow = {
+  id: number;
+  place_id: number;
+  file_path: string;
+  caption: string | null;
+  order_index: number;
+  created_at: string;
+};
+
+
+
 export type UserProfileRow = {
   id: number;
   user_id: number;
@@ -23,6 +54,74 @@ export type StyleProfileRow = {
 };
 
 // ── Application types (camelCase, used throughout the app) ──────────────────
+
+export type PlaceCategory = "restaurant" | "cafe" | "accommodation" | "attraction";
+
+export type Place = {
+  id: number;
+  name: string;
+  category: PlaceCategory;
+  address: string | null;
+  rating: number | null;
+  memo: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MenuItem = {
+  id: number;
+  placeId: number;
+  name: string;
+  priceKrw: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Photo = {
+  id: number;
+  placeId: number;
+  filePath: string;
+  caption: string | null;
+  orderIndex: number;
+  createdAt: string;
+};
+
+export function rowToPlace(row: PlaceRow): Place {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    address: row.address,
+    rating: row.rating,
+    memo: row.memo,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function rowToMenuItem(row: MenuItemRow): MenuItem {
+  return {
+    id: row.id,
+    placeId: row.place_id,
+    name: row.name,
+    priceKrw: row.price_krw,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function rowToPhoto(row: PhotoRow): Photo {
+  return {
+    id: row.id,
+    placeId: row.place_id,
+    filePath: row.file_path,
+    caption: row.caption,
+    orderIndex: row.order_index,
+    createdAt: row.created_at,
+  };
+}
+
+
 
 export type AgeGroup = "20s" | "30s" | "40plus";
 export type PreferredTone = "casual" | "detailed";
