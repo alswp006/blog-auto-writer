@@ -1,2 +1,5 @@
+🇺🇸 [한국어](./README.ko.md)
+
 # blog-auto-writer
-가족이 함께 쓰는 블로그 수익화 도구 — 사진과 메모만 올리면 5분 안에 한영 포스팅 완성.
+
+A family blog monetization tool — just upload photos and notes, and complete bilingual Korean-English posts in under 5 minutes.
