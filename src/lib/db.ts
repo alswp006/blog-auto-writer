@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
+import { applyAppSchema } from "@/lib/db/appSchema";
 
 const DB_PATH = path.join(process.cwd(), "app.db");
 
