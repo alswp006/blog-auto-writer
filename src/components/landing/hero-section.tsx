@@ -24,7 +24,7 @@ export function HeroSection({
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-[var(--text)] max-w-3xl leading-tight">
           {headline}
         </h1>
-        <p className="text-lg leading-relaxed text-[var(--text-secondary)] max-w-xl">
+        <p className="text-lg leading-[1.7] text-[var(--text-secondary)] max-w-xl">
           {subheadline}
         </p>
         <div className="flex gap-3 pt-2">

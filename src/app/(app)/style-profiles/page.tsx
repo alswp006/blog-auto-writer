@@ -326,25 +326,59 @@ export default function StyleProfilesPage() {
           </p>
         </div>
 
-        {/* Create form */}
-        <div className="max-w-2xl">
-          <CreateForm onCreated={fetchProfiles} />
-        </div>
-
-        {/* Error banner */}
-        {error && (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
-            <p className="text-sm text-red-400">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchProfiles}
-              className="shrink-0 border-red-500/40 text-red-400 hover:bg-red-500/10 min-h-[44px]"
-            >
-              Retry
-            </Button>
+        {/* Create form + contextual info */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          <div className="space-y-4">
+            <CreateForm onCreated={fetchProfiles} />
+            {error && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
+                <p className="text-sm text-red-400">{error}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchProfiles}
+                  className="shrink-0 border-red-500/40 text-red-400 hover:bg-red-500/10 min-h-[44px]"
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="space-y-6 py-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text)] mb-2">What is a writing style?</h3>
+              <p className="text-sm text-[var(--text-secondary)] leading-[1.7]">
+                A writing style captures your unique voice — sentence rhythm, vocabulary, tone, and personality. Once saved, the AI will match your style when generating blog posts.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text)] mb-3">Tips for great samples</h3>
+              <ul className="space-y-2.5">
+                {[
+                  "Use posts you actually wrote, not edited versions",
+                  "Vary the topics to capture your range",
+                  "Each sample should be at least 2–3 paragraphs",
+                  "Avoid very short captions or bullet lists",
+                ].map((tip) => (
+                  <li key={tip} className="flex gap-2.5 text-sm text-[var(--text-secondary)]">
+                    <span className="mt-0.5 shrink-0 w-4 h-4 rounded-full bg-[var(--accent-soft)] flex items-center justify-center">
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1.5 4L3.5 6L6.5 2" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
+              <p className="text-xs text-[var(--text-muted)] leading-[1.7]">
+                <span className="font-medium text-[var(--text-secondary)]">System presets</span> are available if you prefer to skip this step — they cover common styles like casual, professional, and storytelling.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Content */}
         {loading ? (
