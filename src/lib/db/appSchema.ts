@@ -58,6 +58,26 @@ export function applyAppSchema(db: Database.Database): void {
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
       CHECK((is_system_preset=1 AND user_id IS NULL) OR (is_system_preset=0 AND user_id IS NOT NULL))
     );
+
+    CREATE TABLE IF NOT EXISTS posts (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      place_id INTEGER NOT NULL,
+      style_profile_id INTEGER NOT NULL,
+      title_ko TEXT NULL,
+      content_ko TEXT NULL,
+      hashtags_ko_json TEXT NOT NULL DEFAULT '[]',
+      title_en TEXT NULL,
+      content_en TEXT NULL,
+      hashtags_en_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL CHECK(status IN ('draft','generated')),
+      generation_error TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(place_id) REFERENCES places(id) ON DELETE RESTRICT,
+      FOREIGN KEY(style_profile_id) REFERENCES style_profiles(id) ON DELETE RESTRICT
+    );
   `);
 
   seedSystemPresets(db);
