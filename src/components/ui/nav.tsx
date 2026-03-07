@@ -38,6 +38,11 @@ export function Nav() {
                   Dashboard
                 </Link>
               </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/style-profiles" className="no-underline">
+                  Styles
+                </Link>
+              </Button>
               <span className="text-xs text-[var(--text-muted)]">{user.email}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 Logout
