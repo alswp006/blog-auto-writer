@@ -1,0 +1,842 @@
+"use client";
+
+import { useState, useEffect, use, useCallback } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+
+type Post = {
+  id: number;
+  titleKo: string | null;
+  contentKo: string | null;
+  hashtagsKo: string[];
+  titleEn: string | null;
+  contentEn: string | null;
+  hashtagsEn: string[];
+  status: string;
+  generationError: string | null;
+  placeId: number;
+  scheduledAt: string | null;
+  scheduledPlatform: string | null;
+  scheduledLang: string | null;
+};
+
+type Photo = {
+  id: number;
+  filePath: string;
+  caption: string | null;
+  orderIndex: number;
+};
+
+type Place = {
+  id: number;
+  name: string;
+  category: string;
+};
+
+type PublishHistoryItem = {
+  id: number;
+  postId: number;
+  platform: string;
+  lang: string;
+  publishedUrl: string | null;
+  status: "published" | "failed" | "copied";
+  error: string | null;
+  publishedAt: string;
+};
+
+type Tab = "preview" | "edit";
+type Lang = "ko" | "en";
+type Platform = "naver" | "tistory" | "medium" | "wordpress";
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  naver: "네이버",
+  tistory: "티스토리",
+  medium: "Medium",
+  wordpress: "WordPress",
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  naver: "bg-green-500/15 text-green-400 border-green-500/30",
+  tistory: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  medium: "bg-white/15 text-white border-white/30",
+  wordpress: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+};
+
+export default function PostEditPage({
+  params,
+}: {
+  params: Promise<{ postId: string }>;
+}) {
+  const { postId } = use(params);
+  const [post, setPost] = useState<Post | null>(null);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [place, setPlace] = useState<Place | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<Tab>("preview");
+  const [lang, setLang] = useState<Lang>("ko");
+  const [error, setError] = useState("");
+
+  // Toast
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  }, []);
+
+  // Edit fields
+  const [titleKo, setTitleKo] = useState("");
+  const [contentKo, setContentKo] = useState("");
+  const [hashtagsKo, setHashtagsKo] = useState("");
+  const [titleEn, setTitleEn] = useState("");
+  const [contentEn, setContentEn] = useState("");
+  const [hashtagsEn, setHashtagsEn] = useState("");
+
+  // Publishing
+  const [publishing, setPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [connections, setConnections] = useState<{ platform: string; hasToken: boolean }[]>([]);
+  const [publishHistory, setPublishHistory] = useState<PublishHistoryItem[]>([]);
+
+  // Watermark
+  const [watermarkApplying, setWatermarkApplying] = useState(false);
+  const [hasWatermarkText, setHasWatermarkText] = useState(false);
+
+  // Scheduling
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [schedulePlatform, setSchedulePlatform] = useState<Platform>("tistory");
+  const [scheduling, setScheduling] = useState(false);
+
+  // Keywords
+  const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
+  const [keywordsLoading, setKeywordsLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/posts/${postId}`)
+      .then((r) => {
+        if (!r.ok) throw new Error("Post not found");
+        return r.json();
+      })
+      .then((data) => {
+        setPost(data.post);
+        setPhotos(data.photos ?? []);
+        setPlace(data.place ?? null);
+        setPublishHistory(data.publishHistory ?? []);
+        setTitleKo(data.post.titleKo ?? "");
+        setContentKo(data.post.contentKo ?? "");
+        setHashtagsKo((data.post.hashtagsKo ?? []).join(" "));
+        setTitleEn(data.post.titleEn ?? "");
+        setContentEn(data.post.contentEn ?? "");
+        setHashtagsEn((data.post.hashtagsEn ?? []).join(" "));
+      })
+      .catch(() => setError("글을 불러올 수 없습니다"))
+      .finally(() => setLoading(false));
+
+    // Fetch platform connections
+    fetch("/api/connections")
+      .then((r) => (r.ok ? r.json() : { connections: [] }))
+      .then((data) => setConnections(data.connections ?? []))
+      .catch(() => {});
+
+    // Fetch profile for watermark config
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : { profile: null }))
+      .then((data) => setHasWatermarkText(!!data.profile?.watermarkText))
+      .catch(() => {});
+  }, [postId]);
+
+  // ── Save ──
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          titleKo, contentKo,
+          hashtagsKo: hashtagsKo.split(/\s+/).filter(Boolean),
+          titleEn, contentEn,
+          hashtagsEn: hashtagsEn.split(/\s+/).filter(Boolean),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      setPost(data.post);
+      showToast("수정 저장 완료!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Platform copy formatters ──
+  const getTitle = () => lang === "ko" ? titleKo : titleEn;
+  const getContent = () => lang === "ko" ? contentKo : contentEn;
+  const getHashtags = () => (lang === "ko" ? hashtagsKo : hashtagsEn).split(/\s+/).filter(Boolean);
+  const getTagStr = () => getHashtags().map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+
+  const buildPhotoImgTags = (format: "html" | "markdown"): string => {
+    if (photos.length === 0) return "";
+    if (format === "html") {
+      return photos
+        .map((p) => {
+          const alt = p.caption ?? `Photo ${p.orderIndex}`;
+          return `<img src="${p.filePath}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${p.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${p.caption}</p>` : ""}`;
+        })
+        .join("\n");
+    }
+    // markdown
+    return photos
+      .map((p) => `![${p.caption ?? `Photo ${p.orderIndex}`}](${p.filePath})${p.caption ? `\n*${p.caption}*` : ""}`)
+      .join("\n\n");
+  };
+
+  const formatForPlatform = (platform: Platform): string => {
+    const title = getTitle();
+    const content = getContent();
+    const tagStr = getTagStr();
+    const paragraphs = content.split("\n\n");
+    const photoBlock = buildPhotoImgTags(platform === "naver" ? "html" : "markdown");
+
+    // Insert photos after first paragraph
+    const insertIdx = Math.min(1, paragraphs.length);
+
+    if (platform === "naver") {
+      // HTML format with img tags
+      const htmlParts = paragraphs.map((p) => `<p>${p}</p>`);
+      htmlParts.splice(insertIdx, 0, photoBlock);
+      return `<h2>${title}</h2>\n\n${htmlParts.join("\n\n")}\n\n<p>${tagStr}</p>`;
+    }
+    if (platform === "tistory") {
+      // Markdown format
+      const mdParts = [...paragraphs];
+      mdParts.splice(insertIdx, 0, photoBlock);
+      return `# ${title}\n\n${mdParts.join("\n\n")}\n\n${tagStr}`;
+    }
+    // Medium - markdown
+    const mdParts = [...paragraphs];
+    mdParts.splice(insertIdx, 0, photoBlock);
+    return `# ${title}\n\n${mdParts.join("\n\n")}\n\n${tagStr}`;
+  };
+
+  const handleCopy = async (platform: Platform) => {
+    const text = formatForPlatform(platform);
+    await navigator.clipboard.writeText(text);
+    showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
+    // Record naver copy in publish history
+    if (platform === "naver") {
+      try {
+        await fetch(`/api/posts/${postId}/record-copy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform: "naver", lang }),
+        });
+        // Refresh publish history
+        const res = await fetch(`/api/posts/${postId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPublishHistory(data.publishHistory ?? []);
+        }
+      } catch { /* non-critical */ }
+    }
+  };
+
+  const handleSuggestKeywords = async () => {
+    setKeywordsLoading(true);
+    setSuggestedKeywords([]);
+    try {
+      const res = await fetch(`/api/posts/${postId}/keywords`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setSuggestedKeywords(data.keywords ?? []);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "키워드 추천 실패");
+    } finally {
+      setKeywordsLoading(false);
+    }
+  };
+
+  const handleAddKeyword = (keyword: string) => {
+    if (lang === "ko") {
+      const current = hashtagsKo.split(/\s+/).filter(Boolean);
+      if (!current.includes(keyword)) {
+        setHashtagsKo([...current, keyword].join(" "));
+      }
+    } else {
+      const current = hashtagsEn.split(/\s+/).filter(Boolean);
+      if (!current.includes(keyword)) {
+        setHashtagsEn([...current, keyword].join(" "));
+      }
+    }
+    setSuggestedKeywords((prev) => prev.filter((k) => k !== keyword));
+    showToast(`${keyword} 추가됨`);
+  };
+
+  const handleSchedule = async () => {
+    if (!scheduleDate || !scheduleTime) {
+      showToast("날짜와 시간을 선택해주세요");
+      return;
+    }
+    setScheduling(true);
+    try {
+      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+      const res = await fetch(`/api/posts/${postId}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduledAt, platform: schedulePlatform, lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Schedule failed");
+      setPost(data.post);
+      showToast("예약 발행이 설정되었습니다!");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "예약 설정 실패");
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const handleUnschedule = async () => {
+    setScheduling(true);
+    try {
+      const res = await fetch(`/api/posts/${postId}/schedule`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unschedule failed");
+      setPost(data.post);
+      setScheduleDate("");
+      setScheduleTime("");
+      showToast("예약이 취소되었습니다");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "예약 취소 실패");
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const handleApplyWatermark = async () => {
+    if (photos.length === 0) return;
+    setWatermarkApplying(true);
+    try {
+      const res = await fetch("/api/photos/watermark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoIds: photos.map((p) => p.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Watermark failed");
+      // Update photo paths locally
+      const resultMap = new Map((data.results as { photoId: number; filePath: string }[]).map((r) => [r.photoId, r.filePath]));
+      setPhotos((prev) =>
+        prev.map((p) => {
+          const newPath = resultMap.get(p.id);
+          return newPath ? { ...p, filePath: newPath } : p;
+        }),
+      );
+      showToast(`워터마크 적용 완료! (${data.results.length}장)`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "워터마크 적용 실패");
+    } finally {
+      setWatermarkApplying(false);
+    }
+  };
+
+  const hasTistoryConnection = connections.some((c) => c.platform === "tistory" && c.hasToken);
+  const hasMediumConnection = connections.some((c) => c.platform === "medium" && c.hasToken);
+  const hasWordPressConfig = typeof window !== "undefined"; // WordPress uses env vars, always show button
+
+  const handlePublish = async (platform: "tistory" | "medium" | "wordpress") => {
+    setPublishing(true);
+    setPublishedUrl(null);
+    try {
+      const res = await fetch(`/api/publish/${platform}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId: parseInt(postId, 10), lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Publish failed");
+      setPublishedUrl(data.url ?? null);
+      showToast(`${PLATFORM_LABELS[platform]}에 발행 완료!`);
+      // Refresh publish history
+      const histRes = await fetch(`/api/posts/${postId}`);
+      if (histRes.ok) {
+        const histData = await histRes.json();
+        setPublishHistory(histData.publishHistory ?? []);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "발행 실패");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // ── Loading / Error states ──
+  if (loading) {
+    return (
+      <section className="w-full py-12">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
+          <div className="max-w-3xl mx-auto animate-pulse space-y-6">
+            <div className="h-8 bg-[var(--bg-elevated)] rounded w-48" />
+            <div className="h-64 bg-[var(--bg-elevated)] rounded" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error && !post) {
+    return (
+      <section className="w-full py-12">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8 text-center">
+          <p className="text-red-400">{error}</p>
+          <Button variant="outline" className="mt-4" asChild>
+            <Link href="/dashboard" className="no-underline">Dashboard</Link>
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  // ── Preview helpers ──
+  const previewTitle = (lang === "ko" ? post?.titleKo : post?.titleEn) ?? "";
+  const previewContent = (lang === "ko" ? post?.contentKo : post?.contentEn) ?? "";
+  const previewHashtags = (lang === "ko" ? post?.hashtagsKo : post?.hashtagsEn) ?? [];
+
+  // Split content into paragraphs and interleave photos
+  const paragraphs = previewContent ? previewContent.split("\n\n") : [];
+  const photoInsertIdx = Math.min(1, paragraphs.length);
+
+  return (
+    <section className="w-full py-12">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* Toast */}
+          {toast && (
+            <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+              {toast}
+            </div>
+          )}
+
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">글 편집</h1>
+              {place && (
+                <p className="text-sm text-[var(--text-muted)] mt-1">{place.name}</p>
+              )}
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/dashboard" className="no-underline">목록으로</Link>
+            </Button>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>
+          )}
+
+          {post?.generationError && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
+              생성 오류: {post.generationError}
+            </div>
+          )}
+
+          {/* Tab + Lang Switcher */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
+              {(["preview", "edit"] as Tab[]).map((t) => (
+                <button key={t} onClick={() => setTab(t)} className={cn(
+                  "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  tab === t ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                )}>
+                  {t === "preview" ? "미리보기" : "편집"}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
+              {(["ko", "en"] as Lang[]).map((l) => (
+                <button key={l} onClick={() => setLang(l)} className={cn(
+                  "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  lang === l ? "bg-[var(--bg-card)] text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                )}>
+                  {l === "ko" ? "한국어" : "English"}
+                </button>
+              ))}
+            </div>
+            <Badge variant={post?.status === "generated" ? "default" : "secondary"}>
+              {post?.status === "generated" ? "완료" : "초안"}
+            </Badge>
+          </div>
+
+          {/* Content */}
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              {tab === "preview" ? (
+                <>
+                  <h2 className="text-xl font-bold">{previewTitle || "(제목 없음)"}</h2>
+
+                  {/* Interleave paragraphs with photos */}
+                  {paragraphs.length === 0 && photos.length === 0 && (
+                    <p className="text-sm text-[var(--text-muted)]">(내용 없음)</p>
+                  )}
+
+                  {paragraphs.map((p, i) => (
+                    <div key={i}>
+                      <p className="text-sm leading-relaxed text-[var(--text-secondary)] mb-3">{p}</p>
+
+                      {/* Insert photos after the first paragraph */}
+                      {i === photoInsertIdx - 1 && photos.length > 0 && (
+                        <div className="grid grid-cols-1 gap-3 my-4">
+                          {photos.map((photo) => (
+                            <div key={photo.id}>
+                              <img
+                                src={photo.filePath}
+                                alt={photo.caption ?? `Photo ${photo.orderIndex}`}
+                                className="w-full rounded-lg max-h-[400px] object-cover"
+                              />
+                              {photo.caption && (
+                                <p className="text-xs text-center text-[var(--text-muted)] mt-1.5 italic">
+                                  {photo.caption}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* If no paragraphs, still show photos */}
+                  {paragraphs.length === 0 && photos.length > 0 && (
+                    <div className="grid grid-cols-1 gap-3 my-4">
+                      {photos.map((photo) => (
+                        <div key={photo.id}>
+                          <img
+                            src={photo.filePath}
+                            alt={photo.caption ?? `Photo ${photo.orderIndex}`}
+                            className="w-full rounded-lg max-h-[400px] object-cover"
+                          />
+                          {photo.caption && (
+                            <p className="text-xs text-center text-[var(--text-muted)] mt-1.5 italic">
+                              {photo.caption}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Hashtags */}
+                  {previewHashtags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-4 border-t border-[var(--border)]">
+                      {previewHashtags.map((tag, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs">
+                          {tag.startsWith("#") ? tag : `#${tag}`}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>제목</Label>
+                    {lang === "ko"
+                      ? <Input value={titleKo} onChange={(e) => setTitleKo(e.target.value)} />
+                      : <Input value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>본문</Label>
+                    {lang === "ko"
+                      ? <Textarea value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
+                      : <Textarea value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />}
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label>해시태그 (스페이스 구분)</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSuggestKeywords}
+                        disabled={keywordsLoading}
+                        className="text-xs h-6 px-2"
+                      >
+                        {keywordsLoading ? "분석 중..." : "AI 키워드 추천"}
+                      </Button>
+                    </div>
+                    {lang === "ko"
+                      ? <Input value={hashtagsKo} onChange={(e) => setHashtagsKo(e.target.value)} placeholder="#맛집 #서울" />
+                      : <Input value={hashtagsEn} onChange={(e) => setHashtagsEn(e.target.value)} placeholder="#food #seoul" />}
+                    {suggestedKeywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {suggestedKeywords.map((kw) => (
+                          <button
+                            key={kw}
+                            onClick={() => handleAddKeyword(kw)}
+                            className="text-xs px-2 py-1 rounded-full border border-[var(--accent)]/40 text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                          >
+                            + {kw}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Button onClick={handleSave} disabled={saving} className="w-full">
+                    {saving ? "저장 중..." : "수정 저장"}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Watermark */}
+          {hasWatermarkText && photos.length > 0 && (
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">워터마크 적용</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    설정된 워터마크를 모든 사진에 적용합니다 ({photos.length}장)
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleApplyWatermark}
+                  disabled={watermarkApplying}
+                >
+                  {watermarkApplying ? "적용 중..." : "워터마크 적용"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Platform Copy */}
+          <Card>
+            <CardHeader><CardTitle className="text-lg">플랫폼별 복사</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-[var(--text-muted)] mb-3">사진 img 태그와 해시태그가 포함됩니다</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
+                  네이버 복사 (HTML)
+                </Button>
+                <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full">
+                  티스토리 복사 (MD)
+                </Button>
+                <Button variant="outline" onClick={() => handleCopy("medium")} className="w-full">
+                  Medium 복사 (MD)
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Auto Publish */}
+          <Card>
+            <CardHeader><CardTitle className="text-lg">자동 발행</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Button
+                    variant="outline"
+                    onClick={() => handlePublish("tistory")}
+                    disabled={publishing}
+                    className="w-full"
+                  >
+                    {publishing ? "발행 중..." : "티스토리에 발행"}
+                  </Button>
+                  {hasTistoryConnection ? (
+                    <p className="text-[10px] text-green-500 text-center">연동됨</p>
+                  ) : (
+                    <p className="text-[10px] text-[var(--text-muted)] text-center">
+                      <Link href="/dashboard/settings" className="text-[var(--accent)] hover:underline">설정에서 연동</Link>
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Button
+                    variant="outline"
+                    onClick={() => handlePublish("medium")}
+                    disabled={publishing}
+                    className="w-full"
+                  >
+                    {publishing ? "발행 중..." : "Medium에 발행"}
+                  </Button>
+                  {hasMediumConnection ? (
+                    <p className="text-[10px] text-green-500 text-center">연동됨</p>
+                  ) : (
+                    <p className="text-[10px] text-[var(--text-muted)] text-center">
+                      <Link href="/dashboard/settings" className="text-[var(--accent)] hover:underline">설정에서 연동</Link>
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Button
+                    variant="outline"
+                    onClick={() => handlePublish("wordpress")}
+                    disabled={publishing}
+                    className="w-full"
+                  >
+                    {publishing ? "발행 중..." : "WordPress에 발행"}
+                  </Button>
+                  <p className="text-[10px] text-[var(--text-muted)] text-center">환경변수 설정 필요</p>
+                </div>
+              </div>
+              {publishedUrl && (
+                <div className="rounded-lg bg-green-500/10 border border-green-500/30 px-4 py-3 text-sm">
+                  <p className="text-green-400 text-xs mb-1">발행 완료!</p>
+                  <a
+                    href={publishedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--accent)] text-xs hover:underline break-all"
+                  >
+                    {publishedUrl}
+                  </a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Schedule Publish */}
+          {post?.status === "generated" && (
+            <Card>
+              <CardHeader><CardTitle className="text-lg">예약 발행</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {post.scheduledAt ? (
+                  <div className="space-y-3">
+                    <div className="rounded-lg bg-[var(--accent-soft)] border border-[var(--accent)]/30 px-4 py-3">
+                      <p className="text-sm font-medium">예약됨</p>
+                      <p className="text-xs text-[var(--text-secondary)] mt-1">
+                        {new Date(post.scheduledAt).toLocaleString("ko-KR", {
+                          year: "numeric", month: "long", day: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                        {" · "}
+                        {PLATFORM_LABELS[post.scheduledPlatform as Platform] ?? post.scheduledPlatform}
+                        {" · "}
+                        {post.scheduledLang === "ko" ? "한국어" : "English"}
+                      </p>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleUnschedule}
+                      disabled={scheduling}
+                    >
+                      {scheduling ? "취소 중..." : "예약 취소"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>날짜</Label>
+                        <Input
+                          type="date"
+                          value={scheduleDate}
+                          onChange={(e) => setScheduleDate(e.target.value)}
+                          min={new Date().toISOString().split("T")[0]}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>시간</Label>
+                        <Input
+                          type="time"
+                          value={scheduleTime}
+                          onChange={(e) => setScheduleTime(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>발행 플랫폼</Label>
+                      <select
+                        value={schedulePlatform}
+                        onChange={(e) => setSchedulePlatform(e.target.value as Platform)}
+                        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm"
+                      >
+                        <option value="tistory">티스토리</option>
+                        <option value="medium">Medium</option>
+                        <option value="wordpress">WordPress</option>
+                      </select>
+                    </div>
+                    <Button
+                      onClick={handleSchedule}
+                      disabled={scheduling || !scheduleDate || !scheduleTime}
+                      className="w-full"
+                    >
+                      {scheduling ? "설정 중..." : "예약 발행 설정"}
+                    </Button>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      현재 선택된 언어({lang === "ko" ? "한국어" : "English"})로 발행됩니다
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Publish History */}
+          {publishHistory.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-lg">발행 이력</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {publishHistory.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn("text-[10px] border", PLATFORM_COLORS[h.platform] ?? "")}>
+                          {PLATFORM_LABELS[h.platform as Platform] ?? h.platform}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {h.lang === "ko" ? "한국어" : "English"}
+                        </Badge>
+                        {h.status === "published" && (
+                          <span className="text-[10px] text-green-400">발행됨</span>
+                        )}
+                        {h.status === "copied" && (
+                          <span className="text-[10px] text-blue-400">복사됨</span>
+                        )}
+                        {h.status === "failed" && (
+                          <span className="text-[10px] text-red-400">실패</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {h.publishedUrl && (
+                          <a href={h.publishedUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] text-[var(--accent)] hover:underline">
+                            열기
+                          </a>
+                        )}
+                        <span className="text-[10px] text-[var(--text-muted)]">
+                          {new Date(h.publishedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="text-center">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard" className="no-underline text-[var(--text-muted)]">Dashboard로 돌아가기</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

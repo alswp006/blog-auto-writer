@@ -31,6 +31,8 @@ export type PhotoRow = {
 
 
 
+export type WatermarkPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left";
+
 export type UserProfileRow = {
   id: number;
   user_id: number;
@@ -38,6 +40,8 @@ export type UserProfileRow = {
   age_group: "20s" | "30s" | "40plus";
   preferred_tone: "casual" | "detailed";
   primary_platform: "naver" | "tistory" | "medium";
+  watermark_text: string | null;
+  watermark_position: WatermarkPosition;
   created_at: string;
   updated_at: string;
 };
@@ -134,6 +138,8 @@ export type UserProfile = {
   ageGroup: AgeGroup;
   preferredTone: PreferredTone;
   primaryPlatform: PrimaryPlatform;
+  watermarkText: string | null;
+  watermarkPosition: WatermarkPosition;
   createdAt: string;
   updatedAt: string;
 };
@@ -159,6 +165,8 @@ export function rowToUserProfile(row: UserProfileRow): UserProfile {
     ageGroup: row.age_group,
     preferredTone: row.preferred_tone,
     primaryPlatform: row.primary_platform,
+    watermarkText: row.watermark_text,
+    watermarkPosition: row.watermark_position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

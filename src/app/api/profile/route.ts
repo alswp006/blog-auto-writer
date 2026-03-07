@@ -13,6 +13,8 @@ function profileToResponse(profile: any) {
     ageGroup: profile.ageGroup,
     preferredTone: profile.preferredTone,
     primaryPlatform: profile.primaryPlatform,
+    watermarkText: profile.watermarkText ?? null,
+    watermarkPosition: profile.watermarkPosition ?? "bottom-right",
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   };
@@ -96,7 +98,11 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const updated = update(auth.userId, validation.data);
+  const updated = update(auth.userId, {
+    ...validation.data,
+    watermarkText: validation.data.watermarkText,
+    watermarkPosition: validation.data.watermarkPosition,
+  });
   if (!updated) {
     return jsonError(404, "NOT_FOUND", "User profile not found");
   }

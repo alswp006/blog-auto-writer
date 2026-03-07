@@ -36,7 +36,7 @@ export default function SignupPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/onboarding/profile");
       router.refresh();
     } catch {
       setError("Network error. Please try again.");

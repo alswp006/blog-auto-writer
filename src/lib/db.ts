@@ -37,6 +37,9 @@ export function getDb(): Database.Database {
     );
   `);
 
+  // Apply app-specific schema (places, photos, posts, profiles, etc.)
+  applyAppSchema(_db);
+
   return _db;
 }
 

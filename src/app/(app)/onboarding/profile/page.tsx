@@ -126,10 +126,10 @@ export default function OnboardingProfilePage() {
         <div className="max-w-lg mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-bold">
-              {hasProfile ? "Update Your Profile" : "Set Up Your Profile"}
+              {hasProfile ? "프로필 수정" : "프로필 설정"}
             </h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">
-              Personalize your writing experience with a few quick settings.
+              블로그 글 생성에 사용할 기본 설정을 입력해주세요.
             </p>
           </div>
 
@@ -138,7 +138,7 @@ export default function OnboardingProfilePage() {
               role="status"
               className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm font-medium text-green-400"
             >
-              Profile saved successfully!
+              프로필이 저장되었습니다!
             </div>
           )}
 
@@ -147,12 +147,13 @@ export default function OnboardingProfilePage() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Nickname */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="nickname">Nickname</Label>
+                  <Label htmlFor="nickname">닉네임</Label>
                   <Input
                     id="nickname"
                     value={form.nickname}
                     onChange={(e) => handleChange("nickname", e.target.value)}
-                    placeholder="Your display name"
+                    placeholder="블로그에서 사용할 이름"
+                    maxLength={30}
                     className={cn(fieldErrors.nickname && "border-red-500 focus-visible:ring-red-500")}
                   />
                   {fieldErrors.nickname && (
@@ -162,16 +163,16 @@ export default function OnboardingProfilePage() {
 
                 {/* Age Group */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="ageGroup">Age Group</Label>
+                  <Label htmlFor="ageGroup">나이대</Label>
                   <select
                     id="ageGroup"
                     value={form.ageGroup}
                     onChange={(e) => handleChange("ageGroup", e.target.value)}
                     className={cn(selectClass, fieldErrors.ageGroup && "border-red-500")}
                   >
-                    <option value="20s">20s</option>
-                    <option value="30s">30s</option>
-                    <option value="40plus">40+</option>
+                    <option value="20s">20대</option>
+                    <option value="30s">30대</option>
+                    <option value="40plus">40대+</option>
                   </select>
                   {fieldErrors.ageGroup && (
                     <p className="text-xs text-red-500">{fieldErrors.ageGroup}</p>
@@ -180,15 +181,15 @@ export default function OnboardingProfilePage() {
 
                 {/* Preferred Tone */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="preferredTone">Writing Tone</Label>
+                  <Label htmlFor="preferredTone">선호 문체</Label>
                   <select
                     id="preferredTone"
                     value={form.preferredTone}
                     onChange={(e) => handleChange("preferredTone", e.target.value)}
                     className={cn(selectClass, fieldErrors.preferredTone && "border-red-500")}
                   >
-                    <option value="casual">Casual</option>
-                    <option value="detailed">Detailed</option>
+                    <option value="casual">친근한 일상체</option>
+                    <option value="detailed">상세 리뷰체</option>
                   </select>
                   {fieldErrors.preferredTone && (
                     <p className="text-xs text-red-500">{fieldErrors.preferredTone}</p>
@@ -197,15 +198,15 @@ export default function OnboardingProfilePage() {
 
                 {/* Primary Platform */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="primaryPlatform">Primary Platform</Label>
+                  <Label htmlFor="primaryPlatform">주로 쓰는 블로그 플랫폼</Label>
                   <select
                     id="primaryPlatform"
                     value={form.primaryPlatform}
                     onChange={(e) => handleChange("primaryPlatform", e.target.value)}
                     className={cn(selectClass, fieldErrors.primaryPlatform && "border-red-500")}
                   >
-                    <option value="naver">Naver Blog</option>
-                    <option value="tistory">Tistory</option>
+                    <option value="naver">네이버 블로그</option>
+                    <option value="tistory">티스토리</option>
                     <option value="medium">Medium</option>
                   </select>
                   {fieldErrors.primaryPlatform && (
@@ -219,10 +220,10 @@ export default function OnboardingProfilePage() {
                   disabled={submitting || loading}
                 >
                   {submitting
-                    ? "Saving..."
+                    ? "저장 중..."
                     : hasProfile
-                    ? "Update Profile"
-                    : "Create Profile"}
+                    ? "프로필 수정"
+                    : "프로필 만들기"}
                 </Button>
               </form>
             </CardContent>
@@ -231,7 +232,7 @@ export default function OnboardingProfilePage() {
           <div className="text-center">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/dashboard" className="no-underline text-[var(--text-muted)]">
-                Go to Dashboard →
+                Dashboard로 이동 →
               </Link>
             </Button>
           </div>

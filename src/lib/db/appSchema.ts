@@ -28,7 +28,7 @@ export function applyAppSchema(db: Database.Database): void {
       place_id INTEGER NOT NULL,
       file_path TEXT NOT NULL,
       caption TEXT NULL CHECK(caption IS NULL OR length(caption) <= 140),
-      order_index INTEGER NOT NULL CHECK(order_index >= 1 AND order_index <= 10),
+      order_index INTEGER NOT NULL CHECK(order_index >= 1 AND order_index <= 20),
       created_at TEXT NOT NULL,
       FOREIGN KEY(place_id) REFERENCES places(id) ON DELETE CASCADE,
       UNIQUE(place_id, order_index)
@@ -41,6 +41,8 @@ export function applyAppSchema(db: Database.Database): void {
       age_group TEXT NOT NULL CHECK(age_group IN ('20s','30s','40plus')),
       preferred_tone TEXT NOT NULL CHECK(preferred_tone IN ('casual','detailed')),
       primary_platform TEXT NOT NULL CHECK(primary_platform IN ('naver','tistory','medium')),
+      watermark_text TEXT NULL,
+      watermark_position TEXT NOT NULL DEFAULT 'bottom-right' CHECK(watermark_position IN ('bottom-right','bottom-left','top-right','top-left')),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -59,6 +61,20 @@ export function applyAppSchema(db: Database.Database): void {
       CHECK((is_system_preset=1 AND user_id IS NULL) OR (is_system_preset=0 AND user_id IS NOT NULL))
     );
 
+    CREATE TABLE IF NOT EXISTS platform_connections (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      platform TEXT NOT NULL CHECK(platform IN ('tistory','medium')),
+      access_token TEXT NOT NULL,
+      blog_name TEXT NULL,
+      platform_user_id TEXT NULL,
+      platform_username TEXT NULL,
+      connected_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, platform)
+    );
+
     CREATE TABLE IF NOT EXISTS posts (
       id INTEGER PRIMARY KEY,
       user_id INTEGER NOT NULL,
@@ -72,11 +88,38 @@ export function applyAppSchema(db: Database.Database): void {
       hashtags_en_json TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL CHECK(status IN ('draft','generated')),
       generation_error TEXT NULL,
+      scheduled_at TEXT NULL,
+      scheduled_platform TEXT NULL CHECK(scheduled_platform IS NULL OR scheduled_platform IN ('tistory','medium','wordpress','naver')),
+      scheduled_lang TEXT NULL CHECK(scheduled_lang IS NULL OR scheduled_lang IN ('ko','en')),
+      is_revisit INTEGER NOT NULL DEFAULT 0 CHECK(is_revisit IN (0,1)),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(place_id) REFERENCES places(id) ON DELETE RESTRICT,
       FOREIGN KEY(style_profile_id) REFERENCES style_profiles(id) ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS publish_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      platform TEXT NOT NULL CHECK(platform IN ('tistory','medium','wordpress','naver')),
+      lang TEXT NOT NULL CHECK(lang IN ('ko','en')),
+      published_url TEXT,
+      status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('published','failed','copied')),
+      error TEXT,
+      published_at TEXT NOT NULL,
+      FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS post_analytics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      platform TEXT NOT NULL CHECK(platform IN ('tistory','medium','wordpress','naver')),
+      views INTEGER NOT NULL DEFAULT 0,
+      likes INTEGER NOT NULL DEFAULT 0,
+      comments INTEGER NOT NULL DEFAULT 0,
+      fetched_at TEXT NOT NULL,
+      FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
   `);
 

@@ -39,8 +39,23 @@ export function Nav() {
                 </Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
+                <Link href="/dashboard/new" className="no-underline">
+                  New Post
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
                 <Link href="/style-profiles" className="no-underline">
                   Styles
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/dashboard/analytics" className="no-underline">
+                  Analytics
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/dashboard/settings" className="no-underline">
+                  Settings
                 </Link>
               </Button>
               <span className="text-xs text-[var(--text-muted)]">{user.email}</span>

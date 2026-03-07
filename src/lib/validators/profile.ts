@@ -2,11 +2,13 @@ import type {
   AgeGroup,
   PreferredTone,
   PrimaryPlatform,
+  WatermarkPosition,
 } from "@/lib/models/modelTypes";
 
 const VALID_AGE_GROUPS: AgeGroup[] = ["20s", "30s", "40plus"];
 const VALID_PREFERRED_TONES: PreferredTone[] = ["casual", "detailed"];
 const VALID_PRIMARY_PLATFORMS: PrimaryPlatform[] = ["naver", "tistory", "medium"];
+const VALID_WATERMARK_POSITIONS: WatermarkPosition[] = ["bottom-right", "bottom-left", "top-right", "top-left"];
 
 export interface CreateProfileInput {
   nickname: string;
@@ -20,6 +22,8 @@ export interface UpdateProfileInput {
   ageGroup?: AgeGroup;
   preferredTone?: PreferredTone;
   primaryPlatform?: PrimaryPlatform;
+  watermarkText?: string | null;
+  watermarkPosition?: WatermarkPosition;
 }
 
 export interface ValidationError {
@@ -148,6 +152,28 @@ export function validateUpdateProfileInput(data: unknown): {
       fields.primaryPlatform = `primaryPlatform must be one of: ${VALID_PRIMARY_PLATFORMS.join(", ")}`;
     } else {
       result.primaryPlatform = obj.primaryPlatform as PrimaryPlatform;
+    }
+  }
+
+  // Validate watermarkText if provided
+  if ("watermarkText" in obj) {
+    if (obj.watermarkText === null || obj.watermarkText === "") {
+      result.watermarkText = null;
+    } else if (typeof obj.watermarkText !== "string") {
+      fields.watermarkText = "watermarkText must be a string or null";
+    } else if (obj.watermarkText.length > 50) {
+      fields.watermarkText = "watermarkText must be 50 characters or less";
+    } else {
+      result.watermarkText = obj.watermarkText;
+    }
+  }
+
+  // Validate watermarkPosition if provided
+  if ("watermarkPosition" in obj) {
+    if (!VALID_WATERMARK_POSITIONS.includes(obj.watermarkPosition as WatermarkPosition)) {
+      fields.watermarkPosition = `watermarkPosition must be one of: ${VALID_WATERMARK_POSITIONS.join(", ")}`;
+    } else {
+      result.watermarkPosition = obj.watermarkPosition as WatermarkPosition;
     }
   }
 

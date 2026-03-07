@@ -52,6 +52,10 @@ export function update(id: number, input: UpdatePhotoInput): Photo | null {
   return getById(id);
 }
 
+export function updateFilePath(id: number, filePath: string): void {
+  execute("UPDATE photos SET file_path = ? WHERE id = ?", filePath, id);
+}
+
 export function remove(id: number): boolean {
   const result = execute("DELETE FROM photos WHERE id = ?", id);
   return result.changes > 0;

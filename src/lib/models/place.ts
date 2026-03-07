@@ -62,6 +62,16 @@ export function update(id: number, input: UpdatePlaceInput): Place | null {
   return getById(id);
 }
 
+export function listByUser(userId: number): Place[] {
+  return query<PlaceRow>(
+    `SELECT DISTINCT pl.* FROM places pl
+     JOIN posts p ON p.place_id = pl.id
+     WHERE p.user_id = ?
+     ORDER BY pl.name ASC`,
+    userId,
+  ).map(rowToPlace);
+}
+
 export function remove(id: number): boolean {
   const result = execute("DELETE FROM places WHERE id = ?", id);
   return result.changes > 0;
