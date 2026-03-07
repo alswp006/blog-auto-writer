@@ -156,6 +156,8 @@ describe("API: POST /api/places", () => {
 
 describe("API: POST /api/posts/generate", () => {
   it("generates a post with fallback (no OpenAI key)", async () => {
+    const savedKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     const { POST } = await import("@/app/api/posts/generate/route");
 
     const place = placeModel.create({
@@ -190,6 +192,7 @@ describe("API: POST /api/posts/generate", () => {
     // Cleanup
     postModel.remove(data.post.id);
     placeModel.remove(place.id);
+    if (savedKey !== undefined) process.env.OPENAI_API_KEY = savedKey;
   });
 });
 

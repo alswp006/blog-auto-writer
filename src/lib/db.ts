@@ -35,6 +35,13 @@ export function getDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      userId INTEGER NOT NULL,
+      expiresAt INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_userId ON sessions(userId);
   `);
 
   // Apply app-specific schema (places, photos, posts, profiles, etc.)
