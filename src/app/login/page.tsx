@@ -55,16 +55,16 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[60vh] px-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="flex items-center justify-center min-h-[60vh] px-6">
+      <div className="w-full max-w-lg space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold">Login</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">Welcome back</p>
         </div>
 
         <Card>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <CardContent className="pt-6 px-6 pb-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
                 <div className="text-xs px-3 py-2 rounded-md bg-[var(--danger-soft)] text-[var(--danger)]">
                   {error}

@@ -327,7 +327,9 @@ export default function StyleProfilesPage() {
         </div>
 
         {/* Create form */}
-        <CreateForm onCreated={fetchProfiles} />
+        <div className="max-w-2xl">
+          <CreateForm onCreated={fetchProfiles} />
+        </div>
 
         {/* Error banner */}
         {error && (
