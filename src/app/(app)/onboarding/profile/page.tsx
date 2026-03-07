@@ -144,7 +144,7 @@ export default function OnboardingProfilePage() {
 
           <Card>
             <CardContent className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Nickname */}
                 <div className="space-y-1.5">
                   <Label htmlFor="nickname">Nickname</Label>

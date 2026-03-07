@@ -214,7 +214,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
                 <Textarea
                   value={text}
                   onChange={(e) => updateSample(idx, e.target.value)}
-                  placeholder={`Sample ${idx + 1}`}
+                  placeholder={`Sample ${idx + 1} — paste a paragraph of your writing here...`}
                   rows={3}
                   className={cn(
                     "w-full resize-none",
@@ -316,7 +316,7 @@ export default function StyleProfilesPage() {
   }, [fetchProfiles]);
 
   return (
-    <section className="w-full py-16">
+    <section className="w-full py-20">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8 space-y-10">
         {/* Header */}
         <div>
