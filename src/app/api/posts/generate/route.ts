@@ -8,6 +8,7 @@ import * as photoModel from "@/lib/models/photo";
 import * as styleProfileModel from "@/lib/models/styleProfile";
 import * as userProfileModel from "@/lib/models/userProfile";
 import { generateBlogPost } from "@/lib/ai/generate";
+import * as apiUsageModel from "@/lib/models/apiUsage";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthUser(request);
@@ -59,6 +60,12 @@ export async function POST(request: NextRequest) {
     const userMemo = typeof memo === "string" ? memo : (place.memo ?? "");
 
     const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit);
+
+    // Record API usage
+    if (generated.usage) {
+      const cost = apiUsageModel.calculateCost(generated.usage.model, generated.usage.inputTokens, generated.usage.outputTokens);
+      await apiUsageModel.recordUsage(auth.userId, generated.usage.model, generated.usage.inputTokens, generated.usage.outputTokens, cost);
+    }
 
     const updated = await postModel.updateGenerated(post.id, generated);
     return NextResponse.json({ post: updated }, { status: 201 });

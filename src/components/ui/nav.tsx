@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 export function Nav() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<{ id: number; name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ id: number; name: string; email: string; isAdmin?: boolean } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -58,6 +58,13 @@ export function Nav() {
                   소개
                 </Link>
               </Button>
+              {user.isAdmin && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/admin" className="no-underline">
+                    관리자
+                  </Link>
+                </Button>
+              )}
               <span className="text-xs text-[var(--text-muted)]">{user.name || user.email}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 로그아웃

@@ -10,6 +10,7 @@ export type GeneratedContent = {
   titleEn: string;
   contentEn: string;
   hashtagsEn: string[];
+  usage?: { model: string; inputTokens: number; outputTokens: number };
 };
 
 // ── Category-specific blog structures ──
@@ -318,6 +319,14 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedCont
     throw new Error("AI 응답이 불완전합니다");
   }
 
+  const usageData = data.usage
+    ? {
+        model: data.model ?? "unknown",
+        inputTokens: data.usage.prompt_tokens ?? 0,
+        outputTokens: data.usage.completion_tokens ?? 0,
+      }
+    : undefined;
+
   return {
     titleKo: parsed.titleKo,
     contentKo: parsed.contentKo,
@@ -325,6 +334,7 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedCont
     titleEn: parsed.titleEn,
     contentEn: parsed.contentEn,
     hashtagsEn: Array.isArray(parsed.hashtagsEn) ? parsed.hashtagsEn : [],
+    usage: usageData,
   };
 }
 

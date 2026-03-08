@@ -121,6 +121,19 @@ export async function applyAppSchema(client: Client): Promise<void> {
       fetched_at TEXT NOT NULL,
       FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS api_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cost REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id);
+    CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at);
   `);
 
   await seedSystemPresets(client);
