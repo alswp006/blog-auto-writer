@@ -18,11 +18,12 @@ type StyleProfileSummary = {
   updatedAt: string;
 };
 
-function toSummary(profile: StyleProfile): StyleProfileSummary {
+function toSummary(profile: StyleProfile): StyleProfileSummary & { analyzedTone: Record<string, string> } {
   return {
     id: profile.id,
     name: profile.name,
     isSystemPreset: profile.isSystemPreset,
+    analyzedTone: profile.analyzedTone,
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   };
