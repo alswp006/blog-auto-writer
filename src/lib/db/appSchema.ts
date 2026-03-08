@@ -182,16 +182,16 @@ const SYSTEM_PRESETS = [
 async function seedSystemPresets(client: Client): Promise<void> {
   const now = new Date().toISOString();
 
-  // Migrate old English preset names
-  await client.execute({ sql: "UPDATE style_profiles SET name = ?, description = ? WHERE name = ? AND is_system_preset = 1", args: ["일상 블로거", SYSTEM_PRESETS[0].description, "Casual Blogger"] });
-  await client.execute({ sql: "UPDATE style_profiles SET name = ?, description = ? WHERE name = ? AND is_system_preset = 1", args: ["전문 리뷰어", SYSTEM_PRESETS[1].description, "Professional Writer"] });
-
-  // Add description column if missing (for existing DBs)
+  // Add description column if missing (for existing DBs) — MUST run before any query that references description
   try {
     await client.execute("ALTER TABLE style_profiles ADD COLUMN description TEXT NULL");
   } catch {
     // Column already exists — ignore
   }
+
+  // Migrate old English preset names
+  await client.execute({ sql: "UPDATE style_profiles SET name = ?, description = ? WHERE name = ? AND is_system_preset = 1", args: ["일상 블로거", SYSTEM_PRESETS[0].description, "Casual Blogger"] });
+  await client.execute({ sql: "UPDATE style_profiles SET name = ?, description = ? WHERE name = ? AND is_system_preset = 1", args: ["전문 리뷰어", SYSTEM_PRESETS[1].description, "Professional Writer"] });
 
   // Update descriptions for existing Korean presets
   for (const preset of SYSTEM_PRESETS) {

@@ -315,7 +315,12 @@ export default function DashboardNewPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ placeId, styleProfileId: selectedStyleId, memo: memo.trim(), isRevisit }),
       });
-      const genData = await genRes.json();
+      let genData;
+      try {
+        genData = await genRes.json();
+      } catch {
+        throw new Error("AI 생성 요청 시간이 초과되었습니다. 다시 시도해주세요.");
+      }
       if (!genRes.ok) throw new Error(genData.error ?? "글 생성 실패");
 
       // 5. Navigate to edit page

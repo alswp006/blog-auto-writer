@@ -283,25 +283,40 @@ function generateFallback(
 // ── OpenAI call with retry ──
 
 async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedContent> {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "당신은 전문 한국어/영어 이중언어 블로거입니다. 항상 유효한 JSON으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요.",
-        },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.8,
-      max_tokens: 4096,
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 50_000); // 50s timeout (leave 10s buffer for Vercel 60s limit)
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "당신은 전문 한국어/영어 이중언어 블로거입니다. 항상 유효한 JSON으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.8,
+        max_tokens: 4096,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("AI 응답 시간이 초과되었습니다 (50초). 다시 시도해주세요.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const errText = await response.text();
@@ -363,16 +378,5 @@ export async function generateBlogPost(
   }
 
   const prompt = buildPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit);
-
-  // Try once, retry once on failure
-  try {
-    return await callOpenAI(prompt, apiKey);
-  } catch (firstError) {
-    // Auto-retry once
-    try {
-      return await callOpenAI(prompt, apiKey);
-    } catch (retryError) {
-      throw retryError;
-    }
-  }
+  return await callOpenAI(prompt, apiKey);
 }
