@@ -32,14 +32,14 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Signup failed");
+        setError(data.error ?? "회원가입에 실패했습니다");
         return;
       }
 
       router.push("/onboarding/profile");
       router.refresh();
     } catch {
-      setError("Network error. Please try again.");
+      setError("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }
@@ -74,8 +74,8 @@ export default function SignupPage() {
         {/* Right: Form */}
         <div className="space-y-6">
           <div className="text-center lg:text-left">
-            <h1 className="text-2xl font-bold">Create Account</h1>
-            <p className="text-sm text-[var(--text-muted)] mt-1">Get started for free</p>
+            <h1 className="text-2xl font-bold">회원가입</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">계정을 만들고 시작하세요</p>
           </div>
 
           <Card>
@@ -88,19 +88,19 @@ export default function SignupPage() {
                 )}
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="name">Name</Label>
+                  <Label htmlFor="name">이름</Label>
                   <Input
                     id="name"
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Your name"
+                    placeholder="이름을 입력하세요"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">이메일</Label>
                   <Input
                     id="email"
                     type="email"
@@ -112,7 +112,7 @@ export default function SignupPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">비밀번호</Label>
                   <Input
                     id="password"
                     type="password"
@@ -120,20 +120,20 @@ export default function SignupPage() {
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="6자 이상"
                   />
                 </div>
 
                 <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Creating account..." : "Sign Up"}
+                  {loading ? "계정 생성 중..." : "회원가입"}
                 </Button>
               </form>
             </CardContent>
           </Card>
 
           <p className="text-center text-xs text-[var(--text-muted)]">
-            Already have an account?{" "}
-            <Link href="/login" className="text-[var(--accent)]">Login</Link>
+            이미 계정이 있으신가요?{" "}
+            <Link href="/login" className="text-[var(--accent)]">로그인</Link>
           </p>
         </div>
       </div>

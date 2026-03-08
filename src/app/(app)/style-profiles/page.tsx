@@ -56,7 +56,7 @@ function LoadingSkeleton() {
 // ── Profile Card ──────────────────────────────────────────────────────────────
 
 function ProfileCard({ profile }: { profile: StyleProfileSummary }) {
-  const date = new Date(profile.createdAt).toLocaleDateString("en-US", {
+  const date = new Date(profile.createdAt).toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -70,12 +70,12 @@ function ProfileCard({ profile }: { profile: StyleProfileSummary }) {
             {profile.name}
           </h3>
           {profile.isSystemPreset ? (
-            <Badge variant="secondary" className="shrink-0 text-xs">Preset</Badge>
+            <Badge variant="secondary" className="shrink-0 text-xs">기본</Badge>
           ) : (
-            <Badge variant="outline" className="shrink-0 text-xs">Custom</Badge>
+            <Badge variant="outline" className="shrink-0 text-xs">커스텀</Badge>
           )}
         </div>
-        <p className="text-xs text-[var(--text-muted)]">Created {date}</p>
+        <p className="text-xs text-[var(--text-muted)]">{date} 생성</p>
       </CardContent>
     </Card>
   );
@@ -103,9 +103,9 @@ function EmptyCustoms() {
         </svg>
       </div>
       <div>
-        <p className="text-sm font-medium text-[var(--text)]">No custom styles yet</p>
+        <p className="text-sm font-medium text-[var(--text)]">아직 커스텀 문체가 없습니다</p>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
-          Use the form above to create your first writing style.
+          위 양식으로 나만의 문체를 만들어보세요.
         </p>
       </div>
     </div>
@@ -164,7 +164,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
         if (fields?.name) setNameError(fields.name);
         if (fields?.sampleTexts) setSampleTextsError(fields.sampleTexts);
         if (!fields || (!fields.name && !fields.sampleTexts)) {
-          setGeneralError(data?.error?.message ?? "Something went wrong.");
+          setGeneralError(data?.error?.message ?? "오류가 발생했습니다.");
         }
         return;
       }
@@ -174,7 +174,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
       setSuccess(true);
       onCreated();
     } catch {
-      setGeneralError("Network error. Please try again.");
+      setGeneralError("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setSubmitting(false);
     }
@@ -183,16 +183,16 @@ function CreateForm({ onCreated }: CreateFormProps) {
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle className="text-base">Create a writing style</CardTitle>
+        <CardTitle className="text-base">문체 프로필 만들기</CardTitle>
         <CardDescription className="text-sm">
-          Paste 3–5 samples of your writing. We&apos;ll analyze the tone for you.
+          본인이 쓴 글 3~5개를 붙여넣으면 문체를 분석해드립니다.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Name */}
           <div className="space-y-1.5">
-            <Label htmlFor="style-name">Style name</Label>
+            <Label htmlFor="style-name">문체 이름</Label>
             <Input
               id="style-name"
               value={name}
@@ -200,7 +200,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
                 setName(e.target.value);
                 if (nameError) setNameError(null);
               }}
-              placeholder="e.g. My Blog Voice"
+              placeholder="예: 내 블로그 톤"
               className={cn("w-full", nameError && "border-red-500 focus-visible:ring-red-500")}
             />
             {nameError && <p className="text-xs text-red-500">{nameError}</p>}
@@ -208,13 +208,13 @@ function CreateForm({ onCreated }: CreateFormProps) {
 
           {/* Sample texts */}
           <div className="space-y-2">
-            <Label>Sample texts ({sampleTexts.length}/5)</Label>
+            <Label>샘플 글 ({sampleTexts.length}/5)</Label>
             {sampleTexts.map((text, idx) => (
               <div key={idx} className="flex gap-2 items-start">
                 <Textarea
                   value={text}
                   onChange={(e) => updateSample(idx, e.target.value)}
-                  placeholder={`Sample ${idx + 1} — paste a paragraph of your writing here...`}
+                  placeholder={`샘플 ${idx + 1} — 본인이 쓴 글의 일부를 붙여넣어주세요...`}
                   rows={3}
                   className={cn(
                     "w-full resize-none",
@@ -228,7 +228,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
                     size="sm"
                     onClick={() => removeSample(idx)}
                     className="shrink-0 mt-1 text-[var(--text-muted)] hover:text-red-500"
-                    aria-label="Remove sample"
+                    aria-label="삭제"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -258,7 +258,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
                 onClick={addSample}
                 className="text-xs"
               >
-                + Add sample
+                + 샘플 추가
               </Button>
             )}
           </div>
@@ -272,7 +272,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
               role="status"
               className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm font-medium text-green-400"
             >
-              Style created successfully!
+              문체 프로필이 생성되었습니다!
             </div>
           )}
 
@@ -281,7 +281,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
             className="w-full min-h-[44px]"
             disabled={submitting}
           >
-            {submitting ? "Creating..." : "Create style"}
+            {submitting ? "분석 중..." : "문체 만들기"}
           </Button>
         </form>
       </CardContent>
@@ -301,11 +301,11 @@ export default function StyleProfilesPage() {
     setError(null);
     try {
       const res = await fetch("/api/style-profiles");
-      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      if (!res.ok) throw new Error(`요청 실패 (${res.status})`);
       const json = (await res.json()) as ProfilesData;
       setData(json);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load style profiles.");
+      setError(err instanceof Error ? err.message : "문체 프로필을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -320,9 +320,9 @@ export default function StyleProfilesPage() {
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8 space-y-10">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text)]">Style Profiles</h1>
+          <h1 className="text-2xl font-bold text-[var(--text)]">문체 프로필</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">
-            Choose a preset or create a custom style based on your own writing samples.
+            기본 프리셋을 사용하거나, 본인의 글 샘플로 커스텀 문체를 만들어보세요.
           </p>
         </div>
 
@@ -339,7 +339,7 @@ export default function StyleProfilesPage() {
                   onClick={fetchProfiles}
                   className="shrink-0 border-red-500/40 text-red-400 hover:bg-red-500/10 min-h-[44px]"
                 >
-                  Retry
+                  다시 시도
                 </Button>
               </div>
             )}
@@ -347,19 +347,20 @@ export default function StyleProfilesPage() {
 
           <div className="space-y-6 py-2">
             <div>
-              <h3 className="text-sm font-semibold text-[var(--text)] mb-2">What is a writing style?</h3>
+              <h3 className="text-sm font-semibold text-[var(--text)] mb-2">문체 프로필이란?</h3>
               <p className="text-sm text-[var(--text-secondary)] leading-[1.7]">
-                A writing style captures your unique voice — sentence rhythm, vocabulary, tone, and personality. Once saved, the AI will match your style when generating blog posts.
+                문체 프로필은 나만의 글쓰기 스타일을 담는 설정입니다. 문장 리듬, 어휘, 톤, 감성 등을 분석하여
+                AI가 블로그 글을 생성할 때 해당 스타일을 반영합니다.
               </p>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-[var(--text)] mb-3">Tips for great samples</h3>
+              <h3 className="text-sm font-semibold text-[var(--text)] mb-3">좋은 샘플 작성 팁</h3>
               <ul className="space-y-2.5">
                 {[
-                  "Use posts you actually wrote, not edited versions",
-                  "Vary the topics to capture your range",
-                  "Each sample should be at least 2–3 paragraphs",
-                  "Avoid very short captions or bullet lists",
+                  "직접 쓴 글을 그대로 사용하세요 (수정본 말고 원본)",
+                  "다양한 주제의 글을 넣으면 더 정확해요",
+                  "각 샘플은 최소 2~3문단 정도가 좋아요",
+                  "짧은 한줄평이나 목록보다는 자연스러운 글이 좋아요",
                 ].map((tip) => (
                   <li key={tip} className="flex gap-2.5 text-sm text-[var(--text-secondary)]">
                     <span className="mt-0.5 shrink-0 w-4 h-4 rounded-full bg-[var(--accent-soft)] flex items-center justify-center">
@@ -374,7 +375,8 @@ export default function StyleProfilesPage() {
             </div>
             <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
               <p className="text-xs text-[var(--text-muted)] leading-[1.7]">
-                <span className="font-medium text-[var(--text-secondary)]">System presets</span> are available if you prefer to skip this step — they cover common styles like casual, professional, and storytelling.
+                <span className="font-medium text-[var(--text-secondary)]">기본 프리셋</span>은 별도 설정 없이 바로 사용할 수 있습니다.
+                일상체, 전문 리뷰체 등 일반적인 스타일을 제공합니다.
               </p>
             </div>
           </div>
@@ -388,7 +390,7 @@ export default function StyleProfilesPage() {
             {/* Presets */}
             <div className="space-y-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Presets
+                기본 프리셋
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.presets.map((p) => (
@@ -400,7 +402,7 @@ export default function StyleProfilesPage() {
             {/* Your styles */}
             <div className="space-y-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Your styles
+                내 커스텀 문체
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.customs.length === 0 ? (

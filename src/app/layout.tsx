@@ -9,7 +9,7 @@ export const metadata = seo();
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="ko" className="dark">
       <body className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
         <StructuredData />
         <AdProvider>

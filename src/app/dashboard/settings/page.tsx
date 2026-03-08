@@ -263,7 +263,7 @@ function SettingsPage() {
           <p className="text-sm text-[var(--text-muted)] mt-1">플랫폼 연동 및 계정 설정</p>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/dashboard" className="no-underline">Dashboard</Link>
+          <Link href="/dashboard" className="no-underline">대시보드</Link>
         </Button>
       </div>
 

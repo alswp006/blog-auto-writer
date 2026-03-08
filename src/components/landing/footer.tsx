@@ -20,16 +20,17 @@ const siteName = process.env.NEXT_PUBLIC_SITE_NAME || "App";
 export function Footer({ columns, copyright }: FooterProps) {
   const defaultColumns: FooterColumn[] = [
     {
-      title: "Product",
+      title: "서비스",
       links: [
-        { label: "Dashboard", href: "/dashboard" },
+        { label: "대시보드", href: "/dashboard" },
+        { label: "소개", href: "/about" },
       ],
     },
     {
-      title: "Account",
+      title: "계정",
       links: [
-        { label: "Sign Up", href: "/signup" },
-        { label: "Login", href: "/login" },
+        { label: "회원가입", href: "/signup" },
+        { label: "로그인", href: "/login" },
       ],
     },
   ];
@@ -62,7 +63,7 @@ export function Footer({ columns, copyright }: FooterProps) {
           ))}
         </div>
         <div className="text-xs text-[var(--text-muted)]">
-          {copyright || `\u00A9 ${year} ${siteName}. All rights reserved.`}
+          {copyright || `\u00A9 ${year} ${siteName}`}
         </div>
       </div>
     </footer>

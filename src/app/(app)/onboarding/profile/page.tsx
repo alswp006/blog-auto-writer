@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,7 @@ function LoadingSkeleton() {
 }
 
 export default function OnboardingProfilePage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -111,6 +113,11 @@ export default function OnboardingProfilePage() {
         return;
       }
 
+      if (!hasProfile) {
+        // First time creating profile — redirect to dashboard
+        router.push("/dashboard");
+        return;
+      }
       setHasProfile(true);
       setSuccess(true);
     } finally {
@@ -198,7 +205,7 @@ export default function OnboardingProfilePage() {
 
                 {/* Primary Platform */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="primaryPlatform">주로 쓰는 블로그 플랫폼</Label>
+                  <Label htmlFor="primaryPlatform">기본 발행 플랫폼</Label>
                   <select
                     id="primaryPlatform"
                     value={form.primaryPlatform}
@@ -209,6 +216,9 @@ export default function OnboardingProfilePage() {
                     <option value="tistory">티스토리</option>
                     <option value="medium">Medium</option>
                   </select>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    복사/발행 시 기본으로 선택되는 플랫폼입니다
+                  </p>
                   {fieldErrors.primaryPlatform && (
                     <p className="text-xs text-red-500">{fieldErrors.primaryPlatform}</p>
                   )}
@@ -232,7 +242,7 @@ export default function OnboardingProfilePage() {
           <div className="text-center">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/dashboard" className="no-underline text-[var(--text-muted)]">
-                Dashboard로 이동 →
+                대시보드로 이동 →
               </Link>
             </Button>
           </div>

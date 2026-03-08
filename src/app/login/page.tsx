@@ -41,14 +41,14 @@ function LoginForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Login failed");
+        setError(data.error ?? "로그인에 실패했습니다");
         return;
       }
 
       router.push(redirect);
       router.refresh();
     } catch {
-      setError("Network error. Please try again.");
+      setError("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }
@@ -82,8 +82,8 @@ function LoginForm() {
         {/* Right: Form */}
         <div className="space-y-6">
           <div className="text-center lg:text-left">
-            <h1 className="text-2xl font-bold">Login</h1>
-            <p className="text-sm text-[var(--text-muted)] mt-1">Welcome back</p>
+            <h1 className="text-2xl font-bold">로그인</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">다시 오신 것을 환영합니다</p>
           </div>
 
           <Card>
@@ -96,7 +96,7 @@ function LoginForm() {
                 )}
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">이메일</Label>
                   <Input
                     id="email"
                     type="email"
@@ -108,7 +108,7 @@ function LoginForm() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">비밀번호</Label>
                   <Input
                     id="password"
                     type="password"
@@ -120,15 +120,15 @@ function LoginForm() {
                 </div>
 
                 <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Logging in..." : "Login"}
+                  {loading ? "로그인 중..." : "로그인"}
                 </Button>
               </form>
             </CardContent>
           </Card>
 
           <p className="text-center text-xs text-[var(--text-muted)]">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-[var(--accent)]">Sign up</Link>
+            계정이 없으신가요?{" "}
+            <Link href="/signup" className="text-[var(--accent)]">회원가입</Link>
           </p>
         </div>
       </div>

@@ -54,7 +54,7 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold">대시보드</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">
             {profile.nickname}님, 환영합니다!
           </p>
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
                         />
                       ) : (
                         <div className="w-24 h-24 md:w-32 md:h-28 bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--text-muted)] text-xs">
-                          No photo
+                          사진 없음
                         </div>
                       )}
                     </Link>

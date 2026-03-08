@@ -27,7 +27,7 @@ export function Nav() {
     <nav className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="text-sm font-bold no-underline hover:no-underline text-[var(--text)]">
-          Blog Auto Writer
+          블로그 자동 작성기
         </Link>
 
         <div className="flex items-center gap-2">
@@ -35,44 +35,49 @@ export function Nav() {
             <>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/dashboard" className="no-underline">
-                  Dashboard
+                  대시보드
                 </Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/dashboard/new" className="no-underline">
-                  New Post
+                  새 글
                 </Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/style-profiles" className="no-underline">
-                  Styles
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/analytics" className="no-underline">
-                  Analytics
+                  문체
                 </Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/dashboard/settings" className="no-underline">
-                  Settings
+                  설정
                 </Link>
               </Button>
-              <span className="text-xs text-[var(--text-muted)]">{user.email}</span>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/about" className="no-underline">
+                  소개
+                </Link>
+              </Button>
+              <span className="text-xs text-[var(--text-muted)]">{user.name || user.email}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
-                Logout
+                로그아웃
               </Button>
             </>
           ) : (
             <>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/about" className="no-underline">
+                  소개
+                </Link>
+              </Button>
               <Button variant="outline" size="sm" asChild>
                 <Link href="/login" className="no-underline">
-                  Login
+                  로그인
                 </Link>
               </Button>
               <Button size="sm" asChild>
                 <Link href="/signup" className="no-underline">
-                  Sign Up
+                  회원가입
                 </Link>
               </Button>
             </>

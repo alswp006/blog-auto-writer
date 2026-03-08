@@ -168,11 +168,11 @@ export default function PostEditPage({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      if (!res.ok) throw new Error(data.error ?? "저장 실패");
       setPost(data.post);
       showToast("수정 저장 완료!");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : "저장 실패");
     } finally {
       setSaving(false);
     }
@@ -403,7 +403,7 @@ export default function PostEditPage({
         <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8 text-center">
           <p className="text-red-400">{error}</p>
           <Button variant="outline" className="mt-4" asChild>
-            <Link href="/dashboard" className="no-underline">Dashboard</Link>
+            <Link href="/dashboard" className="no-underline">대시보드</Link>
           </Button>
         </div>
       </section>
@@ -832,7 +832,7 @@ export default function PostEditPage({
 
           <div className="text-center">
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard" className="no-underline text-[var(--text-muted)]">Dashboard로 돌아가기</Link>
+              <Link href="/dashboard" className="no-underline text-[var(--text-muted)]">대시보드로 돌아가기</Link>
             </Button>
           </div>
         </div>
