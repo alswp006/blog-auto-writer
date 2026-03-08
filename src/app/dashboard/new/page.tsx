@@ -9,7 +9,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
+import dynamic from "next/dynamic";
+import type { DropResult } from "@hello-pangea/dnd";
+
+const DragDropContext = dynamic(
+  () => import("@hello-pangea/dnd").then((mod) => mod.DragDropContext),
+  { ssr: false },
+);
+const Droppable = dynamic(
+  () => import("@hello-pangea/dnd").then((mod) => mod.Droppable),
+  { ssr: false },
+);
+const Draggable = dynamic(
+  () => import("@hello-pangea/dnd").then((mod) => mod.Draggable),
+  { ssr: false },
+);
 
 type SearchResult = {
   title: string;
