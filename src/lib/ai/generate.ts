@@ -304,7 +304,7 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedCont
           { role: "user", content: prompt },
         ],
         temperature: 0.8,
-        max_tokens: 4096,
+        max_completion_tokens: 4096,
       }),
       signal: controller.signal,
     });
