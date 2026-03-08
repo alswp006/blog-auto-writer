@@ -10,6 +10,8 @@ import * as userProfileModel from "@/lib/models/userProfile";
 import { generateBlogPost } from "@/lib/ai/generate";
 import * as apiUsageModel from "@/lib/models/apiUsage";
 
+export const maxDuration = 60; // Vercel 서버리스 함수 타임아웃 (초)
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
