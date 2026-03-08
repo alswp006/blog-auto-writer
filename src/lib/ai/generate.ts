@@ -299,7 +299,7 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedCont
         { role: "user", content: prompt },
       ],
       temperature: 0.8,
-      max_tokens: 3000,
+      max_tokens: 4096,
     }),
   });
 
@@ -313,7 +313,14 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedCont
   if (!content) throw new Error("OpenAI로부터 응답이 없습니다");
 
   const jsonStr = content.replace(/^```json?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-  const parsed = JSON.parse(jsonStr) as GeneratedContent;
+
+  let parsed: GeneratedContent;
+  try {
+    parsed = JSON.parse(jsonStr) as GeneratedContent;
+  } catch {
+    // Response was likely truncated by max_tokens
+    throw new Error("AI 응답이 잘렸습니다. 다시 시도해주세요.");
+  }
 
   if (!parsed.titleKo || !parsed.contentKo || !parsed.titleEn || !parsed.contentEn) {
     throw new Error("AI 응답이 불완전합니다");
