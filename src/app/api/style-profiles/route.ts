@@ -13,15 +13,18 @@ import type { StyleProfile } from "@/lib/models/modelTypes";
 type StyleProfileSummary = {
   id: number;
   name: string;
+  description: string | null;
   isSystemPreset: boolean;
+  analyzedTone: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 };
 
-function toSummary(profile: StyleProfile): StyleProfileSummary & { analyzedTone: Record<string, string> } {
+function toSummary(profile: StyleProfile): StyleProfileSummary {
   return {
     id: profile.id,
     name: profile.name,
+    description: profile.description,
     isSystemPreset: profile.isSystemPreset,
     analyzedTone: profile.analyzedTone,
     createdAt: profile.createdAt,

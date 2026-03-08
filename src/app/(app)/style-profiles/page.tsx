@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 type StyleProfileSummary = {
   id: number;
   name: string;
+  description: string | null;
   isSystemPreset: boolean;
   createdAt: string;
   updatedAt: string;
@@ -75,6 +76,9 @@ function ProfileCard({ profile }: { profile: StyleProfileSummary }) {
             <Badge variant="outline" className="shrink-0 text-xs">커스텀</Badge>
           )}
         </div>
+        {profile.description && (
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{profile.description}</p>
+        )}
         <p className="text-xs text-[var(--text-muted)]">{date} 생성</p>
       </CardContent>
     </Card>

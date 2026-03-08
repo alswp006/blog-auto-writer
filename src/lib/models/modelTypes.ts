@@ -50,6 +50,7 @@ export type StyleProfileRow = {
   id: number;
   user_id: number | null;
   name: string;
+  description: string | null;
   is_system_preset: 0 | 1;
   sample_texts_json: string;
   analyzed_tone_json: string;
@@ -148,6 +149,7 @@ export type StyleProfile = {
   id: number;
   userId: number | null;
   name: string;
+  description: string | null;
   isSystemPreset: boolean;
   sampleTexts: string[];
   analyzedTone: Record<string, string>;
@@ -177,6 +179,7 @@ export function rowToStyleProfile(row: StyleProfileRow): StyleProfile {
     id: row.id,
     userId: row.user_id,
     name: row.name,
+    description: row.description ?? null,
     isSystemPreset: row.is_system_preset === 1,
     sampleTexts: JSON.parse(row.sample_texts_json) as string[],
     analyzedTone: JSON.parse(row.analyzed_tone_json) as Record<string, string>,
