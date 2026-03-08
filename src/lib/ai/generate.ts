@@ -284,7 +284,7 @@ function generateFallback(
 
 async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedContent> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 50_000); // 50s timeout (leave 10s buffer for Vercel 60s limit)
+  const timeout = setTimeout(() => controller.abort(), 120_000); // 120s timeout for gpt-5
 
   let response: Response;
   try {
