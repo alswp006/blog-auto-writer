@@ -85,9 +85,13 @@ export default function CalendarPage() {
   while (cells.length % 7 !== 0) cells.push(null);
 
   // Group posts and publishes by day
-  const getDay = (dateStr: string) => new Date(dateStr).getDate();
-  const getMonth = (dateStr: string) => new Date(dateStr).getMonth() + 1;
-  const getYear = (dateStr: string) => new Date(dateStr).getFullYear();
+  const safeDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const getDay = (dateStr: string) => safeDate(dateStr)?.getDate() ?? 0;
+  const getMonth = (dateStr: string) => (safeDate(dateStr)?.getMonth() ?? -1) + 1;
+  const getYear = (dateStr: string) => safeDate(dateStr)?.getFullYear() ?? 0;
   const isThisMonth = (dateStr: string) => getYear(dateStr) === year && getMonth(dateStr) === month;
 
   const postsByDay = new Map<number, CalendarPost[]>();

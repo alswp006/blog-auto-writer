@@ -99,7 +99,12 @@ JSON으로 응답:
 
     const data = await response.json();
     const analysisText = data.choices?.[0]?.message?.content ?? "{}";
-    const analysis = JSON.parse(analysisText);
+    let analysis;
+    try {
+      analysis = JSON.parse(analysisText);
+    } catch {
+      return NextResponse.json({ error: "AI 응답 파싱 실패" }, { status: 502 });
+    }
 
     return NextResponse.json({ analysis });
   } catch (error) {

@@ -483,14 +483,18 @@ export default function PostEditPage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      const resultMap = new Map((data.results as { photoId: number; caption: string }[]).map((r) => [r.photoId, r.caption]));
+      const results = (data.results ?? []) as { photoId?: number; caption: string }[];
+      const resultMap = new Map<number, string>();
+      for (const r of results) {
+        if (r.photoId && r.caption) resultMap.set(r.photoId, r.caption);
+      }
       setPhotos((prev) =>
         prev.map((p) => {
           const newCaption = resultMap.get(p.id);
           return newCaption ? { ...p, caption: newCaption } : p;
         }),
       );
-      showToast(`AI 캡션 생성 완료! (${data.results.length}장)`);
+      showToast(`AI 캡션 생성 완료! (${resultMap.size}장)`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "사진 분석 실패");
     } finally {

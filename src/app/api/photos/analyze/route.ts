@@ -101,8 +101,13 @@ JSON으로 응답: { "captions": ["캡션1", "캡션2", ...] }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(content) as { captions: string[] };
-    const captions = parsed.captions ?? [];
+    let captions: string[] = [];
+    try {
+      const parsed = JSON.parse(content) as { captions: string[] };
+      captions = parsed.captions ?? [];
+    } catch {
+      return NextResponse.json({ error: "AI 응답 파싱 실패" }, { status: 502 });
+    }
 
     // Update DB for uploaded photos
     const results: { index: number; photoId?: number; caption: string }[] = [];
