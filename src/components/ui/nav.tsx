@@ -49,6 +49,11 @@ export function Nav() {
                 </Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
+                <Link href="/dashboard/calendar" className="no-underline">
+                  캘린더
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
                 <Link href="/dashboard/settings" className="no-underline">
                   설정
                 </Link>
