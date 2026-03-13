@@ -26,7 +26,7 @@ export function Nav() {
   return (
     <nav className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="text-sm font-bold no-underline hover:no-underline text-[var(--text)]">
+        <Link href={user ? "/dashboard" : "/"} className="text-sm font-bold no-underline hover:no-underline text-[var(--text)]">
           블로그 자동 작성기
         </Link>
 
