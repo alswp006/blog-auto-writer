@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "placeId and name are required" }, { status: 400 });
   }
 
-  const place = await placeModel.getById(placeId);
+  const place = await placeModel.getById(placeId, auth.userId);
   if (!place) {
     return NextResponse.json({ error: "Place not found" }, { status: 404 });
   }

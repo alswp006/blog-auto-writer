@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       address: address?.trim() || null,
       rating: rating != null ? Number(rating) : null,
       memo: memo?.trim() || null,
+      userId: auth.userId,
     });
 
     return NextResponse.json({ place }, { status: 201 });
@@ -51,6 +52,6 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuthUser(request);
   if (!auth.ok) return auth.response;
 
-  const places = await placeModel.list();
+  const places = await placeModel.list(auth.userId);
   return NextResponse.json({ places });
 }

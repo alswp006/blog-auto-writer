@@ -2,6 +2,7 @@
 
 export type PlaceRow = {
   id: number;
+  user_id: number | null;
   name: string;
   category: "restaurant" | "cafe" | "accommodation" | "attraction";
   address: string | null;
@@ -64,6 +65,7 @@ export type PlaceCategory = "restaurant" | "cafe" | "accommodation" | "attractio
 
 export type Place = {
   id: number;
+  userId: number | null;
   name: string;
   category: PlaceCategory;
   address: string | null;
@@ -94,6 +96,7 @@ export type Photo = {
 export function rowToPlace(row: PlaceRow): Place {
   return {
     id: row.id,
+    userId: row.user_id ?? null,
     name: row.name,
     category: row.category,
     address: row.address,

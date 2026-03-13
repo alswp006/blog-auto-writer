@@ -12,24 +12,34 @@ export type CreatePlaceInput = {
   address?: string | null;
   rating?: number | null;
   memo?: string | null;
+  userId?: number | null;
 };
 
 export type UpdatePlaceInput = Partial<CreatePlaceInput>;
 
-export async function getById(id: number): Promise<Place | null> {
-  const row = await queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", id);
+export async function getById(id: number, userId?: number): Promise<Place | null> {
+  const sql = userId != null
+    ? "SELECT * FROM places WHERE id = ? AND user_id = ?"
+    : "SELECT * FROM places WHERE id = ?";
+  const args = userId != null ? [id, userId] : [id];
+  const row = await queryOne<PlaceRow>(sql, ...args);
   return row ? rowToPlace(row) : null;
 }
 
-export async function list(): Promise<Place[]> {
-  return (await query<PlaceRow>("SELECT * FROM places ORDER BY created_at DESC, rowid DESC")).map(rowToPlace);
+export async function list(userId?: number): Promise<Place[]> {
+  const sql = userId != null
+    ? "SELECT * FROM places WHERE user_id = ? ORDER BY created_at DESC, rowid DESC"
+    : "SELECT * FROM places ORDER BY created_at DESC, rowid DESC";
+  const args = userId != null ? [userId] : [];
+  return (await query<PlaceRow>(sql, ...args)).map(rowToPlace);
 }
 
 export async function create(input: CreatePlaceInput): Promise<Place> {
   const now = new Date().toISOString();
   const result = await execute(
-    `INSERT INTO places (name, category, address, rating, memo, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO places (user_id, name, category, address, rating, memo, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    input.userId ?? null,
     input.name,
     input.category,
     input.address ?? null,
@@ -43,8 +53,12 @@ export async function create(input: CreatePlaceInput): Promise<Place> {
   return rowToPlace(row);
 }
 
-export async function update(id: number, input: UpdatePlaceInput): Promise<Place | null> {
-  const existing = await queryOne<PlaceRow>("SELECT * FROM places WHERE id = ?", id);
+export async function update(id: number, input: UpdatePlaceInput, userId?: number): Promise<Place | null> {
+  const sql = userId != null
+    ? "SELECT * FROM places WHERE id = ? AND user_id = ?"
+    : "SELECT * FROM places WHERE id = ?";
+  const args = userId != null ? [id, userId] : [id];
+  const existing = await queryOne<PlaceRow>(sql, ...args);
   if (!existing) return null;
 
   const now = new Date().toISOString();
@@ -72,7 +86,11 @@ export async function listByUser(userId: number): Promise<Place[]> {
   )).map(rowToPlace);
 }
 
-export async function remove(id: number): Promise<boolean> {
-  const result = await execute("DELETE FROM places WHERE id = ?", id);
+export async function remove(id: number, userId?: number): Promise<boolean> {
+  const sql = userId != null
+    ? "DELETE FROM places WHERE id = ? AND user_id = ?"
+    : "DELETE FROM places WHERE id = ?";
+  const args = userId != null ? [id, userId] : [id];
+  const result = await execute(sql, ...args);
   return result.changes > 0;
 }

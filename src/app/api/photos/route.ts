@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid placeId" }, { status: 400 });
     }
 
-    const place = await placeModel.getById(placeId);
+    const place = await placeModel.getById(placeId, auth.userId);
     if (!place) {
       return NextResponse.json({ error: "Place not found" }, { status: 404 });
     }
@@ -82,9 +82,16 @@ export async function POST(request: NextRequest) {
     // Determine output format (keep original, but normalize HEIC to JPEG)
     let ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
     if (ext === "heic" || ext === "heif") {
-      const converted = await sharp(buffer).jpeg({ quality: 85 }).toBuffer();
-      buffer = Buffer.from(converted);
-      ext = "jpg";
+      try {
+        const converted = await sharp(buffer).jpeg({ quality: 85 }).toBuffer();
+        buffer = Buffer.from(converted);
+        ext = "jpg";
+      } catch {
+        return NextResponse.json(
+          { error: "HEIC 이미지 변환에 실패했습니다. JPEG 또는 PNG로 변환 후 업로드해주세요." },
+          { status: 400 },
+        );
+      }
     }
 
     // Save file

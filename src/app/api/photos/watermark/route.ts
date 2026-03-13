@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { requireAuthUser } from "@/lib/api/auth";
 import * as userProfileModel from "@/lib/models/userProfile";
 import * as photoModel from "@/lib/models/photo";
+import * as placeModel from "@/lib/models/place";
 import sharp from "sharp";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
@@ -38,6 +39,8 @@ export async function POST(request: NextRequest) {
   for (const photoId of photoIds) {
     const photo = await photoModel.getById(photoId);
     if (!photo) continue;
+    const place = await placeModel.getById(photo.placeId);
+    if (!place || place.userId !== auth.userId) continue;
 
     const srcPath = path.join(process.cwd(), "public", photo.filePath);
     let buffer: Buffer;

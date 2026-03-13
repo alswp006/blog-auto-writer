@@ -4,13 +4,15 @@ export async function applyAppSchema(client: Client): Promise<void> {
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS places (
       id INTEGER PRIMARY KEY,
+      user_id INTEGER NULL,
       name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 80),
       category TEXT NOT NULL CHECK(category IN ('restaurant','cafe','accommodation','attraction')),
       address TEXT NULL CHECK(address IS NULL OR length(address) <= 200),
       rating REAL NULL CHECK(rating IS NULL OR (rating >= 1 AND rating <= 5)),
       memo TEXT NULL CHECK(memo IS NULL OR length(memo) <= 1000),
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS menu_items (
@@ -136,6 +138,13 @@ export async function applyAppSchema(client: Client): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id);
     CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at);
   `);
+
+  // Add user_id column to places if missing (for existing DBs)
+  try {
+    await client.execute("ALTER TABLE places ADD COLUMN user_id INTEGER NULL REFERENCES users(id) ON DELETE CASCADE");
+  } catch {
+    // Column already exists — ignore
+  }
 
   await seedSystemPresets(client);
 }

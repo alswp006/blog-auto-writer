@@ -1,29 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import dynamic from "next/dynamic";
-import type { DropResult } from "@hello-pangea/dnd";
-
-const DragDropContext = dynamic(
-  () => import("@hello-pangea/dnd").then((mod) => mod.DragDropContext),
-  { ssr: false },
-);
-const Droppable = dynamic(
-  () => import("@hello-pangea/dnd").then((mod) => mod.Droppable),
-  { ssr: false },
-);
-const Draggable = dynamic(
-  () => import("@hello-pangea/dnd").then((mod) => mod.Draggable),
-  { ssr: false },
-);
+import { PhotoUploader, type LocalPhoto } from "@/components/post/photo-uploader";
 
 type SearchResult = {
   title: string;
@@ -41,14 +26,6 @@ type StyleProfile = {
   analyzedTone: Record<string, string>;
 };
 
-type LocalPhoto = {
-  id: number;
-  filePath: string;
-  caption: string | null;
-  orderIndex: number;
-  _file: File;
-};
-
 const CATEGORY_OPTIONS: { value: PlaceCategory; label: string }[] = [
   { value: "restaurant", label: "맛집" },
   { value: "cafe", label: "카페" },
@@ -59,12 +36,8 @@ const CATEGORY_OPTIONS: { value: PlaceCategory; label: string }[] = [
 const selectClass =
   "w-full h-10 rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition-colors";
 
-const MAX_PHOTOS = 20;
-
 export default function DashboardNewPage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Place fields
   const [placeName, setPlaceName] = useState("");
@@ -161,86 +134,6 @@ export default function DashboardNewPage() {
     setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)));
   const removeMenuItem = (i: number) => setMenuItems((prev) => prev.filter((_, idx) => idx !== i));
 
-  // ── Photo helpers ──
-  const addFiles = useCallback(
-    (files: FileList | File[]) => {
-      const fileArr = Array.from(files);
-      const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic"];
-
-      setPhotos((prev) => {
-        const remaining = MAX_PHOTOS - prev.length;
-        const toAdd = fileArr.filter((f) => allowed.includes(f.type)).slice(0, remaining);
-        return [
-          ...prev,
-          ...toAdd.map((file, i) => ({
-            id: -(prev.length + i + 1),
-            filePath: URL.createObjectURL(file),
-            caption: null,
-            orderIndex: prev.length + i + 1,
-            _file: file,
-          })),
-        ];
-      });
-    },
-    [],
-  );
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(e.target.files);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragging(false);
-      if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
-    },
-    [addFiles],
-  );
-
-  const updateCaption = (i: number, caption: string) =>
-    setPhotos((prev) => prev.map((p, idx) => (idx === i ? { ...p, caption: caption || null } : p)));
-
-  const removePhoto = (i: number) => {
-    setPhotos((prev) => {
-      const removed = prev[i];
-      if (removed.filePath.startsWith("blob:")) URL.revokeObjectURL(removed.filePath);
-      return prev.filter((_, idx) => idx !== i);
-    });
-    setThumbnailIdx((prev) => {
-      if (i < prev) return prev - 1;
-      if (i === prev) return 0;
-      return prev;
-    });
-  };
-
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
-    const from = result.source.index;
-    const to = result.destination.index;
-    if (from === to) return;
-    setPhotos((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next.map((p, i) => ({ ...p, orderIndex: i + 1 }));
-    });
-  };
-
   // ── Submit ──
   const handleGenerate = async () => {
     setError("");
@@ -292,7 +185,11 @@ export default function DashboardNewPage() {
         formData.append("placeId", placeId.toString());
         formData.append("orderIndex", (i + 1).toString());
         if (photo.caption) formData.append("caption", photo.caption);
-        await fetch("/api/photos", { method: "POST", body: formData });
+        const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+        if (!photoRes.ok) {
+          const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
+          throw new Error(errData.error ?? `사진 ${i + 1} 업로드 실패`);
+        }
       }
 
       // 3. Create menu items
@@ -540,109 +437,14 @@ export default function DashboardNewPage() {
           )}
 
           {/* ── 3. 사진 업로드 ── */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">사진 *</CardTitle>
-                <Badge variant="secondary">{photos.length}/{MAX_PHOTOS}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {photos.length < MAX_PHOTOS && (
-                <div
-                  ref={dropZoneRef}
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-                    dragging
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                      : "border-[var(--border)] hover:border-[var(--border-hover)]",
-                  )}
-                >
-                  <p className="text-sm text-[var(--text-muted)]">
-                    {dragging ? "여기에 놓으세요!" : "클릭 또는 드래그앤드롭으로 사진 추가"}
-                  </p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">JPEG, PNG, WebP, HEIC / 최대 10MB</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic"
-                    multiple
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                </div>
-              )}
-
-              {photos.length > 0 && (
-                <DragDropContext onDragEnd={handleDragEnd}>
-                  <Droppable droppableId="photos" direction="horizontal">
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className="grid grid-cols-2 md:grid-cols-3 gap-3"
-                      >
-                        {photos.map((photo, i) => (
-                          <Draggable key={`photo-${i}`} draggableId={`photo-${i}`} index={i}>
-                            {(dragProvided, snapshot) => (
-                              <div
-                                ref={dragProvided.innerRef}
-                                {...dragProvided.draggableProps}
-                                className={cn("relative group", snapshot.isDragging && "opacity-80 shadow-lg z-10")}
-                              >
-                                <div
-                                  {...dragProvided.dragHandleProps}
-                                  className="absolute top-1 left-1 z-10 flex items-center gap-1"
-                                >
-                                  <span className="bg-black/60 text-white text-[10px] rounded px-1.5 py-0.5 cursor-grab active:cursor-grabbing flex items-center gap-0.5">
-                                    ⠿ {i + 1}
-                                  </span>
-                                </div>
-                                <img
-                                  src={photo.filePath}
-                                  alt={photo.caption ?? `사진 ${i + 1}`}
-                                  className="w-full h-32 object-cover rounded-lg"
-                                />
-                                <button
-                                  onClick={() => setThumbnailIdx(i)}
-                                  className={cn(
-                                    "absolute bottom-10 left-1 w-6 h-6 rounded-full text-xs flex items-center justify-center transition-all",
-                                    thumbnailIdx === i
-                                      ? "bg-yellow-400 text-black"
-                                      : "bg-black/40 text-white/60 opacity-0 group-hover:opacity-100",
-                                  )}
-                                  title="대표 사진 지정"
-                                >
-                                  ★
-                                </button>
-                                <button
-                                  onClick={() => removePhoto(i)}
-                                  className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  X
-                                </button>
-                                <Input
-                                  value={photo.caption ?? ""}
-                                  onChange={(e) => updateCaption(i, e.target.value)}
-                                  placeholder="사진 설명..."
-                                  className="mt-1 text-xs h-7"
-                                />
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
-              )}
-            </CardContent>
-          </Card>
+          <PhotoUploader
+            photos={photos}
+            thumbnailIdx={thumbnailIdx}
+            dragging={dragging}
+            onPhotosChange={setPhotos}
+            onThumbnailChange={setThumbnailIdx}
+            onDraggingChange={setDragging}
+          />
 
           {/* ── 4. 문체 프로필 선택 ── */}
           <Card>

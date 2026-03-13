@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireAuthUser } from "@/lib/api/auth";
 import { query, execute } from "@/lib/db";
+import * as apiUsageModel from "@/lib/models/apiUsage";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -30,8 +31,10 @@ export async function POST(request: NextRequest) {
     const ids = (body.photoIds as number[]).slice(0, 10);
     const placeholders = ids.map(() => "?").join(",");
     const photos = await query<{ id: number; file_path: string }>(
-      `SELECT id, file_path FROM photos WHERE id IN (${placeholders})`,
-      ...ids,
+      `SELECT ph.id, ph.file_path FROM photos ph
+       JOIN places pl ON ph.place_id = pl.id
+       WHERE ph.id IN (${placeholders}) AND pl.user_id = ?`,
+      ...ids, auth.userId,
     );
 
     for (const photo of photos) {
@@ -100,6 +103,16 @@ JSON으로 응답: { "captions": ["캡션1", "캡션2", ...] }
     }
 
     const data = await response.json();
+
+    // Track API usage for vision calls
+    if (data.usage) {
+      const model = data.model ?? "gpt-4o-mini";
+      const inputTokens = data.usage.prompt_tokens ?? 0;
+      const outputTokens = data.usage.completion_tokens ?? 0;
+      const cost = apiUsageModel.calculateCost(model, inputTokens, outputTokens);
+      await apiUsageModel.recordUsage(auth.userId, model, inputTokens, outputTokens, cost);
+    }
+
     const content = data.choices?.[0]?.message?.content ?? "{}";
     let captions: string[] = [];
     try {

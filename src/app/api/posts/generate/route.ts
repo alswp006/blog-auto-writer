@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const place = await placeModel.getById(placeId);
+  const place = await placeModel.getById(placeId, auth.userId);
   if (!place) {
     return NextResponse.json({ error: "Place not found" }, { status: 404 });
   }
@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
     const userProfile = await userProfileModel.getByUserId(auth.userId);
     const userMemo = typeof memo === "string" ? memo : (place.memo ?? "");
 
-    const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit);
+    // generateBlogPost handles quality-based retry internally
+    const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, auth.userId);
 
     // Record API usage
     if (generated.usage) {

@@ -9,6 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { SeoScoreCard } from "@/components/post/seo-score-card";
+import { CompetitorAnalysisCard } from "@/components/post/competitor-analysis-card";
+import { PublishHistoryCard, type PublishHistoryItem } from "@/components/post/publish-history-card";
+import { SchedulePublishCard } from "@/components/post/schedule-publish-card";
 
 type Post = {
   id: number;
@@ -39,17 +43,6 @@ type Place = {
   category: string;
 };
 
-type PublishHistoryItem = {
-  id: number;
-  postId: number;
-  platform: string;
-  lang: string;
-  publishedUrl: string | null;
-  status: "published" | "failed" | "copied";
-  error: string | null;
-  publishedAt: string;
-};
-
 type Tab = "preview" | "edit";
 type Lang = "ko" | "en";
 type Platform = "naver" | "tistory" | "medium" | "wordpress";
@@ -59,13 +52,6 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   tistory: "티스토리",
   medium: "Medium",
   wordpress: "WordPress",
-};
-
-const PLATFORM_COLORS: Record<string, string> = {
-  naver: "bg-green-500/15 text-green-400 border-green-500/30",
-  tistory: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-  medium: "bg-white/15 text-white border-white/30",
-  wordpress: "bg-blue-500/15 text-blue-400 border-blue-500/30",
 };
 
 export default function PostEditPage({
@@ -108,39 +94,15 @@ export default function PostEditPage({
   const [watermarkApplying, setWatermarkApplying] = useState(false);
   const [hasWatermarkText, setHasWatermarkText] = useState(false);
 
-  // Scheduling
-  const [scheduleDate, setScheduleDate] = useState("");
-  const [scheduleTime, setScheduleTime] = useState("");
-  const [schedulePlatform, setSchedulePlatform] = useState<Platform>("tistory");
-  const [scheduling, setScheduling] = useState(false);
-
   // Keywords
   const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
-
-  // SEO Score
-  const [seoScore, setSeoScore] = useState<{
-    score: number;
-    grade: string;
-    breakdown: { category: string; score: number; max: number; detail: string; tips: string[] }[];
-  } | null>(null);
-  const [seoLoading, setSeoLoading] = useState(false);
 
   // Partial Regeneration
   const [regenIndex, setRegenIndex] = useState<number | null>(null);
   const [regenFeedback, setRegenFeedback] = useState("");
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenPreview, setRegenPreview] = useState<string | null>(null);
-
-  // Competitor Analysis
-  const [competitors, setCompetitors] = useState<{
-    benchmarks: { avgContentLength: string; avgPhotoCount: string; commonElements: string[] };
-    missing: string[];
-    strengths: string[];
-    improvements: string[];
-    competitiveScore: number;
-  } | null>(null);
-  const [competitorsLoading, setCompetitorsLoading] = useState(false);
 
   // Photo Analysis
   const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
@@ -332,47 +294,6 @@ export default function PostEditPage({
     showToast(`${keyword} 추가됨`);
   };
 
-  const handleSchedule = async () => {
-    if (!scheduleDate || !scheduleTime) {
-      showToast("날짜와 시간을 선택해주세요");
-      return;
-    }
-    setScheduling(true);
-    try {
-      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-      const res = await fetch(`/api/posts/${postId}/schedule`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduledAt, platform: schedulePlatform, lang }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Schedule failed");
-      setPost(data.post);
-      showToast("예약 발행이 설정되었습니다!");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "예약 설정 실패");
-    } finally {
-      setScheduling(false);
-    }
-  };
-
-  const handleUnschedule = async () => {
-    setScheduling(true);
-    try {
-      const res = await fetch(`/api/posts/${postId}/schedule`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Unschedule failed");
-      setPost(data.post);
-      setScheduleDate("");
-      setScheduleTime("");
-      showToast("예약이 취소되었습니다");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "예약 취소 실패");
-    } finally {
-      setScheduling(false);
-    }
-  };
-
   const handleApplyWatermark = async () => {
     if (photos.length === 0) return;
     setWatermarkApplying(true);
@@ -397,22 +318,6 @@ export default function PostEditPage({
       showToast(err instanceof Error ? err.message : "워터마크 적용 실패");
     } finally {
       setWatermarkApplying(false);
-    }
-  };
-
-  // ── SEO Score ──
-  const handleFetchSeoScore = async () => {
-    setSeoLoading(true);
-    setSeoScore(null);
-    try {
-      const res = await fetch(`/api/posts/${postId}/seo-score?lang=${lang}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      setSeoScore(data);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "SEO 분석 실패");
-    } finally {
-      setSeoLoading(false);
     }
   };
 
@@ -449,26 +354,6 @@ export default function PostEditPage({
     setRegenFeedback("");
     setRegenPreview(null);
     showToast("문단이 교체되었습니다. 저장을 눌러주세요.");
-  };
-
-  // ── Competitor Analysis ──
-  const handleFetchCompetitors = async () => {
-    setCompetitorsLoading(true);
-    setCompetitors(null);
-    try {
-      const res = await fetch(`/api/posts/${postId}/competitors`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      setCompetitors(data.analysis);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "경쟁 분석 실패");
-    } finally {
-      setCompetitorsLoading(false);
-    }
   };
 
   // ── Photo Analysis ──
@@ -871,67 +756,7 @@ export default function PostEditPage({
 
           {/* SEO Score */}
           {post?.status === "generated" && (
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">SEO 점수</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleFetchSeoScore}
-                    disabled={seoLoading}
-                  >
-                    {seoLoading ? "분석 중..." : seoScore ? "다시 분석" : "분석하기"}
-                  </Button>
-                </div>
-              </CardHeader>
-              {seoScore && (
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "text-3xl font-bold w-16 h-16 rounded-full flex items-center justify-center border-2",
-                      seoScore.grade === "A" ? "border-green-500 text-green-400" :
-                      seoScore.grade === "B" ? "border-blue-500 text-blue-400" :
-                      seoScore.grade === "C" ? "border-yellow-500 text-yellow-400" :
-                      "border-red-500 text-red-400",
-                    )}>
-                      {seoScore.grade}
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{seoScore.score}점</p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {seoScore.score >= 85 ? "훌륭합니다!" :
-                         seoScore.score >= 70 ? "양호합니다" :
-                         seoScore.score >= 50 ? "개선이 필요합니다" : "많은 개선이 필요합니다"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {seoScore.breakdown.map((item, i) => (
-                      <div key={i} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-[var(--text-secondary)]">{item.category}</span>
-                          <span className="text-[var(--text-muted)]">{item.detail} ({item.score}/{item.max})</span>
-                        </div>
-                        <div className="h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
-                          <div
-                            className={cn(
-                              "h-full rounded-full transition-all",
-                              item.score / item.max >= 0.8 ? "bg-green-500" :
-                              item.score / item.max >= 0.5 ? "bg-yellow-500" : "bg-red-500",
-                            )}
-                            style={{ width: `${(item.score / item.max) * 100}%` }}
-                          />
-                        </div>
-                        {item.tips.length > 0 && (
-                          <p className="text-[10px] text-[var(--text-muted)]">{item.tips[0]}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              )}
-            </Card>
+            <SeoScoreCard postId={postId} lang={lang} onError={showToast} />
           )}
 
           {/* Photo Analysis */}
@@ -1044,207 +869,21 @@ export default function PostEditPage({
 
           {/* Schedule Publish */}
           {post?.status === "generated" && (
-            <Card>
-              <CardHeader><CardTitle className="text-lg">예약 발행</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                {post.scheduledAt ? (
-                  <div className="space-y-3">
-                    <div className="rounded-lg bg-[var(--accent-soft)] border border-[var(--accent)]/30 px-4 py-3">
-                      <p className="text-sm font-medium">예약됨</p>
-                      <p className="text-xs text-[var(--text-secondary)] mt-1">
-                        {new Date(post.scheduledAt).toLocaleString("ko-KR", {
-                          year: "numeric", month: "long", day: "numeric",
-                          hour: "2-digit", minute: "2-digit",
-                        })}
-                        {" · "}
-                        {PLATFORM_LABELS[post.scheduledPlatform as Platform] ?? post.scheduledPlatform}
-                        {" · "}
-                        {post.scheduledLang === "ko" ? "한국어" : "English"}
-                      </p>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleUnschedule}
-                      disabled={scheduling}
-                    >
-                      {scheduling ? "취소 중..." : "예약 취소"}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>날짜</Label>
-                        <Input
-                          type="date"
-                          value={scheduleDate}
-                          onChange={(e) => setScheduleDate(e.target.value)}
-                          min={new Date().toISOString().split("T")[0]}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>시간</Label>
-                        <Input
-                          type="time"
-                          value={scheduleTime}
-                          onChange={(e) => setScheduleTime(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>발행 플랫폼</Label>
-                      <select
-                        value={schedulePlatform}
-                        onChange={(e) => setSchedulePlatform(e.target.value as Platform)}
-                        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm"
-                      >
-                        <option value="tistory">티스토리</option>
-                        <option value="medium">Medium</option>
-                        <option value="wordpress">WordPress</option>
-                      </select>
-                    </div>
-                    <Button
-                      onClick={handleSchedule}
-                      disabled={scheduling || !scheduleDate || !scheduleTime}
-                      className="w-full"
-                    >
-                      {scheduling ? "설정 중..." : "예약 발행 설정"}
-                    </Button>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      현재 선택된 언어({lang === "ko" ? "한국어" : "English"})로 발행됩니다
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <SchedulePublishCard
+              postId={postId}
+              post={{ scheduledAt: post.scheduledAt, scheduledPlatform: post.scheduledPlatform, scheduledLang: post.scheduledLang }}
+              lang={lang}
+              onUpdate={(updated) => setPost((prev) => prev ? { ...prev, ...updated } : prev)}
+              onToast={showToast}
+            />
           )}
 
           {/* Publish History */}
-          {publishHistory.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-lg">발행 이력</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {publishHistory.map((h) => (
-                    <div key={h.id} className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={cn("text-[10px] border", PLATFORM_COLORS[h.platform] ?? "")}>
-                          {PLATFORM_LABELS[h.platform as Platform] ?? h.platform}
-                        </Badge>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {h.lang === "ko" ? "한국어" : "English"}
-                        </Badge>
-                        {h.status === "published" && (
-                          <span className="text-[10px] text-green-400">발행됨</span>
-                        )}
-                        {h.status === "copied" && (
-                          <span className="text-[10px] text-blue-400">복사됨</span>
-                        )}
-                        {h.status === "failed" && (
-                          <span className="text-[10px] text-red-400">실패</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {h.publishedUrl && (
-                          <a href={h.publishedUrl} target="_blank" rel="noopener noreferrer"
-                            className="text-[10px] text-[var(--accent)] hover:underline">
-                            열기
-                          </a>
-                        )}
-                        <span className="text-[10px] text-[var(--text-muted)]">
-                          {new Date(h.publishedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <PublishHistoryCard history={publishHistory} />
 
           {/* Competitor Analysis */}
           {post?.status === "generated" && (
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">경쟁 글 분석</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleFetchCompetitors}
-                    disabled={competitorsLoading}
-                  >
-                    {competitorsLoading ? "분석 중..." : competitors ? "다시 분석" : "분석하기"}
-                  </Button>
-                </div>
-              </CardHeader>
-              {competitors && (
-                <CardContent className="space-y-4">
-                  {/* Competitive Score */}
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "text-2xl font-bold w-12 h-12 rounded-full flex items-center justify-center border-2",
-                      competitors.competitiveScore >= 8 ? "border-green-500 text-green-400" :
-                      competitors.competitiveScore >= 6 ? "border-blue-500 text-blue-400" :
-                      competitors.competitiveScore >= 4 ? "border-yellow-500 text-yellow-400" :
-                      "border-red-500 text-red-400",
-                    )}>
-                      {competitors.competitiveScore}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">경쟁력 점수</p>
-                      <p className="text-xs text-[var(--text-muted)]">상위 글 대비 10점 만점</p>
-                    </div>
-                  </div>
-
-                  {/* Benchmarks */}
-                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3 space-y-1.5">
-                    <p className="text-xs font-medium">상위 글 기준</p>
-                    <p className="text-[11px] text-[var(--text-secondary)]">
-                      평균 글자수: {competitors.benchmarks.avgContentLength} | 평균 사진: {competitors.benchmarks.avgPhotoCount}
-                    </p>
-                    {competitors.benchmarks.commonElements.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {competitors.benchmarks.commonElements.map((el, i) => (
-                          <Badge key={i} variant="secondary" className="text-[10px]">{el}</Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Strengths */}
-                  {competitors.strengths.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-green-400">강점</p>
-                      {competitors.strengths.map((s, i) => (
-                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-green-500/30">{s}</p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Missing */}
-                  {competitors.missing.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-yellow-400">부족한 요소</p>
-                      {competitors.missing.map((m, i) => (
-                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-yellow-500/30">{m}</p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Improvements */}
-                  {competitors.improvements.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-[var(--accent)]">개선 제안</p>
-                      {competitors.improvements.map((imp, i) => (
-                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-[var(--accent)]/30">{imp}</p>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              )}
-            </Card>
+            <CompetitorAnalysisCard postId={postId} lang={lang} onError={showToast} />
           )}
 
           <div className="text-center">
