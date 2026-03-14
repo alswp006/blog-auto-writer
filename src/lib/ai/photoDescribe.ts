@@ -15,6 +15,7 @@ export type PhotoDescription = {
   orderIndex: number;
   caption: string;         // original short caption (user or auto-generated)
   richDescription: string; // detailed description for blog writing
+  photoType: string;       // food, exterior, interior, parking, street, menu, other
 };
 
 /**
@@ -31,6 +32,7 @@ export async function describePhotosForGeneration(
       orderIndex: p.orderIndex,
       caption: p.caption ?? "",
       richDescription: p.caption ?? "",
+      photoType: "other",
     }));
   }
 
@@ -66,6 +68,7 @@ export async function describePhotosForGeneration(
       orderIndex: p.orderIndex,
       caption: p.caption ?? "",
       richDescription: p.caption ?? "",
+      photoType: "other",
     }));
   }
 
@@ -87,13 +90,17 @@ export async function describePhotosForGeneration(
 
 규칙:
 - 각 묘사는 80~150자
-- 음식: 색감, 질감, 플레이팅, 양, 그릇 특징, 김이 나는지, 소스 색상 등 시각적 디테일
-- 인테리어/외관: 조명 톤, 좌석 배치, 벽면 소재, 식물/소품, 전체 분위기
-- 풍경/거리: 계절감, 하늘 색, 사람들, 건물 특징
+- 먼저 사진 유형을 파악하세요: 음식, 외관/간판, 인테리어, 주차장, 주변환경/거리, 풍경, 메뉴판, 기타
+- 음식/음료: 색감, 질감, 플레이팅, 양, 그릇 특징, 김이 나는지, 소스 색상 등 시각적 디테일
+- 외관/간판: 건물 형태, 간판 색상과 디자인, 입구 모양, 주변 건물과의 관계
+- 인테리어: 조명 톤, 좌석 배치, 벽면 소재, 식물/소품, 전체 분위기
+- 주차장/주변: 주차 공간 크기, 주차 편의성이 보이는 특징, 주변 도로나 골목 모습
+- 풍경/거리: 계절감, 하늘 색, 사람들, 건물 특징, 거리 분위기
+- 메뉴판: 가격대, 메뉴 구성, 추천 메뉴 표시 여부
 - 블로거가 이 사진을 보고 묘사할 때 쓸 수 있는 구체적 디테일에 집중
 - 감정이나 평가 넣지 말고 순수한 시각 묘사만
 
-JSON으로 응답: { "descriptions": ["묘사1", "묘사2", ...] }
+JSON으로 응답: { "descriptions": ["묘사1", "묘사2", ...], "photoTypes": ["food", "exterior", "interior", "parking", "street", "menu", "other", ...] }
 사진 순서대로 작성하세요.`,
             },
             ...entries.map((e) => ({
@@ -114,8 +121,9 @@ JSON으로 응답: { "descriptions": ["묘사1", "묘사2", ...] }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(content) as { descriptions: string[] };
+    const parsed = JSON.parse(content) as { descriptions: string[]; photoTypes?: string[] };
     const descriptions = parsed.descriptions ?? [];
+    const photoTypes = parsed.photoTypes ?? [];
 
     // Map descriptions back to photos
     return photos.map((p) => {
@@ -123,10 +131,14 @@ JSON으로 응답: { "descriptions": ["묘사1", "묘사2", ...] }
       const richDesc = entryIdx >= 0 && descriptions[entryIdx]
         ? descriptions[entryIdx]
         : p.caption ?? "";
+      const pType = entryIdx >= 0 && photoTypes[entryIdx]
+        ? photoTypes[entryIdx]
+        : "other";
       return {
         orderIndex: p.orderIndex,
         caption: p.caption ?? "",
         richDescription: richDesc,
+        photoType: pType,
       };
     });
   } catch {
@@ -135,6 +147,7 @@ JSON으로 응답: { "descriptions": ["묘사1", "묘사2", ...] }
       orderIndex: p.orderIndex,
       caption: p.caption ?? "",
       richDescription: p.caption ?? "",
+      photoType: "other",
     }));
   }
 }
