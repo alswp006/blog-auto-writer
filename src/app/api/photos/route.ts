@@ -3,10 +3,10 @@ import type { NextRequest } from "next/server";
 import { requireAuthUser } from "@/lib/api/auth";
 import * as photoModel from "@/lib/models/photo";
 import * as placeModel from "@/lib/models/place";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { writeFile } from "fs/promises";
 import crypto from "crypto";
 import sharp from "sharp";
+import { getUploadDir } from "@/lib/storage";
 
 const MAX_WIDTH = 1200;
 const MAX_PHOTOS_PER_PLACE = 20;
@@ -96,9 +96,8 @@ export async function POST(request: NextRequest) {
 
     // Save file
     const filename = `${crypto.randomUUID()}.${ext}`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDir, { recursive: true });
-    const filePath = path.join(uploadDir, filename);
+    const uploadDir = await getUploadDir();
+    const filePath = `${uploadDir}/${filename}`;
     await writeFile(filePath, buffer);
 
     const photo = await photoModel.create({

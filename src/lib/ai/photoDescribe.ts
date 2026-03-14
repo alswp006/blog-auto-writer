@@ -7,9 +7,9 @@
  */
 
 import { readFile } from "fs/promises";
-import { existsSync } from "fs";
 import path from "path";
 import type { Photo } from "@/lib/models/modelTypes";
+import { resolveFilePath } from "@/lib/storage";
 
 export type PhotoDescription = {
   orderIndex: number;
@@ -40,10 +40,10 @@ export async function describePhotosForGeneration(
 
   for (const photo of photos.slice(0, 10)) {
     try {
-      const publicPath = path.join(process.cwd(), "public", photo.filePath);
-      if (!existsSync(publicPath)) continue;
+      const resolved = resolveFilePath(photo.filePath);
+      if (!resolved) continue;
 
-      const buffer = await readFile(publicPath);
+      const buffer = await readFile(resolved);
       const base64 = buffer.toString("base64");
       const ext = path.extname(photo.filePath).slice(1).toLowerCase();
       const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg"

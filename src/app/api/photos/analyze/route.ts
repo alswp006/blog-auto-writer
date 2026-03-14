@@ -4,8 +4,7 @@ import { requireAuthUser } from "@/lib/api/auth";
 import { query, execute } from "@/lib/db";
 import * as apiUsageModel from "@/lib/models/apiUsage";
 import { readFile } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { resolveFilePath } from "@/lib/storage";
 
 export const maxDuration = 60;
 
@@ -38,11 +37,11 @@ export async function POST(request: NextRequest) {
     );
 
     for (const photo of photos) {
-      const publicPath = path.join(process.cwd(), "public", photo.file_path);
-      if (existsSync(publicPath)) {
-        const buffer = await readFile(publicPath);
+      const resolvedPath = resolveFilePath(photo.file_path);
+      if (resolvedPath) {
+        const buffer = await readFile(resolvedPath);
         const base64 = buffer.toString("base64");
-        const ext = path.extname(photo.file_path).slice(1).toLowerCase();
+        const ext = photo.file_path.split(".").pop()?.toLowerCase() ?? "jpg";
         const mime = ext === "jpg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
         imageEntries.push({
           index: imageEntries.length,

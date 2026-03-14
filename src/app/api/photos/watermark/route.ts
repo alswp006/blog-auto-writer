@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
+import { resolveFilePath, getWritePath } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthUser(request);
@@ -42,7 +43,8 @@ export async function POST(request: NextRequest) {
     const place = await placeModel.getById(photo.placeId);
     if (!place || place.userId !== auth.userId) continue;
 
-    const srcPath = path.join(process.cwd(), "public", photo.filePath);
+    const srcPath = resolveFilePath(photo.filePath);
+    if (!srcPath) continue;
     let buffer: Buffer;
     try {
       buffer = await readFile(srcPath);
@@ -120,8 +122,7 @@ export async function POST(request: NextRequest) {
     // Save as new file
     const ext = path.extname(photo.filePath) || ".jpg";
     const newFilename = `wm_${crypto.randomUUID()}${ext}`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    const newPath = path.join(uploadDir, newFilename);
+    const newPath = getWritePath(`/uploads/${newFilename}`);
     await writeFile(newPath, watermarked);
 
     // Update photo record with new file path
