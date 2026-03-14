@@ -19,6 +19,15 @@ type SearchResult = {
 
 type PlaceCategory = "restaurant" | "cafe" | "accommodation" | "attraction";
 
+type ExistingPlace = {
+  id: number;
+  name: string;
+  category: string;
+  address: string | null;
+  photoCount: number;
+  menuItemCount: number;
+};
+
 type StyleProfile = {
   id: number;
   name: string;
@@ -65,8 +74,17 @@ export default function DashboardNewPage() {
 
   // Revisit
   const [isRevisit, setIsRevisit] = useState(false);
-  const [existingPlaces, setExistingPlaces] = useState<{ id: number; name: string; category: string; photoCount: number; menuItemCount: number }[]>([]);
+  const [existingPlaces, setExistingPlaces] = useState<ExistingPlace[]>([]);
   const [selectedExistingPlaceId, setSelectedExistingPlaceId] = useState<number | null>(null);
+  const [placeSearchQuery, setPlaceSearchQuery] = useState("");
+  const [showPlaceDropdown, setShowPlaceDropdown] = useState(false);
+  const placeSearchRef = useRef<HTMLDivElement>(null);
+
+  // Menu autocomplete
+  const [menuSuggestions, setMenuSuggestions] = useState<{ name: string; priceKrw: number }[]>([]);
+  const [activeMenuIdx, setActiveMenuIdx] = useState<number | null>(null);
+  const [showMenuSuggestions, setShowMenuSuggestions] = useState(false);
+  const menuSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Generation
   const [generating, setGenerating] = useState(false);
@@ -128,11 +146,58 @@ export default function DashboardNewPage() {
     setSearchResults([]);
   };
 
+  // ── Existing place search (local filter) ──
+  const filteredPlaces = placeSearchQuery.trim().length === 0
+    ? existingPlaces
+    : existingPlaces.filter((p) => {
+        const q = placeSearchQuery.toLowerCase();
+        return p.name.toLowerCase().includes(q) || (p.address ?? "").toLowerCase().includes(q);
+      });
+
+  const selectExistingPlace = (place: ExistingPlace) => {
+    setSelectedExistingPlaceId(place.id);
+    setPlaceSearchQuery(`${place.name}${place.address ? ` - ${place.address}` : ""}`);
+    setShowPlaceDropdown(false);
+  };
+
   // ── Menu helpers ──
   const addMenuItem = () => setMenuItems((prev) => [...prev, { name: "", price: "" }]);
   const updateMenuItem = (i: number, field: "name" | "price", value: string) =>
     setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)));
   const removeMenuItem = (i: number) => setMenuItems((prev) => prev.filter((_, idx) => idx !== i));
+
+  const handleMenuNameChange = (i: number, value: string) => {
+    updateMenuItem(i, "name", value);
+    setActiveMenuIdx(i);
+    if (menuSearchTimerRef.current) clearTimeout(menuSearchTimerRef.current);
+    if (value.trim().length === 0) {
+      setMenuSuggestions([]);
+      setShowMenuSuggestions(false);
+      return;
+    }
+    menuSearchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/menu-items/suggestions?q=${encodeURIComponent(value.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMenuSuggestions(data.suggestions ?? []);
+          setShowMenuSuggestions((data.suggestions ?? []).length > 0);
+        }
+      } catch { /* ignore */ }
+    }, 200);
+  };
+
+  const selectMenuSuggestion = (suggestion: { name: string; priceKrw: number }) => {
+    if (activeMenuIdx !== null) {
+      setMenuItems((prev) =>
+        prev.map((item, idx) =>
+          idx === activeMenuIdx ? { name: suggestion.name, price: suggestion.priceKrw > 0 ? suggestion.priceKrw.toString() : "" } : item,
+        ),
+      );
+    }
+    setShowMenuSuggestions(false);
+    setMenuSuggestions([]);
+  };
 
   // ── Submit ──
   const handleGenerate = async () => {
@@ -261,7 +326,10 @@ export default function DashboardNewPage() {
                   <button
                     onClick={() => {
                       setIsRevisit(!isRevisit);
-                      if (!isRevisit) setSelectedExistingPlaceId(null);
+                      if (!isRevisit) {
+                        setSelectedExistingPlaceId(null);
+                        setPlaceSearchQuery("");
+                      }
                     }}
                     className={cn(
                       "relative w-11 h-6 rounded-full transition-colors",
@@ -278,19 +346,55 @@ export default function DashboardNewPage() {
                 </div>
                 {isRevisit && (
                   <div className="mt-3 space-y-2">
-                    <Label>기존 장소 선택</Label>
-                    <select
-                      value={selectedExistingPlaceId ?? ""}
-                      onChange={(e) => setSelectedExistingPlaceId(e.target.value ? parseInt(e.target.value, 10) : null)}
-                      className={selectClass}
-                    >
-                      <option value="">장소를 선택하세요</option>
-                      {existingPlaces.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({CATEGORY_OPTIONS.find((c) => c.value === p.category)?.label ?? p.category}) — 사진 {p.photoCount}장
-                        </option>
-                      ))}
-                    </select>
+                    <Label>기존 장소 검색</Label>
+                    <div className="relative" ref={placeSearchRef}>
+                      <Input
+                        value={placeSearchQuery}
+                        onChange={(e) => {
+                          setPlaceSearchQuery(e.target.value);
+                          setShowPlaceDropdown(true);
+                          if (selectedExistingPlaceId) setSelectedExistingPlaceId(null);
+                        }}
+                        onFocus={() => setShowPlaceDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowPlaceDropdown(false), 200)}
+                        placeholder="장소명 또는 주소로 검색..."
+                        autoComplete="off"
+                      />
+                      {showPlaceDropdown && filteredPlaces.length > 0 && (
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {filteredPlaces.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => selectExistingPlace(p)}
+                              className={cn(
+                                "w-full text-left px-3 py-2.5 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border)] last:border-0",
+                                selectedExistingPlaceId === p.id && "bg-[var(--accent-soft)]",
+                              )}
+                            >
+                              <div className="text-sm font-medium text-[var(--text)]">
+                                {p.name}
+                                <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">
+                                  {CATEGORY_OPTIONS.find((c) => c.value === p.category)?.label ?? p.category}
+                                </span>
+                              </div>
+                              {p.address && (
+                                <div className="text-xs text-[var(--text-muted)] mt-0.5">{p.address}</div>
+                              )}
+                              <div className="text-xs text-[var(--text-muted)] mt-0.5">
+                                사진 {p.photoCount}장 · 메뉴 {p.menuItemCount}개
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showPlaceDropdown && filteredPlaces.length === 0 && placeSearchQuery.trim().length > 0 && (
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg px-3 py-3">
+                          <p className="text-sm text-[var(--text-muted)] text-center">일치하는 장소가 없습니다</p>
+                        </div>
+                      )}
+                    </div>
                     {selectedExistingPlaceId && (
                       <p className="text-xs text-[var(--text-muted)]">
                         기존 장소 정보를 사용합니다. 새 사진을 추가하고 메모를 작성해주세요.
@@ -413,13 +517,38 @@ export default function DashboardNewPage() {
                   </p>
                 )}
                 {menuItems.map((item, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <Input
-                      value={item.name}
-                      onChange={(e) => updateMenuItem(i, "name", e.target.value)}
-                      placeholder="메뉴명"
-                      className="flex-1"
-                    />
+                  <div key={i} className="flex gap-2 items-center relative">
+                    <div className="flex-1 relative">
+                      <Input
+                        value={item.name}
+                        onChange={(e) => handleMenuNameChange(i, e.target.value)}
+                        onFocus={() => {
+                          setActiveMenuIdx(i);
+                          if (item.name.trim().length > 0 && menuSuggestions.length > 0) setShowMenuSuggestions(true);
+                        }}
+                        onBlur={() => setTimeout(() => setShowMenuSuggestions(false), 200)}
+                        placeholder="메뉴명 (이전 입력 자동완성)"
+                        autoComplete="off"
+                      />
+                      {showMenuSuggestions && activeMenuIdx === i && menuSuggestions.length > 0 && (
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                          {menuSuggestions.map((s, si) => (
+                            <button
+                              key={si}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => selectMenuSuggestion(s)}
+                              className="w-full text-left px-3 py-2 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border)] last:border-0"
+                            >
+                              <span className="text-sm text-[var(--text)]">{s.name}</span>
+                              {s.priceKrw > 0 && (
+                                <span className="text-xs text-[var(--text-muted)] ml-2">{s.priceKrw.toLocaleString()}원</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <Input
                       value={item.price}
                       onChange={(e) => updateMenuItem(i, "price", e.target.value)}
@@ -484,7 +613,7 @@ export default function DashboardNewPage() {
           {/* ── 5. 생성 버튼 ── */}
           <Button
             onClick={handleGenerate}
-            disabled={generating || !placeName.trim() || photos.length === 0 || !selectedStyleId}
+            disabled={generating || (!isRevisit && !placeName.trim()) || (isRevisit && !selectedExistingPlaceId) || photos.length === 0 || !selectedStyleId}
             className="w-full min-h-[48px] text-base"
           >
             {generating ? uploadProgress || "처리 중..." : "글 생성하기"}
