@@ -137,6 +137,13 @@ export async function applyAppSchema(client: Client): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id);
     CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at);
+
+    CREATE TABLE IF NOT EXISTS allowed_emails (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      memo TEXT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Add user_id column to places if missing (for existing DBs)

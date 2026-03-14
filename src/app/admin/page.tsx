@@ -7,6 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
+type AllowedEmail = {
+  id: number;
+  email: string;
+  memo: string | null;
+  createdAt: string;
+};
+
 type UserSummary = {
   userId: number;
   name: string;
@@ -49,6 +56,20 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
+  // Allowed emails management
+  const [allowedEmails, setAllowedEmails] = useState<AllowedEmail[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [newMemo, setNewMemo] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailAdding, setEmailAdding] = useState(false);
+
+  const fetchAllowedEmails = () => {
+    fetch("/api/admin/allowed-emails")
+      .then((r) => (r.ok ? r.json() : { emails: [] }))
+      .then((data) => setAllowedEmails(data.emails ?? []))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     fetch("/api/admin")
       .then((r) => {
@@ -62,7 +83,45 @@ export default function AdminPage() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
+    fetchAllowedEmails();
   }, []);
+
+  const handleAddEmail = async () => {
+    setEmailError("");
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailError("올바른 이메일을 입력해주세요");
+      return;
+    }
+    setEmailAdding(true);
+    try {
+      const res = await fetch("/api/admin/allowed-emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed, memo: newMemo.trim() || null }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setEmailError(data.error ?? "추가 실패");
+        return;
+      }
+      setNewEmail("");
+      setNewMemo("");
+      fetchAllowedEmails();
+    } catch {
+      setEmailError("추가 실패");
+    } finally {
+      setEmailAdding(false);
+    }
+  };
+
+  const handleRemoveEmail = async (id: number) => {
+    try {
+      await fetch(`/api/admin/allowed-emails?id=${id}`, { method: "DELETE" });
+      fetchAllowedEmails();
+    } catch { /* ignore */ }
+  };
 
   if (loading) {
     return (
@@ -150,6 +209,73 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Allowed Emails */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">가입 허용 이메일</CardTitle>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                {allowedEmails.length === 0 ? "목록이 비어있으면 누구나 가입 가능합니다" : `${allowedEmails.length}개 등록됨 — 목록에 있는 이메일만 가입 가능`}
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Add form */}
+          <div className="flex gap-2 items-start">
+            <div className="flex-1 space-y-1">
+              <Input
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="이메일 주소"
+                type="email"
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddEmail(); }}
+              />
+            </div>
+            <div className="w-40">
+              <Input
+                value={newMemo}
+                onChange={(e) => setNewMemo(e.target.value)}
+                placeholder="메모 (선택)"
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddEmail(); }}
+              />
+            </div>
+            <Button onClick={handleAddEmail} disabled={emailAdding} size="sm" className="shrink-0 mt-0.5">
+              {emailAdding ? "추가 중..." : "추가"}
+            </Button>
+          </div>
+          {emailError && (
+            <p className="text-xs text-red-400">{emailError}</p>
+          )}
+
+          {/* Email list */}
+          {allowedEmails.length > 0 && (
+            <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)]">
+              {allowedEmails.map((ae) => (
+                <div key={ae.id} className="flex items-center justify-between px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-medium">{ae.email}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {ae.memo && <span className="mr-2">{ae.memo}</span>}
+                      {new Date(ae.createdAt).toLocaleDateString("ko-KR")} 등록
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveEmail(ae.id)}
+                    className="text-red-400 hover:text-red-300 shrink-0"
+                  >
+                    삭제
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Monthly Summary */}
       {monthly.length > 0 && (

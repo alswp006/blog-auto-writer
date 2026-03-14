@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createUser } from "@/lib/models/user";
 import { createSession } from "@/lib/auth";
+import { isAllowed } from "@/lib/models/allowedEmail";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,6 +27,12 @@ export async function POST(request: Request) {
 
     if (password.length < 6) {
       return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+    }
+
+    // Check if email is in the allowed list (if allowlist is configured)
+    const allowed = await isAllowed(trimmedEmail);
+    if (!allowed) {
+      return NextResponse.json({ error: "초대된 이메일만 가입할 수 있습니다. 관리자에게 문의하세요." }, { status: 403 });
     }
 
     const trimmedName = (name ?? "").trim();
