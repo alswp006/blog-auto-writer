@@ -4,6 +4,7 @@ import type { Photo } from "@/lib/models/modelTypes";
 import type { StyleProfile, UserProfile } from "@/lib/models/modelTypes";
 import { enrichPlace, type EnrichedPlaceInfo } from "@/lib/ai/enrich";
 import { describePhotosForGeneration, type PhotoDescription } from "@/lib/ai/photoDescribe";
+import { researchPlace, type PlaceInsight } from "@/lib/ai/agentResearch";
 import { query } from "@/lib/db";
 
 const KRW_USD_RATE = Number(process.env.KRW_USD_RATE) || 1300;
@@ -43,7 +44,13 @@ function pickOpeningPattern(lang: "ko" | "en"): string {
 
 type PastPostSample = { titleKo: string; contentKoExcerpt: string; titleEn: string; contentEnExcerpt: string };
 
-async function fetchUserPastPosts(userId: number, limit: number = 2): Promise<PastPostSample[]> {
+async function fetchUserPastPosts(userId: number, limit?: number): Promise<PastPostSample[]> {
+  // STYLE_CONTEXT_POSTS: 대형 컨텍스트 모델(100만 토큰)에서 더 많은 과거 글을 참조하여 문체 학습 품질 향상
+  const postLimit = limit ?? (Number(process.env.STYLE_CONTEXT_POSTS) || 2);
+  // 과거 글이 많을수록 발췌 길이도 조정 (2개: 800자, 5개+: 1500자, 10개+: 2500자)
+  const excerptLen = postLimit <= 2 ? 800 : postLimit <= 5 ? 1500 : 2500;
+  const excerptLenEn = postLimit <= 2 ? 600 : postLimit <= 5 ? 1200 : 2000;
+
   try {
     const rows = await query<{
       title_ko: string | null;
@@ -56,17 +63,16 @@ async function fetchUserPastPosts(userId: number, limit: number = 2): Promise<Pa
        WHERE user_id = ? AND status = 'generated' AND content_ko IS NOT NULL
        ORDER BY updated_at DESC, rowid DESC
        LIMIT ?`,
-      userId, limit,
+      userId, postLimit,
     );
 
     return rows
       .filter((r) => r.content_ko && r.content_ko.length > 500)
       .map((r) => ({
         titleKo: r.title_ko ?? "",
-        // Take first ~800 chars at paragraph boundary
-        contentKoExcerpt: truncateAtParagraph(r.content_ko ?? "", 800),
+        contentKoExcerpt: truncateAtParagraph(r.content_ko ?? "", excerptLen),
         titleEn: r.title_en ?? "",
-        contentEnExcerpt: truncateAtParagraph(r.content_en ?? "", 600),
+        contentEnExcerpt: truncateAtParagraph(r.content_en ?? "", excerptLenEn),
       }));
   } catch {
     return [];
@@ -240,6 +246,7 @@ function buildBaseContext(
   isRevisit: boolean,
   enriched: EnrichedPlaceInfo | null,
   photoDescs: PhotoDescription[] | null = null,
+  agentInsight: PlaceInsight | null = null,
 ): string {
   let ctx = `## 장소 정보
 - 이름: ${place.name}
@@ -337,6 +344,43 @@ ${enriched?.naverCategory ? `- 네이버 분류: ${enriched.naverCategory}` : ""
 `;
   }
 
+  // AI Agent Research Insights
+  const hasInsight = agentInsight && (
+    agentInsight.popularMenus.length > 0 ||
+    agentInsight.atmosphere ||
+    agentInsight.tips.length > 0 ||
+    agentInsight.nearbyLandmarks.length > 0 ||
+    agentInsight.bestPhotoSpots.length > 0 ||
+    agentInsight.visitorSentiment
+  );
+
+  if (hasInsight) {
+    ctx += `\n## AI 리서치 인사이트 (자동 수집된 참고 데이터)
+`;
+    if (agentInsight!.popularMenus.length > 0) {
+      ctx += `- 인기 메뉴: ${agentInsight!.popularMenus.join(", ")}\n`;
+    }
+    if (agentInsight!.atmosphere) {
+      ctx += `- 분위기: ${agentInsight!.atmosphere}\n`;
+    }
+    if (agentInsight!.visitorSentiment) {
+      ctx += `- 방문자 평: ${agentInsight!.visitorSentiment}\n`;
+    }
+    if (agentInsight!.tips.length > 0) {
+      ctx += `- 방문 팁: ${agentInsight!.tips.join("; ")}\n`;
+    }
+    if (agentInsight!.nearbyLandmarks.length > 0) {
+      ctx += `- 근처: ${agentInsight!.nearbyLandmarks.join(", ")}\n`;
+    }
+    if (agentInsight!.bestPhotoSpots.length > 0) {
+      ctx += `- 사진 포인트: ${agentInsight!.bestPhotoSpots.join(", ")}\n`;
+    }
+    if (agentInsight!.recentTrends) {
+      ctx += `- 최근 트렌드: ${agentInsight!.recentTrends}\n`;
+    }
+    ctx += `\n→ 위 인사이트는 참고용입니다. 사용자 입력 정보가 최우선이며, 인사이트 내용은 자연스럽게 녹여서 활용하세요.\n`;
+  }
+
   return ctx;
 }
 
@@ -354,6 +398,7 @@ function buildKoreanPrompt(
   photoDescs: PhotoDescription[] | null = null,
   pastPosts: PastPostSample[] = [],
   qualityFeedback: string | null = null,
+  agentInsight: PlaceInsight | null = null,
 ): string {
   const cat = place.category;
   const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
@@ -362,7 +407,7 @@ function buildKoreanPrompt(
   const toneDesc = style.analyzedTone;
   const openingPattern = pickOpeningPattern("ko");
 
-  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs);
+  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight);
 
   let prompt = `아래 장소 방문 경험을 바탕으로 한국어 블로그 글을 작성하세요.
 
@@ -378,7 +423,8 @@ ${pastPosts.length > 0 ? `
 ${pastPosts.map((p, i) => `#### 이전 글 ${i + 1}: "${p.titleKo}"
 ${p.contentKoExcerpt}`).join("\n\n")}
 
-→ 위 이전 글의 어투, 문장 패턴, 감정 표현 방식을 최대한 모방하세요. 이 사용자만의 고유한 글쓰기 스타일입니다.
+→ 위 ${pastPosts.length}개 이전 글의 어투, 문장 패턴, 감정 표현 방식을 최대한 모방하세요. 이 사용자만의 고유한 글쓰기 스타일입니다.
+→ 반복되는 표현 패턴, 문장 길이 분포, 감탄사 사용 빈도, 문단 전환 방식을 분석하여 일관되게 적용하세요.
 ` : ""}
 ### 도입부 패턴 (이번 글은 이 방식으로 시작하세요)
 ${openingPattern}
@@ -465,6 +511,7 @@ function buildEnglishPrompt(
   photoDescs: PhotoDescription[] | null = null,
   pastPosts: PastPostSample[] = [],
   qualityFeedback: string | null = null,
+  agentInsight: PlaceInsight | null = null,
 ): string {
   const cat = place.category;
   const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
@@ -472,7 +519,7 @@ function buildEnglishPrompt(
   const ageTone = getAgeToneInstruction(userProfile?.ageGroup ?? "30s");
   const openingPattern = pickOpeningPattern("en");
 
-  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs);
+  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight);
 
   let prompt = `Write an English blog post about this place from the perspective of a foreign tourist visiting Korea.
 
@@ -495,6 +542,7 @@ ${pastPosts.filter((p) => p.contentEnExcerpt.length > 100).map((p, i) => `#### P
 ${p.contentEnExcerpt}`).join("\n\n")}
 
 → Match this user's unique writing voice, sentence patterns, and expression style as closely as possible.
+→ Analyze recurring patterns across all ${pastPosts.filter((p) => p.contentEnExcerpt.length > 100).length} posts: vocabulary choices, sentence length distribution, humor style, and paragraph transitions.
 ` : ""}
 ### Opening approach (start THIS post with this pattern)
 ${openingPattern}
@@ -881,19 +929,21 @@ export async function generateBlogPost(
     return generateFallback(place, menuItems, photos, style, userProfile, userMemo);
   }
 
-  // Phase 1: Parallel data preparation
-  const [enriched, photoDescs, pastPosts] = await Promise.all([
+  // Phase 1: Parallel data preparation (enrichment + vision + style + agent research)
+  const [enriched, photoDescs, pastPosts, agentInsight] = await Promise.all([
     // External data enrichment (Naver + Google)
     enrichPlace(place.name, place.address ?? null),
-    // Rich photo descriptions via Vision API
+    // Rich photo descriptions via Vision API (Gemini preferred, OpenAI fallback)
     photos.length > 0 ? describePhotosForGeneration(photos) : Promise.resolve(null),
-    // User's past posts for few-shot style matching
-    userId ? fetchUserPastPosts(userId, 2) : Promise.resolve([]),
+    // User's past posts for few-shot style matching (STYLE_CONTEXT_POSTS env로 개수 조절)
+    userId ? fetchUserPastPosts(userId) : Promise.resolve([]),
+    // AI Agent research — 자동으로 장소 리서치
+    researchPlace(place.name, place.category, place.address ?? null),
   ]);
 
   // Phase 2: Build prompts for Korean and English separately
-  const koPrompt = buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts);
-  const enPrompt = buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts);
+  const koPrompt = buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight);
+  const enPrompt = buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight);
 
   // Phase 3: Generate Korean and English in parallel (separate LLM calls)
   const [koResult, enResult] = await Promise.all([
@@ -923,14 +973,14 @@ export async function generateBlogPost(
       needsKoRetry
         ? callOpenAISingle(
             SYSTEM_MSG_KO,
-            buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(koQuality.issues, "ko")),
+            buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(koQuality.issues, "ko"), agentInsight),
             apiKey,
           )
         : null,
       needsEnRetry
         ? callOpenAISingle(
             SYSTEM_MSG_EN,
-            buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(enQuality.issues, "en")),
+            buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(enQuality.issues, "en"), agentInsight),
             apiKey,
           )
         : null,
