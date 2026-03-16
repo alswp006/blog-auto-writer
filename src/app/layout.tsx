@@ -7,6 +7,11 @@ import { generateMetadata as seo } from "@/lib/seo";
 
 export const metadata = seo();
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko" className="dark">
