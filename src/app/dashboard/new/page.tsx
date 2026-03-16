@@ -87,7 +87,7 @@ export default function DashboardNewPage() {
   const menuSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Menu auto-suggest from blogs
-  const [menuLoading, setMenuLoading] = useState(false);
+  const menuLoading = false; // kept for template compatibility
 
   // Generation
   const [generating, setGenerating] = useState(false);
@@ -150,26 +150,6 @@ export default function DashboardNewPage() {
     setShowResults(false);
     setSearchResults([]);
 
-    // 맛집/카페면 대표 메뉴 자동 불러오기
-    if (detectedCategory === "restaurant" || detectedCategory === "cafe") {
-      fetchMenuSuggestions(item.title, item.roadAddress || item.address);
-    }
-  };
-
-  const fetchMenuSuggestions = async (name: string, addr: string) => {
-    setMenuLoading(true);
-    try {
-      const res = await fetch(
-        `/api/places/menu-suggest?name=${encodeURIComponent(name)}&address=${encodeURIComponent(addr)}`,
-      );
-      if (!res.ok) return;
-      const data = await res.json();
-      const menus: { name: string; price: number }[] = data.menus ?? [];
-      if (menus.length > 0) {
-        setMenuItems(menus.map((m) => ({ name: m.name, price: m.price > 0 ? m.price.toString() : "" })));
-      }
-    } catch { /* ignore */ }
-    finally { setMenuLoading(false); }
   };
 
   // ── Existing place search (local filter) ──
@@ -537,14 +517,9 @@ export default function DashboardNewPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {menuLoading && (
-                  <div className="text-sm text-[var(--accent)] text-center py-4 animate-pulse">
-                    블로그에서 대표 메뉴 불러오는 중...
-                  </div>
-                )}
                 {!menuLoading && menuItems.length === 0 && (
                   <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                    메뉴를 추가하면 글에 자동 포함됩니다 (장소 선택 시 자동 추천)
+                    먹은 메뉴를 추가해주세요
                   </p>
                 )}
                 {menuItems.map((item, i) => (
