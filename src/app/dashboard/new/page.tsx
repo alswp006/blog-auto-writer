@@ -55,10 +55,11 @@ export default function DashboardNewPage() {
   const [rating, setRating] = useState("");
   const [memo, setMemo] = useState("");
 
-  // Menu items (for restaurants/cafes)
-  const [menuItems, setMenuItems] = useState<{ name: string; price: string }[]>([]);
+  // Menu items — unified list (popular menus auto-loaded, user can add more)
+  // If a menu has a photo attached, it's treated as "what I ate"
+  const [menuItems, setMenuItems] = useState<{ name: string; price: string; photo: File | null; photoPreview: string | null }[]>([]);
 
-  // Photos
+  // Photos (place photos: interior, exterior, parking, etc.)
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [dragging, setDragging] = useState(false);
   const [thumbnailIdx, setThumbnailIdx] = useState(0); // index of selected thumbnail photo
@@ -86,9 +87,8 @@ export default function DashboardNewPage() {
   const [showMenuSuggestions, setShowMenuSuggestions] = useState(false);
   const menuSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Popular menu suggestions from blogs (reference only, not user's order)
-  const [suggestedMenus, setSuggestedMenus] = useState<{ name: string; price: number }[]>([]);
-  const [suggestedMenusLoading, setSuggestedMenusLoading] = useState(false);
+  // Loading state for popular menu fetch
+  const [menuSuggestLoading, setMenuSuggestLoading] = useState(false);
 
   // Generation
   const [generating, setGenerating] = useState(false);
@@ -158,17 +158,24 @@ export default function DashboardNewPage() {
   };
 
   const fetchPopularMenus = async (name: string, addr: string) => {
-    setSuggestedMenusLoading(true);
-    setSuggestedMenus([]);
+    setMenuSuggestLoading(true);
     try {
       const res = await fetch(
         `/api/places/menu-suggest?name=${encodeURIComponent(name)}&address=${encodeURIComponent(addr)}`,
       );
       if (!res.ok) return;
       const data = await res.json();
-      setSuggestedMenus(data.menus ?? []);
+      const menus: { name: string; price: number }[] = data.menus ?? [];
+      if (menus.length > 0) {
+        setMenuItems(menus.map((m) => ({
+          name: m.name,
+          price: m.price > 0 ? m.price.toString() : "",
+          photo: null,
+          photoPreview: null,
+        })));
+      }
     } catch { /* ignore */ }
-    finally { setSuggestedMenusLoading(false); }
+    finally { setMenuSuggestLoading(false); }
   };
 
   // ── Existing place search (local filter) ──
@@ -186,10 +193,26 @@ export default function DashboardNewPage() {
   };
 
   // ── Menu helpers ──
-  const addMenuItem = () => setMenuItems((prev) => [...prev, { name: "", price: "" }]);
+  const addMenuItem = () => setMenuItems((prev) => [...prev, { name: "", price: "", photo: null, photoPreview: null }]);
   const updateMenuItem = (i: number, field: "name" | "price", value: string) =>
     setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)));
-  const removeMenuItem = (i: number) => setMenuItems((prev) => prev.filter((_, idx) => idx !== i));
+  const removeMenuItem = (i: number) => {
+    setMenuItems((prev) => {
+      const item = prev[i];
+      if (item?.photoPreview) URL.revokeObjectURL(item.photoPreview);
+      return prev.filter((_, idx) => idx !== i);
+    });
+  };
+  const addMenuPhoto = (i: number, file: File) => {
+    const preview = URL.createObjectURL(file);
+    setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, photo: file, photoPreview: preview } : item)));
+  };
+  const removeMenuPhoto = (i: number) => {
+    setMenuItems((prev) => prev.map((item, idx) => {
+      if (idx === i && item.photoPreview) URL.revokeObjectURL(item.photoPreview);
+      return idx === i ? { ...item, photo: null, photoPreview: null } : item;
+    }));
+  };
 
   const handleMenuNameChange = (i: number, value: string) => {
     updateMenuItem(i, "name", value);
@@ -216,7 +239,7 @@ export default function DashboardNewPage() {
     if (activeMenuIdx !== null) {
       setMenuItems((prev) =>
         prev.map((item, idx) =>
-          idx === activeMenuIdx ? { name: suggestion.name, price: suggestion.priceKrw > 0 ? suggestion.priceKrw.toString() : "" } : item,
+          idx === activeMenuIdx ? { ...item, name: suggestion.name, price: suggestion.priceKrw > 0 ? suggestion.priceKrw.toString() : "" } : item,
         ),
       );
     }
@@ -261,28 +284,48 @@ export default function DashboardNewPage() {
         placeId = placeData.place.id;
       }
 
-      // 2. Upload photos (thumbnail first at order 1)
+      // 2. Upload menu food photos first, then place photos
+      let photoOrder = 1;
+      const menuPhotos = menuItems.filter((m) => m.photo && m.name.trim());
+      for (let i = 0; i < menuPhotos.length; i++) {
+        setUploadProgress(`메뉴 사진 업로드 중... (${i + 1}/${menuPhotos.length})`);
+        const item = menuPhotos[i];
+        const formData = new FormData();
+        formData.append("file", item.photo!);
+        formData.append("placeId", placeId.toString());
+        formData.append("orderIndex", photoOrder.toString());
+        formData.append("caption", `[음식] ${item.name.trim()}`);
+        const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+        if (!photoRes.ok) {
+          const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
+          throw new Error(errData.error ?? `메뉴 사진 업로드 실패`);
+        }
+        photoOrder++;
+      }
+
+      // Upload place photos (interior, exterior, parking, etc.)
       const orderedPhotos = [...photos];
       if (thumbnailIdx > 0 && thumbnailIdx < orderedPhotos.length) {
         const [thumb] = orderedPhotos.splice(thumbnailIdx, 1);
         orderedPhotos.unshift(thumb);
       }
       for (let i = 0; i < orderedPhotos.length; i++) {
-        setUploadProgress(`사진 업로드 중... (${i + 1}/${orderedPhotos.length})`);
+        setUploadProgress(`장소 사진 업로드 중... (${i + 1}/${orderedPhotos.length})`);
         const photo = orderedPhotos[i];
         const formData = new FormData();
         formData.append("file", photo._file);
         formData.append("placeId", placeId.toString());
-        formData.append("orderIndex", (i + 1).toString());
+        formData.append("orderIndex", photoOrder.toString());
         if (photo.caption) formData.append("caption", photo.caption);
         const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
         if (!photoRes.ok) {
           const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
           throw new Error(errData.error ?? `사진 ${i + 1} 업로드 실패`);
         }
+        photoOrder++;
       }
 
-      // 3. Create menu items
+      // 3. Create menu items (all of them — both eaten and reference)
       const validMenus = menuItems.filter((m) => m.name.trim());
       if (validMenus.length > 0) {
         setUploadProgress("메뉴 저장 중...");
@@ -296,11 +339,15 @@ export default function DashboardNewPage() {
       }
 
       // 4. Generate post via AI
+      // Menus with photos = what I ate, menus without photos = popular reference
+      const orderedMenus = validMenus.filter((m) => m.photo).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
+      const popularMenus = validMenus.filter((m) => !m.photo).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
+
       setUploadProgress("AI 글 생성 중... (30초~1분 소요)");
       const genRes = await fetch("/api/posts/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ placeId, styleProfileId: selectedStyleId, memo: memo.trim(), isRevisit, suggestedMenus }),
+        body: JSON.stringify({ placeId, styleProfileId: selectedStyleId, memo: memo.trim(), isRevisit, suggestedMenus: popularMenus, orderedMenus }),
       });
       let genData;
       try {
@@ -524,84 +571,113 @@ export default function DashboardNewPage() {
           </Card>
           )}
 
-          {/* ── 2. 메뉴/가격 ── */}
+          {/* ── 2. 메뉴 ── */}
           {!isRevisit && showMenuSection && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">메뉴 / 가격</CardTitle>
+                  <CardTitle className="text-lg">메뉴</CardTitle>
                   <Button variant="outline" size="sm" onClick={addMenuItem}>
                     + 메뉴 추가
                   </Button>
                 </div>
+                <p className="text-xs text-[var(--text-muted)]">
+                  사진을 추가한 메뉴 = 내가 먹은 메뉴 / 사진 없는 메뉴 = 대표 메뉴 참고
+                </p>
               </CardHeader>
               <CardContent className="space-y-3">
-                {suggestedMenusLoading && (
+                {menuSuggestLoading && (
                   <div className="text-sm text-[var(--accent)] text-center py-2 animate-pulse">
                     블로그에서 대표 메뉴 검색 중...
                   </div>
                 )}
-                {suggestedMenus.length > 0 && (
-                  <div className="bg-[var(--bg-elevated)] rounded-lg p-3 mb-2">
-                    <p className="text-xs text-[var(--text-muted)] mb-1.5">이 가게의 대표 메뉴 (블로그 기반)</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {suggestedMenus.map((m, i) => (
-                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--accent-soft)] text-xs text-[var(--accent)]">
-                          {m.name}{m.price > 0 && <span className="text-[var(--text-muted)]">{m.price.toLocaleString()}원</span>}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)] mt-1.5">글 생성 시 참고 정보로 활용됩니다</p>
-                  </div>
-                )}
-                {menuItems.length === 0 && (
+                {menuItems.length === 0 && !menuSuggestLoading && (
                   <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                    내가 먹은 메뉴를 추가해주세요
+                    장소를 검색하면 대표 메뉴가 자동으로 불러와집니다
                   </p>
                 )}
                 {menuItems.map((item, i) => (
-                  <div key={i} className="flex gap-2 items-center relative">
-                    <div className="flex-1 relative">
+                  <div
+                    key={i}
+                    className={cn(
+                      "rounded-lg border p-3 space-y-2 transition-colors",
+                      item.photo
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                        : "border-[var(--border)] bg-[var(--bg-card)]",
+                    )}
+                  >
+                    <div className="flex gap-2 items-center relative">
+                      {item.photo && (
+                        <span className="text-xs font-medium text-[var(--accent)] shrink-0">먹음</span>
+                      )}
+                      <div className="flex-1 relative">
+                        <Input
+                          value={item.name}
+                          onChange={(e) => handleMenuNameChange(i, e.target.value)}
+                          onFocus={() => {
+                            setActiveMenuIdx(i);
+                            if (item.name.trim().length > 0 && menuSuggestions.length > 0) setShowMenuSuggestions(true);
+                          }}
+                          onBlur={() => setTimeout(() => setShowMenuSuggestions(false), 200)}
+                          placeholder="메뉴명"
+                          autoComplete="off"
+                        />
+                        {showMenuSuggestions && activeMenuIdx === i && menuSuggestions.length > 0 && (
+                          <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                            {menuSuggestions.map((s, si) => (
+                              <button
+                                key={si}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => selectMenuSuggestion(s)}
+                                className="w-full text-left px-3 py-2 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border)] last:border-0"
+                              >
+                                <span className="text-sm text-[var(--text)]">{s.name}</span>
+                                {s.priceKrw > 0 && (
+                                  <span className="text-xs text-[var(--text-muted)] ml-2">{s.priceKrw.toLocaleString()}원</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <Input
-                        value={item.name}
-                        onChange={(e) => handleMenuNameChange(i, e.target.value)}
-                        onFocus={() => {
-                          setActiveMenuIdx(i);
-                          if (item.name.trim().length > 0 && menuSuggestions.length > 0) setShowMenuSuggestions(true);
-                        }}
-                        onBlur={() => setTimeout(() => setShowMenuSuggestions(false), 200)}
-                        placeholder="메뉴명 (이전 입력 자동완성)"
-                        autoComplete="off"
+                        value={item.price}
+                        onChange={(e) => updateMenuItem(i, "price", e.target.value)}
+                        placeholder="가격(원)"
+                        type="number"
+                        className="w-28"
                       />
-                      {showMenuSuggestions && activeMenuIdx === i && menuSuggestions.length > 0 && (
-                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                          {menuSuggestions.map((s, si) => (
-                            <button
-                              key={si}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => selectMenuSuggestion(s)}
-                              className="w-full text-left px-3 py-2 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border)] last:border-0"
-                            >
-                              <span className="text-sm text-[var(--text)]">{s.name}</span>
-                              {s.priceKrw > 0 && (
-                                <span className="text-xs text-[var(--text-muted)] ml-2">{s.priceKrw.toLocaleString()}원</span>
-                              )}
-                            </button>
-                          ))}
+                      <Button variant="ghost" size="sm" onClick={() => removeMenuItem(i)} className="text-red-400 hover:text-red-300 shrink-0">
+                        삭제
+                      </Button>
+                    </div>
+                    {/* Photo attachment */}
+                    <div className="flex items-center gap-2">
+                      {item.photoPreview ? (
+                        <div className="flex items-center gap-2">
+                          <img src={item.photoPreview} alt={item.name} className="w-12 h-12 rounded-md object-cover" />
+                          <Button variant="ghost" size="sm" onClick={() => removeMenuPhoto(i)} className="text-xs text-red-400 hover:text-red-300">
+                            사진 제거
+                          </Button>
                         </div>
+                      ) : (
+                        <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors border border-dashed border-[var(--border)]">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                          사진 추가 (먹은 메뉴)
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) addMenuPhoto(i, file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
                       )}
                     </div>
-                    <Input
-                      value={item.price}
-                      onChange={(e) => updateMenuItem(i, "price", e.target.value)}
-                      placeholder="가격(원)"
-                      type="number"
-                      className="w-28"
-                    />
-                    <Button variant="ghost" size="sm" onClick={() => removeMenuItem(i)} className="text-red-400 hover:text-red-300 shrink-0">
-                      삭제
-                    </Button>
                   </div>
                 ))}
               </CardContent>

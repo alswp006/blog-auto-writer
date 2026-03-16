@@ -131,7 +131,7 @@ export function PhotoUploader({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">사진 *</CardTitle>
+          <CardTitle className="text-lg">장소 사진 *</CardTitle>
           <Badge variant="secondary">{photos.length}/{MAX_PHOTOS}</Badge>
         </div>
       </CardHeader>
@@ -150,7 +150,7 @@ export function PhotoUploader({
             )}
           >
             <p className="text-sm text-[var(--text-muted)]">
-              {dragging ? "여기에 놓으세요!" : "클릭 또는 드래그앤드롭으로 사진 추가"}
+              {dragging ? "여기에 놓으세요!" : "인테리어, 외관, 주차장 등 장소 사진 추가"}
             </p>
             <p className="text-xs text-[var(--text-muted)] mt-1">JPEG, PNG, WebP, HEIC / 최대 10MB</p>
             <input

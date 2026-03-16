@@ -258,6 +258,7 @@ function buildBaseContext(
   photoDescs: PhotoDescription[] | null = null,
   agentInsight: PlaceInsight | null = null,
   suggestedMenus: SuggestedMenu[] = [],
+  orderedMenus: SuggestedMenu[] = [],
 ): string {
   let ctx = `## 장소 정보
 - 이름: ${place.name}
@@ -267,21 +268,27 @@ function buildBaseContext(
 ${enriched?.naverCategory ? `- 네이버 분류: ${enriched.naverCategory}` : ""}
 `;
 
-  if (suggestedMenus.length > 0) {
-    ctx += `\n## 이 가게의 대표 메뉴 (블로그에서 수집한 참고 정보)\n`;
-    for (const item of suggestedMenus) {
+  if (orderedMenus.length > 0) {
+    ctx += `\n## 내가 먹은 메뉴 (실제 주문 — 사진 있음)\n`;
+    for (const item of orderedMenus) {
       ctx += `- ${item.name}${item.price > 0 ? `: ${item.price.toLocaleString()}원 (~$${(item.price / KRW_USD_RATE).toFixed(1)})` : ""}\n`;
     }
-    ctx += `※ 대표 메뉴 정보가 있으면 글에서 자연스럽게 언급 가능 (예: "이 가게는 ○○로 유명한데, 나는 △△를 주문했다")\n`;
-    ctx += `※ 대표 메뉴 정보가 없으면 이 섹션을 무시하고 내가 먹은 메뉴만 서술\n`;
-  }
-
-  if (menuItems.length > 0) {
-    ctx += `\n## 내가 먹은 메뉴 (실제 주문한 것)\n`;
+    ctx += `※ 글의 주요 내용은 반드시 내가 먹은 메뉴 중심으로 서술. 맛, 비주얼, 감상을 자세히.\n`;
+  } else if (menuItems.length > 0) {
+    // fallback: DB에 저장된 메뉴 (orderedMenus가 없을 때)
+    ctx += `\n## 내가 먹은 메뉴\n`;
     for (const item of menuItems) {
       ctx += `- ${item.name}: ${item.priceKrw.toLocaleString()}원 (~$${(item.priceKrw / KRW_USD_RATE).toFixed(1)})\n`;
     }
-    ctx += `※ 글의 주요 내용은 반드시 내가 먹은 메뉴 중심으로 서술\n`;
+  }
+
+  if (suggestedMenus.length > 0) {
+    ctx += `\n## 이 가게의 대표 메뉴 (블로그 기반 참고 정보)\n`;
+    for (const item of suggestedMenus) {
+      ctx += `- ${item.name}${item.price > 0 ? `: ${item.price.toLocaleString()}원 (~$${(item.price / KRW_USD_RATE).toFixed(1)})` : ""}\n`;
+    }
+    ctx += `※ 대표 메뉴는 자연스럽게 언급 가능 (예: "이 가게는 ○○로 유명한데, 나는 △△를 주문했다")\n`;
+    ctx += `※ 대표 메뉴 정보가 없으면 이 섹션 무시\n`;
   }
 
   if (photos.length > 0) {
@@ -421,6 +428,7 @@ function buildKoreanPrompt(
   qualityFeedback: string | null = null,
   agentInsight: PlaceInsight | null = null,
   suggestedMenus: SuggestedMenu[] = [],
+  orderedMenus: SuggestedMenu[] = [],
 ): string {
   const cat = place.category;
   const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
@@ -429,7 +437,7 @@ function buildKoreanPrompt(
   const toneDesc = style.analyzedTone;
   const openingPattern = pickOpeningPattern("ko");
 
-  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight, suggestedMenus);
+  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight, suggestedMenus, orderedMenus);
 
   let prompt = `아래 장소 방문 경험을 바탕으로 한국어 블로그 글을 작성하세요.
 
@@ -535,6 +543,7 @@ function buildEnglishPrompt(
   qualityFeedback: string | null = null,
   agentInsight: PlaceInsight | null = null,
   suggestedMenus: SuggestedMenu[] = [],
+  orderedMenus: SuggestedMenu[] = [],
 ): string {
   const cat = place.category;
   const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
@@ -542,7 +551,7 @@ function buildEnglishPrompt(
   const ageTone = getAgeToneInstruction(userProfile?.ageGroup ?? "30s");
   const openingPattern = pickOpeningPattern("en");
 
-  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight, suggestedMenus);
+  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight, suggestedMenus, orderedMenus);
 
   let prompt = `Write an English blog post about this place from the perspective of a foreign tourist visiting Korea.
 
@@ -948,6 +957,7 @@ export async function generateBlogPost(
   isRevisit: boolean = false,
   userId: number | null = null,
   suggestedMenus: SuggestedMenu[] = [],
+  orderedMenus: SuggestedMenu[] = [],
 ): Promise<GeneratedContent> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -968,8 +978,8 @@ export async function generateBlogPost(
   ]);
 
   // Phase 2: Build prompts for Korean and English separately
-  const koPrompt = buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight, suggestedMenus);
-  const enPrompt = buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight, suggestedMenus);
+  const koPrompt = buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight, suggestedMenus, orderedMenus);
+  const enPrompt = buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight, suggestedMenus, orderedMenus);
 
   // Phase 3: Generate Korean and English in parallel (separate LLM calls)
   const [koResult, enResult] = await Promise.all([
@@ -999,14 +1009,14 @@ export async function generateBlogPost(
       needsKoRetry
         ? callOpenAISingle(
             SYSTEM_MSG_KO,
-            buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(koQuality.issues, "ko"), agentInsight, suggestedMenus),
+            buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(koQuality.issues, "ko"), agentInsight, suggestedMenus, orderedMenus),
             apiKey,
           )
         : null,
       needsEnRetry
         ? callOpenAISingle(
             SYSTEM_MSG_EN,
-            buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(enQuality.issues, "en"), agentInsight, suggestedMenus),
+            buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(enQuality.issues, "en"), agentInsight, suggestedMenus, orderedMenus),
             apiKey,
           )
         : null,
