@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireAuthUser } from "@/lib/api/auth";
+import {
+  fetchGoogleBlogUrls,
+  fetchMultipleBlogContents,
+  isCrawlableDomain,
+  type GoogleSearchResult,
+} from "@/lib/ai/enrich";
 
 /**
  * GET /api/places/menu-suggest?name=장소명&address=주소
  *
- * 네이버 블로그 검색 → AI 분석으로 대표 메뉴 5~6개 자동 추출
+ * 네이버 블로그 스니펫 + Google CSE + 블로그 본문 크롤링 → AI 분석으로 대표 메뉴 2~5개 자동 추출
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAuthUser(request);
@@ -21,66 +27,122 @@ export async function GET(request: NextRequest) {
 
   const naverId = process.env.NAVER_CLIENT_ID;
   const naverSecret = process.env.NAVER_CLIENT_SECRET;
-  if (!naverId || !naverSecret) {
-    return NextResponse.json({ menus: [] });
-  }
 
   try {
-    // Step 1: 네이버 블로그에서 메뉴 관련 정보 검색
+    // Phase 1: 네이버 블로그 검색 + Google CSE 병렬 수행
     const area = address.split(" ").slice(0, 2).join(" ");
-    const query = area ? `${placeName} ${area} 메뉴 가격` : `${placeName} 메뉴 가격`;
+    const naverQuery = area ? `${placeName} ${area} 메뉴 가격` : `${placeName} 메뉴 가격`;
 
-    const blogRes = await fetch(
-      `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(query)}&display=5&sort=sim`,
-      {
-        headers: { "X-Naver-Client-Id": naverId, "X-Naver-Client-Secret": naverSecret },
-        signal: AbortSignal.timeout(5000),
-      },
-    );
+    const [naverItems, googleResults] = await Promise.all([
+      naverId && naverSecret
+        ? fetchNaverBlogItems(naverQuery, naverId, naverSecret)
+        : Promise.resolve([]),
+      fetchGoogleBlogUrls(placeName, address || null),
+    ]);
 
-    if (!blogRes.ok) {
+    if (naverItems.length === 0 && googleResults.length === 0) {
       return NextResponse.json({ menus: [] });
     }
 
-    const blogData = await blogRes.json();
-    const items: { title?: string; description?: string }[] = blogData.items ?? [];
+    // Phase 2: 크롤 가능한 블로그 본문 가져오기
+    // 네이버 블로그 link 중 크롤 가능한 것 + Google 결과를 합쳐서 크롤링
+    const naverCrawlable: GoogleSearchResult[] = naverItems
+      .filter((item) => item.link && isCrawlableDomain(item.link))
+      .map((item) => ({
+        title: item.title.replace(/<[^>]*>/g, ""),
+        link: item.link,
+        snippet: item.description.replace(/<[^>]*>/g, ""),
+      }));
 
-    if (items.length === 0) {
-      return NextResponse.json({ menus: [] });
-    }
+    const allCrawlTargets: GoogleSearchResult[] = [...naverCrawlable, ...googleResults];
+    const blogContents = await fetchMultipleBlogContents(allCrawlTargets);
 
-    // 블로그 텍스트 수집 (HTML 태그 제거)
-    const blogTexts = items
+    // Phase 3: 모든 텍스트 소스를 결합
+    // 네이버 블로그 스니펫
+    const snippetTexts = naverItems
       .map((item) => {
-        const title = (item.title ?? "").replace(/<[^>]*>/g, "");
-        const desc = (item.description ?? "").replace(/<[^>]*>/g, "");
-        return `${title} ${desc}`;
+        const title = item.title.replace(/<[^>]*>/g, "");
+        const desc = item.description.replace(/<[^>]*>/g, "");
+        return `[${title}] ${desc}`;
       })
       .join("\n");
 
-    // Step 2: AI로 메뉴명+가격 추출
-    const menus = await extractMenusWithAI(placeName, blogTexts);
+    // Google 검색 스니펫 (크롤 불가한 것만 — 크롤된 건 본문이 있으므로)
+    const googleSnippets = googleResults
+      .filter((r) => !isCrawlableDomain(r.link) && r.snippet.length > 30)
+      .slice(0, 3)
+      .map((r) => `[${r.title}] ${r.snippet}`)
+      .join("\n");
+
+    // 크롤된 블로그 본문
+    const fullTexts = blogContents
+      .map((b) => `[${b.title}]\n${b.content}`)
+      .join("\n\n");
+
+    // 합산 텍스트 (최대 ~5000자)
+    const combinedText = [snippetTexts, googleSnippets, fullTexts]
+      .filter(Boolean)
+      .join("\n\n---\n\n")
+      .slice(0, 5000);
+
+    // Phase 4: AI로 메뉴명+가격 추출
+    const menus = await extractMenusWithAI(placeName, combinedText);
     return NextResponse.json({ menus });
   } catch {
     return NextResponse.json({ menus: [] });
   }
 }
 
+// ── Naver blog search ──
+
+type NaverBlogItem = {
+  title: string;
+  link: string;
+  description: string;
+};
+
+async function fetchNaverBlogItems(
+  query: string,
+  naverId: string,
+  naverSecret: string,
+): Promise<NaverBlogItem[]> {
+  try {
+    const res = await fetch(
+      `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(query)}&display=5&sort=sim`,
+      {
+        headers: { "X-Naver-Client-Id": naverId, "X-Naver-Client-Secret": naverSecret },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.items ?? []).map((item: { title?: string; link?: string; description?: string }) => ({
+      title: item.title ?? "",
+      link: item.link ?? "",
+      description: item.description ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ── AI extraction ──
+
 type MenuSuggestion = { name: string; price: number };
 
 async function extractMenusWithAI(placeName: string, blogText: string): Promise<MenuSuggestion[]> {
-  const prompt = `아래는 "${placeName}"에 대한 블로그 리뷰 검색 결과입니다:
+  const prompt = `아래는 "${placeName}"에 대한 블로그 리뷰와 검색 결과입니다:
 
-${blogText.slice(0, 3000)}
+${blogText}
 
-위 텍스트에서 이 장소의 대표 메뉴와 가격을 추출해주세요.
+위 텍스트에서 이 장소의 **대표 메뉴**와 가격을 추출해주세요.
 
 규칙:
-- 최대 6개까지만
-- 가격이 명확히 언급된 것만 포함 (추측 금지)
+- 최소 2개, 최대 5개 추출
+- 대표/시그니처/인기 메뉴를 우선 (사이드메뉴·음료보다 메인 메뉴 우선)
 - 가격은 원 단위 정수 (예: 12000)
-- 가격을 모르면 0으로
-- 음료/디저트/사이드 포함 가능
+- 가격을 확인할 수 없으면 0으로
+- 같은 메뉴가 여러 블로그에 언급되면 신뢰도가 높으므로 우선 포함
 
 JSON으로 응답: { "menus": [{ "name": "메뉴명", "price": 12000 }, ...] }`;
 
@@ -106,7 +168,7 @@ function parseMenuResponse(content: string): MenuSuggestion[] {
     return (parsed.menus ?? [])
       .filter((m) => m.name && typeof m.name === "string")
       .map((m) => ({ name: m.name.trim(), price: Math.max(0, Math.round(Number(m.price) || 0)) }))
-      .slice(0, 6);
+      .slice(0, 5);
   } catch {
     return [];
   }

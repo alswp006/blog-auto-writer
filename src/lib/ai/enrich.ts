@@ -111,7 +111,7 @@ const CRAWLABLE_DOMAINS = [
   "notion.site",
 ];
 
-function isCrawlableDomain(url: string): boolean {
+export function isCrawlableDomain(url: string): boolean {
   try {
     const hostname = new URL(url).hostname;
     return CRAWLABLE_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`));
@@ -120,10 +120,10 @@ function isCrawlableDomain(url: string): boolean {
   }
 }
 
-type GoogleSearchResult = { title: string; link: string; snippet: string };
+export type GoogleSearchResult = { title: string; link: string; snippet: string };
 
 /** Search Google Custom Search for blog posts about this place */
-async function fetchGoogleBlogUrls(
+export async function fetchGoogleBlogUrls(
   placeName: string,
   address: string | null,
 ): Promise<GoogleSearchResult[]> {
@@ -157,7 +157,7 @@ async function fetchGoogleBlogUrls(
  * Only fetches from CRAWLABLE_DOMAINS (Tistory, WordPress, etc.)
  * Returns truncated text (max 1500 chars) focused on the article body.
  */
-async function fetchBlogContent(url: string): Promise<string | null> {
+export async function fetchBlogContent(url: string): Promise<string | null> {
   if (!isCrawlableDomain(url)) return null;
 
   try {
@@ -240,7 +240,7 @@ function extractArticleText(html: string): string | null {
  * Fetch and extract content from multiple blog URLs in parallel.
  * Limits to 3 concurrent fetches to be respectful.
  */
-async function fetchMultipleBlogContents(
+export async function fetchMultipleBlogContents(
   results: GoogleSearchResult[],
 ): Promise<{ title: string; content: string }[]> {
   const crawlable = results.filter((r) => isCrawlableDomain(r.link)).slice(0, 3);
