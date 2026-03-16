@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+.env.local
+.env
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+.vercel
+.claude
+README.md
+src/__tests__
