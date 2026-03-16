@@ -135,16 +135,19 @@ async function extractMenusWithAI(placeName: string, blogText: string): Promise<
 
 ${blogText}
 
-위 텍스트에서 이 장소의 **대표 메뉴**와 가격을 추출해주세요.
+위 텍스트에서 이 장소에서 실제로 판매하는 **구체적인 메뉴 항목**의 이름과 가격을 추출해주세요.
 
 규칙:
 - 최소 2개, 최대 5개 추출
+- 반드시 **구체적인 메뉴 이름**을 추출할 것 (예: "아메리카노", "마르게리타 피자", "숯불갈비", "크로플")
+- **절대 금지**: "브런치", "음료", "디저트", "메인", "사이드", "세트메뉴", "코스요리" 같은 카테고리/분류명은 메뉴가 아님
 - 대표/시그니처/인기 메뉴를 우선 (사이드메뉴·음료보다 메인 메뉴 우선)
 - 가격은 원 단위 정수 (예: 12000)
 - 가격을 확인할 수 없으면 0으로
 - 같은 메뉴가 여러 블로그에 언급되면 신뢰도가 높으므로 우선 포함
+- 텍스트에서 구체적인 메뉴명을 찾을 수 없으면 빈 배열 반환
 
-JSON으로 응답: { "menus": [{ "name": "메뉴명", "price": 12000 }, ...] }`;
+JSON으로 응답: { "menus": [{ "name": "아메리카노", "price": 5000 }, { "name": "크로플", "price": 8500 }] }`;
 
   // Gemini 우선
   if (process.env.GEMINI_API_KEY) {
@@ -161,6 +164,15 @@ JSON으로 응답: { "menus": [{ "name": "메뉴명", "price": 12000 }, ...] }`;
   return [];
 }
 
+/** Category/generic names that should never be returned as menu items */
+const BLOCKED_NAMES = new Set([
+  "브런치", "음료", "디저트", "메인", "사이드", "세트메뉴", "코스요리", "코스",
+  "식사", "주류", "안주", "반찬", "전채", "샐러드", "스프", "빵", "커피",
+  "전체메뉴", "대표메뉴", "시그니처", "추천메뉴", "인기메뉴", "신메뉴",
+  "런치", "디너", "조식", "중식", "석식", "메뉴", "가격",
+  "음식", "요리", "식단", "한식", "양식", "중식", "일식",
+]);
+
 function parseMenuResponse(content: string): MenuSuggestion[] {
   try {
     const cleaned = content.replace(/^```json?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
@@ -168,6 +180,7 @@ function parseMenuResponse(content: string): MenuSuggestion[] {
     return (parsed.menus ?? [])
       .filter((m) => m.name && typeof m.name === "string")
       .map((m) => ({ name: m.name.trim(), price: Math.max(0, Math.round(Number(m.price) || 0)) }))
+      .filter((m) => m.name.length >= 2 && !BLOCKED_NAMES.has(m.name))
       .slice(0, 5);
   } catch {
     return [];
