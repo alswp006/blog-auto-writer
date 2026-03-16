@@ -13,6 +13,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Ensure public dir exists (even if empty)
+RUN mkdir -p public
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
@@ -22,18 +25,15 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create upload directory
-RUN mkdir -p /tmp/uploads
+# Create directories
+RUN mkdir -p /tmp/uploads /app/uploads /app/public /app/.next/static
 
-# Copy standalone output — Next.js may nest under the monorepo path
-# so we find server.js and copy from its parent directory
-COPY --from=builder /app/.next/static ./.next/static
+# Copy built assets
 COPY --from=builder /app/public ./public
-
-# Copy the standalone bundle (handle both flat and nested monorepo output)
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/.next/standalone ./standalone-raw
 
-# Move files to /app — find the actual server.js location
+# Move standalone files to /app — handle nested monorepo output
 RUN if [ -f ./standalone-raw/server.js ]; then \
       cp -r ./standalone-raw/* ./ ; \
     else \
