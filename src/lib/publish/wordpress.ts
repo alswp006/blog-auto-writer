@@ -1,3 +1,6 @@
+import type { PhotoBuffer } from "@/lib/publish/photo-embed";
+import { embedPhotosHtml } from "@/lib/publish/photo-embed";
+
 export type WordPressConfig = {
   siteUrl: string;
   username: string;
@@ -12,19 +15,68 @@ export function getWordPressConfig(): WordPressConfig | null {
   return { siteUrl: siteUrl.replace(/\/+$/, ""), username, appPassword };
 }
 
+/**
+ * Upload a single photo to WordPress media library and return the source URL.
+ * WordPress REST API: POST {siteUrl}/wp-json/wp/v2/media
+ */
+async function uploadPhotoToWordPress(
+  config: WordPressConfig,
+  photo: PhotoBuffer,
+): Promise<string | null> {
+  const authHeader = `Basic ${Buffer.from(`${config.username}:${config.appPassword}`).toString("base64")}`;
+
+  try {
+    const response = await fetch(`${config.siteUrl}/wp-json/wp/v2/media`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Disposition": `attachment; filename="${photo.filename}"`,
+        "Content-Type": photo.mimeType,
+      },
+      body: new Uint8Array(photo.buffer),
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.source_url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function publishToWordPress(
   config: WordPressConfig,
   title: string,
   content: string,
   tags: string[],
+  photos?: PhotoBuffer[],
 ): Promise<{ url: string; postId: number }> {
-  // WordPress REST API v2: https://developer.wordpress.org/rest-api/reference/posts/
-  const htmlContent = content
-    .split("\n\n")
-    .map((p) => `<p>${p}</p>`)
-    .join("\n");
-
   const authHeader = `Basic ${Buffer.from(`${config.username}:${config.appPassword}`).toString("base64")}`;
+
+  // Upload photos and embed in content
+  let processedContent = content;
+  if (photos && photos.length > 0 && /\[PHOTO:\d+\]/.test(content)) {
+    const urlMap = new Map<number, { url: string; caption: string | null }>();
+    for (const photo of photos) {
+      const uploadedUrl = await uploadPhotoToWordPress(config, photo);
+      if (uploadedUrl) {
+        urlMap.set(photo.orderIndex, { url: uploadedUrl, caption: photo.caption });
+      }
+    }
+    if (urlMap.size > 0) {
+      processedContent = embedPhotosHtml(content, urlMap);
+    }
+  }
+
+  // Convert to HTML paragraphs (skip already-HTML parts)
+  const htmlContent = processedContent
+    .split("\n\n")
+    .map((p) => {
+      const trimmed = p.trim();
+      if (trimmed.startsWith("<img ") || trimmed.startsWith("<p")) return trimmed;
+      return `<p>${trimmed}</p>`;
+    })
+    .join("\n");
 
   // Create or get tags
   const tagIds: number[] = [];
@@ -63,7 +115,7 @@ export async function publishToWordPress(
     body: JSON.stringify({
       title,
       content: htmlContent,
-      status: "draft", // Start as draft for safety
+      status: "draft",
       tags: tagIds,
     }),
   });

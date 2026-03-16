@@ -13,6 +13,7 @@ import { SeoScoreCard } from "@/components/post/seo-score-card";
 import { CompetitorAnalysisCard } from "@/components/post/competitor-analysis-card";
 import { PublishHistoryCard, type PublishHistoryItem } from "@/components/post/publish-history-card";
 import { SchedulePublishCard } from "@/components/post/schedule-publish-card";
+import { PlatformOptimizeCard } from "@/components/post/platform-optimize-card";
 
 type GenerationMeta = {
   mainModel: string;
@@ -53,6 +54,18 @@ type Place = {
   id: number;
   name: string;
   category: string;
+};
+
+type PostVariant = {
+  id: number;
+  postId: number;
+  platform: "naver" | "tistory" | "medium";
+  lang: "ko" | "en";
+  title: string;
+  content: string;
+  hashtags: string[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 type Tab = "preview" | "edit";
@@ -122,6 +135,10 @@ export default function PostEditPage({
   // Face Mosaic
   const [faceMosaicApplying, setFaceMosaicApplying] = useState(false);
 
+  // Platform Variants
+  const [variants, setVariants] = useState<PostVariant[]>([]);
+  const [activeVariant, setActiveVariant] = useState<"base" | "naver" | "tistory" | "medium">("base");
+
   useEffect(() => {
     fetch(`/api/posts/${postId}`)
       .then((r) => {
@@ -133,6 +150,7 @@ export default function PostEditPage({
         setPhotos(data.photos ?? []);
         setPlace(data.place ?? null);
         setPublishHistory(data.publishHistory ?? []);
+        setVariants(data.variants ?? []);
         setTitleKo(data.post.titleKo ?? "");
         setContentKo(data.post.contentKo ?? "");
         setHashtagsKo((data.post.hashtagsKo ?? []).join(" "));
@@ -218,60 +236,162 @@ export default function PostEditPage({
   };
 
   const formatForPlatform = (platform: Platform): string => {
-    const title = getTitle();
-    const content = getContent();
-    const tagStr = getTagStr();
+    // Use variant content if available for this platform+lang
+    const variantPlatform = platform === "wordpress" ? null : platform;
+    const variant = variantPlatform ? variants.find((v) => v.platform === variantPlatform && v.lang === lang) : null;
+    const title = variant ? variant.title : getTitle();
+    const content = variant ? variant.content : getContent();
+    const tagStr = variant
+      ? variant.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")
+      : getTagStr();
+    // Naver: plain text (just paste into editor)
+    if (platform === "naver") {
+      const cleanContent = content.replace(/\[PHOTO:\d+\]\s*/g, "").trim();
+      return `${title}\n\n${cleanContent}\n\n${tagStr}`;
+    }
+
+    // Other platforms: markdown with photo markers
     const contentHasMarkers = /\[PHOTO:\d+\]/.test(content);
-    const format = platform === "naver" ? "html" : "markdown";
 
     if (contentHasMarkers) {
-      // Replace [PHOTO:n] markers with actual image tags
-      const replaced = replacePhotoMarkers(content, format);
-      if (platform === "naver") {
-        const htmlParts = replaced.split("\n\n").map((p) => {
-          if (p.startsWith("<img ")) return p;
-          return `<p>${p}</p>`;
-        });
-        return `<h2>${title}</h2>\n\n${htmlParts.join("\n\n")}\n\n<p>${tagStr}</p>`;
-      }
+      const replaced = replacePhotoMarkers(content, "markdown");
       return `# ${title}\n\n${replaced}\n\n${tagStr}`;
     }
 
-    // Fallback: insert all photos after first paragraph
     const paragraphs = content.split("\n\n");
-    const photoBlock = buildPhotoImgTags(format);
+    const photoBlock = buildPhotoImgTags("markdown");
     const insertIdx = Math.min(1, paragraphs.length);
-
-    if (platform === "naver") {
-      const htmlParts = paragraphs.map((p) => `<p>${p}</p>`);
-      htmlParts.splice(insertIdx, 0, photoBlock);
-      return `<h2>${title}</h2>\n\n${htmlParts.join("\n\n")}\n\n<p>${tagStr}</p>`;
-    }
     const mdParts = [...paragraphs];
     mdParts.splice(insertIdx, 0, photoBlock);
     return `# ${title}\n\n${mdParts.join("\n\n")}\n\n${tagStr}`;
   };
 
+  // Convert photo to base64 data URI for rich clipboard
+  const photoToDataUri = async (photo: Photo): Promise<string | null> => {
+    try {
+      const res = await fetch(photo.filePath);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  // Build rich HTML with base64 images for Naver clipboard
+  const buildNaverRichHtml = async (): Promise<string> => {
+    const variantPlatform = "naver" as const;
+    const variant = variants.find((v) => v.platform === variantPlatform && v.lang === lang);
+    const title = variant ? variant.title : getTitle();
+    const content = variant ? variant.content : getContent();
+    const tagStr = variant
+      ? variant.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")
+      : getTagStr();
+
+    // Pre-load all photo data URIs
+    const dataUriMap = new Map<number, string>();
+    for (const photo of photos) {
+      const dataUri = await photoToDataUri(photo);
+      if (dataUri) dataUriMap.set(photo.orderIndex, dataUri);
+    }
+
+    const hasMarkers = /\[PHOTO:\d+\]/.test(content);
+
+    // Replace [PHOTO:n] markers with <img> tags using data URIs
+    let htmlBody: string;
+    if (hasMarkers) {
+      htmlBody = content.replace(/\[PHOTO:(\d+)\]/g, (_m, idxStr) => {
+        const idx = parseInt(idxStr, 10);
+        const dataUri = dataUriMap.get(idx);
+        const photo = photoByIndex.get(idx);
+        if (!dataUri) return "";
+        const alt = photo?.caption ?? `Photo ${idx}`;
+        let img = `<img src="${dataUri}" alt="${alt}" style="max-width:100%;margin:12px 0;" />`;
+        if (photo?.caption) {
+          img += `<p style="text-align:center;color:#888;font-size:14px;">${photo.caption}</p>`;
+        }
+        return img;
+      });
+    } else {
+      // No markers — insert all photos after first paragraph
+      htmlBody = content;
+      if (dataUriMap.size > 0) {
+        const paragraphs = content.split("\n\n");
+        const insertIdx = Math.min(1, paragraphs.length);
+        const photoHtml = photos
+          .map((p) => {
+            const dataUri = dataUriMap.get(p.orderIndex);
+            if (!dataUri) return "";
+            const alt = p.caption ?? `Photo ${p.orderIndex}`;
+            return `<img src="${dataUri}" alt="${alt}" style="max-width:100%;margin:12px 0;" />`;
+          })
+          .filter(Boolean)
+          .join("\n");
+        paragraphs.splice(insertIdx, 0, photoHtml);
+        htmlBody = paragraphs.join("\n\n");
+      }
+    }
+
+    // Convert paragraphs to <p> tags (skip img blocks)
+    const htmlParts = htmlBody.split("\n\n").map((p) => {
+      const trimmed = p.trim();
+      if (!trimmed) return "";
+      if (trimmed.startsWith("<img ") || trimmed.startsWith("<p")) return trimmed;
+      return `<p>${trimmed}</p>`;
+    });
+
+    return `<h2>${title}</h2>\n${htmlParts.join("\n")}\n<p>${tagStr}</p>`;
+  };
+
   const handleCopy = async (platform: Platform) => {
-    const text = formatForPlatform(platform);
-    await navigator.clipboard.writeText(text);
-    showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
-    // Record naver copy in publish history
     if (platform === "naver") {
+      // Rich HTML copy with embedded images
+      try {
+        showToast("사진 포함 복사 중...");
+        const html = await buildNaverRichHtml();
+        const plainText = formatForPlatform(platform);
+
+        const htmlBlob = new Blob([html], { type: "text/html" });
+        const textBlob = new Blob([plainText], { type: "text/plain" });
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": htmlBlob,
+            "text/plain": textBlob,
+          }),
+        ]);
+        showToast("네이버 복사 완료! (사진 포함)");
+      } catch {
+        // Fallback to plain text if rich clipboard fails
+        const text = formatForPlatform(platform);
+        await navigator.clipboard.writeText(text);
+        showToast("네이버 복사됨 (텍스트만 — 브라우저가 이미지 복사를 지원하지 않습니다)");
+      }
+
+      // Record copy
       try {
         await fetch(`/api/posts/${postId}/record-copy`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ platform: "naver", lang }),
         });
-        // Refresh publish history
         const res = await fetch(`/api/posts/${postId}`);
         if (res.ok) {
           const data = await res.json();
           setPublishHistory(data.publishHistory ?? []);
         }
       } catch { /* non-critical */ }
+      return;
     }
+
+    // Other platforms: plain text markdown
+    const text = formatForPlatform(platform);
+    await navigator.clipboard.writeText(text);
+    showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
   };
 
   const handleSuggestKeywords = async () => {
@@ -493,9 +613,13 @@ export default function PostEditPage({
   }
 
   // ── Preview helpers ──
-  const previewTitle = (lang === "ko" ? post?.titleKo : post?.titleEn) ?? "";
-  const previewContent = (lang === "ko" ? post?.contentKo : post?.contentEn) ?? "";
-  const previewHashtags = (lang === "ko" ? post?.hashtagsKo : post?.hashtagsEn) ?? [];
+  const currentVariant = activeVariant !== "base"
+    ? variants.find((v) => v.platform === activeVariant && v.lang === lang)
+    : null;
+  const previewTitle = currentVariant ? currentVariant.title : ((lang === "ko" ? post?.titleKo : post?.titleEn) ?? "");
+  const previewContent = currentVariant ? currentVariant.content : ((lang === "ko" ? post?.contentKo : post?.contentEn) ?? "");
+  const previewHashtags = currentVariant ? currentVariant.hashtags : ((lang === "ko" ? post?.hashtagsKo : post?.hashtagsEn) ?? []);
+  const variantsForLang = variants.filter((v) => v.lang === lang);
 
   // Split content into paragraphs — detect [PHOTO:n] markers for smart placement
   const paragraphs = previewContent ? previewContent.split("\n\n") : [];
@@ -562,7 +686,7 @@ export default function PostEditPage({
           )}
 
           {/* Tab + Lang Switcher */}
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
             <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
               {(["preview", "edit"] as Tab[]).map((t) => (
                 <button key={t} onClick={() => setTab(t)} className={cn(
@@ -573,19 +697,21 @@ export default function PostEditPage({
                 </button>
               ))}
             </div>
-            <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
-              {(["ko", "en"] as Lang[]).map((l) => (
-                <button key={l} onClick={() => setLang(l)} className={cn(
-                  "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  lang === l ? "bg-[var(--bg-card)] text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
-                )}>
-                  {l === "ko" ? "한국어" : "English"}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
+                {(["ko", "en"] as Lang[]).map((l) => (
+                  <button key={l} onClick={() => { setLang(l); setActiveVariant("base"); }} className={cn(
+                    "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                    lang === l ? "bg-[var(--bg-card)] text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                  )}>
+                    {l === "ko" ? "한국어" : "English"}
+                  </button>
+                ))}
+              </div>
+              <Badge variant={post?.status === "generated" ? "default" : "secondary"}>
+                {post?.status === "generated" ? "완료" : "초안"}
+              </Badge>
             </div>
-            <Badge variant={post?.status === "generated" ? "default" : "secondary"}>
-              {post?.status === "generated" ? "완료" : "초안"}
-            </Badge>
           </div>
 
           {/* Content */}
@@ -593,6 +719,30 @@ export default function PostEditPage({
             <CardContent className="p-6 space-y-4">
               {tab === "preview" ? (
                 <>
+                  {/* Variant toggle */}
+                  {variantsForLang.length > 0 && (
+                    <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1 mb-2">
+                      {(["base", "naver", "tistory", "medium"] as const).map((v) => {
+                        if (v !== "base" && !variants.find((vr) => vr.platform === v && vr.lang === lang)) return null;
+                        const label = v === "base" ? "기본" : v === "naver" ? "네이버" : v === "tistory" ? "티스토리" : "Medium";
+                        return (
+                          <button
+                            key={v}
+                            onClick={() => setActiveVariant(v)}
+                            className={cn(
+                              "px-3 py-1 rounded-md text-xs font-medium transition-colors",
+                              activeVariant === v
+                                ? "bg-[var(--accent)] text-white"
+                                : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <h2 className="text-xl font-bold">{previewTitle || "(제목 없음)"}</h2>
 
                   {/* Interleave paragraphs with photos */}
@@ -676,8 +826,8 @@ export default function PostEditPage({
                   <div className="space-y-1.5">
                     <Label>본문</Label>
                     {lang === "ko"
-                      ? <Textarea value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
-                      : <Textarea value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />}
+                      ? <Textarea value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={6} className="font-mono text-sm leading-relaxed min-h-[200px] md:min-h-[400px]" />
+                      : <Textarea value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={6} className="font-mono text-sm leading-relaxed min-h-[200px] md:min-h-[400px]" />}
                   </div>
                   {/* Partial Regeneration */}
                   <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
@@ -845,6 +995,27 @@ export default function PostEditPage({
             <SeoScoreCard postId={postId} lang={lang} onError={showToast} />
           )}
 
+          {/* Platform SEO Optimize */}
+          {post?.status === "generated" && (
+            <PlatformOptimizeCard
+              postId={postId}
+              lang={lang}
+              variants={variants}
+              onOptimized={(variant) => {
+                setVariants((prev) => {
+                  const idx = prev.findIndex((v) => v.platform === variant.platform && v.lang === variant.lang);
+                  if (idx >= 0) {
+                    const updated = [...prev];
+                    updated[idx] = variant;
+                    return updated;
+                  }
+                  return [...prev, variant];
+                });
+              }}
+              onToast={showToast}
+            />
+          )}
+
           {/* Photo Analysis */}
           {photos.length > 0 && (
             <Card>
@@ -896,7 +1067,7 @@ export default function PostEditPage({
               <p className="text-xs text-[var(--text-muted)] mb-3">사진 img 태그와 해시태그가 포함됩니다</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
-                  네이버 복사 (HTML)
+                  네이버 복사
                 </Button>
                 <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full">
                   티스토리 복사 (MD)

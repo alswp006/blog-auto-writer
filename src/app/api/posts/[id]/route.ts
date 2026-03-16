@@ -5,6 +5,7 @@ import * as postModel from "@/lib/models/post";
 import * as placeModel from "@/lib/models/place";
 import * as photoModel from "@/lib/models/photo";
 import * as publishHistoryModel from "@/lib/models/publishHistory";
+import * as postVariantModel from "@/lib/models/postVariant";
 
 export async function GET(
   request: NextRequest,
@@ -22,8 +23,9 @@ export async function GET(
   const place = await placeModel.getById(post.placeId);
   const photos = await photoModel.listPhotos(post.placeId);
   const publishHistory = await publishHistoryModel.getByPostId(post.id);
+  const variants = await postVariantModel.listByPost(post.id);
 
-  return NextResponse.json({ post, place, photos, publishHistory });
+  return NextResponse.json({ post, place, photos, publishHistory, variants });
 }
 
 export async function PATCH(

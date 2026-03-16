@@ -102,6 +102,20 @@ export async function applyAppSchema(client: Client): Promise<void> {
       FOREIGN KEY(style_profile_id) REFERENCES style_profiles(id) ON DELETE RESTRICT
     );
 
+    CREATE TABLE IF NOT EXISTS post_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      platform TEXT NOT NULL CHECK(platform IN ('naver','tistory','medium')),
+      lang TEXT NOT NULL CHECK(lang IN ('ko','en')),
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      hashtags_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      UNIQUE(post_id, platform, lang)
+    );
+
     CREATE TABLE IF NOT EXISTS publish_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_id INTEGER NOT NULL,

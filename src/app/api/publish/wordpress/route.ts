@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireAuthUser } from "@/lib/api/auth";
 import * as postModel from "@/lib/models/post";
+import * as photoModel from "@/lib/models/photo";
 import { publishToWordPress, getWordPressConfig } from "@/lib/publish/wordpress";
 import { recordPublish } from "@/lib/models/publishHistory";
+import * as postVariantModel from "@/lib/models/postVariant";
+import { loadPhotoBuffers } from "@/lib/publish/photo-embed";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthUser(request);
@@ -34,16 +37,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
-  const title = lang === "en" ? post.titleEn : post.titleKo;
-  const content = lang === "en" ? post.contentEn : post.contentKo;
-  const tags = lang === "en" ? post.hashtagsEn : post.hashtagsKo;
+  // WordPress uses Google SEO strategy like Tistory — use tistory variant if available
+  const variant = await postVariantModel.getByPostAndPlatform(postId, "tistory", lang as "ko" | "en");
+  const title = variant ? variant.title : (lang === "en" ? post.titleEn : post.titleKo);
+  const content = variant ? variant.content : (lang === "en" ? post.contentEn : post.contentKo);
+  const tags = variant ? variant.hashtags : (lang === "en" ? post.hashtagsEn : post.hashtagsKo);
 
   if (!title || !content) {
     return NextResponse.json({ error: "Post has no content to publish" }, { status: 400 });
   }
 
+  // Load photos for embedding
+  const photos = await photoModel.listPhotos(post.placeId);
+  const photoBuffers = await loadPhotoBuffers(photos);
+
   try {
-    const result = await publishToWordPress(config, title, content, tags);
+    const result = await publishToWordPress(config, title, content, tags, photoBuffers);
     await recordPublish(postId, "wordpress", lang as "ko" | "en", result.url);
     return NextResponse.json({ url: result.url, wordpressPostId: result.postId });
   } catch (error) {

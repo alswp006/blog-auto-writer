@@ -56,8 +56,8 @@ export default function DashboardNewPage() {
   const [memo, setMemo] = useState("");
 
   // Menu items — unified list (popular menus auto-loaded, user can add more)
-  // If a menu has a photo attached, it's treated as "what I ate"
-  const [menuItems, setMenuItems] = useState<{ name: string; price: string; photo: File | null; photoPreview: string | null }[]>([]);
+  // If a menu has photos attached, it's treated as "what I ate"
+  const [menuItems, setMenuItems] = useState<{ name: string; price: string; photos: File[]; photoPreviews: string[] }[]>([]);
 
   // Photos (place photos: interior, exterior, parking, etc.)
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
@@ -170,8 +170,8 @@ export default function DashboardNewPage() {
         setMenuItems(menus.map((m) => ({
           name: m.name,
           price: m.price > 0 ? m.price.toString() : "",
-          photo: null,
-          photoPreview: null,
+          photos: [],
+          photoPreviews: [],
         })));
       }
     } catch { /* ignore */ }
@@ -193,24 +193,34 @@ export default function DashboardNewPage() {
   };
 
   // ── Menu helpers ──
-  const addMenuItem = () => setMenuItems((prev) => [...prev, { name: "", price: "", photo: null, photoPreview: null }]);
+  const addMenuItem = () => setMenuItems((prev) => [...prev, { name: "", price: "", photos: [], photoPreviews: [] }]);
   const updateMenuItem = (i: number, field: "name" | "price", value: string) =>
     setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)));
   const removeMenuItem = (i: number) => {
     setMenuItems((prev) => {
       const item = prev[i];
-      if (item?.photoPreview) URL.revokeObjectURL(item.photoPreview);
+      item?.photoPreviews.forEach((p) => URL.revokeObjectURL(p));
       return prev.filter((_, idx) => idx !== i);
     });
   };
-  const addMenuPhoto = (i: number, file: File) => {
-    const preview = URL.createObjectURL(file);
-    setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, photo: file, photoPreview: preview } : item)));
-  };
-  const removeMenuPhoto = (i: number) => {
+  const addMenuPhoto = (i: number, files: FileList | File[]) => {
+    const fileArr = Array.from(files);
     setMenuItems((prev) => prev.map((item, idx) => {
-      if (idx === i && item.photoPreview) URL.revokeObjectURL(item.photoPreview);
-      return idx === i ? { ...item, photo: null, photoPreview: null } : item;
+      if (idx !== i) return item;
+      const newPhotos = [...item.photos, ...fileArr];
+      const newPreviews = [...item.photoPreviews, ...fileArr.map((f) => URL.createObjectURL(f))];
+      return { ...item, photos: newPhotos, photoPreviews: newPreviews };
+    }));
+  };
+  const removeMenuPhoto = (menuIdx: number, photoIdx: number) => {
+    setMenuItems((prev) => prev.map((item, idx) => {
+      if (idx !== menuIdx) return item;
+      URL.revokeObjectURL(item.photoPreviews[photoIdx]);
+      return {
+        ...item,
+        photos: item.photos.filter((_, pi) => pi !== photoIdx),
+        photoPreviews: item.photoPreviews.filter((_, pi) => pi !== photoIdx),
+      };
     }));
   };
 
@@ -239,7 +249,7 @@ export default function DashboardNewPage() {
     if (activeMenuIdx !== null) {
       setMenuItems((prev) =>
         prev.map((item, idx) =>
-          idx === activeMenuIdx ? { ...item, name: suggestion.name, price: suggestion.priceKrw > 0 ? suggestion.priceKrw.toString() : "" } : item,
+          idx === activeMenuIdx ? { ...item, name: suggestion.name, price: suggestion.priceKrw > 0 ? suggestion.priceKrw.toString() : item.price } : item,
         ),
       );
     }
@@ -286,21 +296,25 @@ export default function DashboardNewPage() {
 
       // 2. Upload menu food photos first, then place photos
       let photoOrder = 1;
-      const menuPhotos = menuItems.filter((m) => m.photo && m.name.trim());
-      for (let i = 0; i < menuPhotos.length; i++) {
-        setUploadProgress(`메뉴 사진 업로드 중... (${i + 1}/${menuPhotos.length})`);
-        const item = menuPhotos[i];
-        const formData = new FormData();
-        formData.append("file", item.photo!);
-        formData.append("placeId", placeId.toString());
-        formData.append("orderIndex", photoOrder.toString());
-        formData.append("caption", `[음식] ${item.name.trim()}`);
-        const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
-        if (!photoRes.ok) {
-          const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
-          throw new Error(errData.error ?? `메뉴 사진 업로드 실패`);
+      const menusWithPhotos = menuItems.filter((m) => m.photos.length > 0 && m.name.trim());
+      const totalMenuPhotos = menusWithPhotos.reduce((sum, m) => sum + m.photos.length, 0);
+      let menuPhotoUploaded = 0;
+      for (const item of menusWithPhotos) {
+        for (let pi = 0; pi < item.photos.length; pi++) {
+          menuPhotoUploaded++;
+          setUploadProgress(`메뉴 사진 업로드 중... (${menuPhotoUploaded}/${totalMenuPhotos})`);
+          const formData = new FormData();
+          formData.append("file", item.photos[pi]);
+          formData.append("placeId", placeId.toString());
+          formData.append("orderIndex", photoOrder.toString());
+          formData.append("caption", `[음식] ${item.name.trim()}${item.photos.length > 1 ? ` (${pi + 1})` : ""}`);
+          const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+          if (!photoRes.ok) {
+            const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
+            throw new Error(errData.error ?? `메뉴 사진 업로드 실패`);
+          }
+          photoOrder++;
         }
-        photoOrder++;
       }
 
       // Upload place photos (interior, exterior, parking, etc.)
@@ -340,8 +354,8 @@ export default function DashboardNewPage() {
 
       // 4. Generate post via AI
       // Menus with photos = what I ate, menus without photos = popular reference
-      const orderedMenus = validMenus.filter((m) => m.photo).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
-      const popularMenus = validMenus.filter((m) => !m.photo).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
+      const orderedMenus = validMenus.filter((m) => m.photos.length > 0).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
+      const popularMenus = validMenus.filter((m) => m.photos.length === 0).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
 
       setUploadProgress("AI 글 생성 중... (30초~1분 소요)");
       const genRes = await fetch("/api/posts/generate", {
@@ -601,13 +615,14 @@ export default function DashboardNewPage() {
                     key={i}
                     className={cn(
                       "rounded-lg border p-3 space-y-2 transition-colors",
-                      item.photo
+                      item.photos.length > 0
                         ? "border-[var(--accent)] bg-[var(--accent-soft)]"
                         : "border-[var(--border)] bg-[var(--bg-card)]",
                     )}
                   >
+                    {/* Row 1: menu name + delete */}
                     <div className="flex gap-2 items-center relative">
-                      {item.photo && (
+                      {item.photos.length > 0 && (
                         <span className="text-xs font-medium text-[var(--accent)] shrink-0">먹음</span>
                       )}
                       <div className="flex-1 relative">
@@ -641,42 +656,59 @@ export default function DashboardNewPage() {
                           </div>
                         )}
                       </div>
+                      {/* Price: hidden on mobile, shown on desktop in same row */}
                       <Input
                         value={item.price}
                         onChange={(e) => updateMenuItem(i, "price", e.target.value)}
                         placeholder="가격(원)"
                         type="number"
-                        className="w-28"
+                        className="hidden md:block w-28"
                       />
                       <Button variant="ghost" size="sm" onClick={() => removeMenuItem(i)} className="text-red-400 hover:text-red-300 shrink-0">
                         삭제
                       </Button>
                     </div>
-                    {/* Photo attachment */}
-                    <div className="flex items-center gap-2">
-                      {item.photoPreview ? (
-                        <div className="flex items-center gap-2">
-                          <img src={item.photoPreview} alt={item.name} className="w-12 h-12 rounded-md object-cover" />
-                          <Button variant="ghost" size="sm" onClick={() => removeMenuPhoto(i)} className="text-xs text-red-400 hover:text-red-300">
-                            사진 제거
-                          </Button>
+                    {/* Row 2: price (mobile) + photos */}
+                    <div className="space-y-2">
+                      {/* Price: shown on mobile only */}
+                      <Input
+                        value={item.price}
+                        onChange={(e) => updateMenuItem(i, "price", e.target.value)}
+                        placeholder="가격(원)"
+                        type="number"
+                        className="md:hidden w-full"
+                      />
+                      {/* Photo thumbnails */}
+                      {item.photoPreviews.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {item.photoPreviews.map((preview, pi) => (
+                            <div key={pi} className="relative group/photo">
+                              <img src={preview} alt={`${item.name} ${pi + 1}`} className="w-16 h-16 rounded-md object-cover" />
+                              <button
+                                onClick={() => removeMenuPhoto(i, pi)}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity"
+                              >
+                                X
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors border border-dashed border-[var(--border)]">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                          사진 추가 (먹은 메뉴)
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) addMenuPhoto(i, file);
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
                       )}
+                      {/* Add photo button */}
+                      <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors border border-dashed border-[var(--border)]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                        {item.photos.length > 0 ? "사진 더 추가" : "사진 추가 (먹은 메뉴)"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) addMenuPhoto(i, e.target.files);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
                     </div>
                   </div>
                 ))}
