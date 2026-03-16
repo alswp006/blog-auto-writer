@@ -153,6 +153,13 @@ export async function applyAppSchema(client: Client): Promise<void> {
     // Column already exists — ignore
   }
 
+  // Add generation_meta column to posts if missing (for existing DBs)
+  try {
+    await client.execute("ALTER TABLE posts ADD COLUMN generation_meta TEXT NULL");
+  } catch {
+    // Column already exists — ignore
+  }
+
   await seedSystemPresets(client);
 }
 

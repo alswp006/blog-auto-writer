@@ -14,6 +14,17 @@ import { CompetitorAnalysisCard } from "@/components/post/competitor-analysis-ca
 import { PublishHistoryCard, type PublishHistoryItem } from "@/components/post/publish-history-card";
 import { SchedulePublishCard } from "@/components/post/schedule-publish-card";
 
+type GenerationMeta = {
+  mainModel: string;
+  visionProvider: string;
+  visionModel: string;
+  researchProvider: string;
+  styleContextPosts: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+};
+
 type Post = {
   id: number;
   titleKo: string | null;
@@ -24,6 +35,7 @@ type Post = {
   hashtagsEn: string[];
   status: string;
   generationError: string | null;
+  generationMeta: GenerationMeta | null;
   placeId: number;
   scheduledAt: string | null;
   scheduledPlatform: string | null;
@@ -750,6 +762,44 @@ export default function PostEditPage({
                 >
                   {watermarkApplying ? "적용 중..." : "워터마크 적용"}
                 </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Generation Info */}
+          {post?.generationMeta && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">AI 생성 정보</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">글 생성 모델</p>
+                    <p className="text-sm font-semibold text-[var(--text)]">{post.generationMeta.mainModel}</p>
+                  </div>
+                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">사진 분석</p>
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      {post.generationMeta.visionProvider === "gemini" ? "Gemini" : post.generationMeta.visionProvider === "openai" ? "OpenAI" : "없음"}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">{post.generationMeta.visionModel}</p>
+                  </div>
+                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">에이전트 리서치</p>
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      {post.generationMeta.researchProvider === "gemini" ? "Gemini" : post.generationMeta.researchProvider === "openai" ? "OpenAI" : "없음"}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
+                    <p className="text-[10px] text-[var(--text-muted)] mb-1">문체 학습</p>
+                    <p className="text-sm font-semibold text-[var(--text)]">과거 글 {post.generationMeta.styleContextPosts}개</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
+                  <span>토큰: {(post.generationMeta.inputTokens + post.generationMeta.outputTokens).toLocaleString()} ({post.generationMeta.inputTokens.toLocaleString()} in / {post.generationMeta.outputTokens.toLocaleString()} out)</span>
+                  <span>${post.generationMeta.cost.toFixed(4)}</span>
+                </div>
               </CardContent>
             </Card>
           )}

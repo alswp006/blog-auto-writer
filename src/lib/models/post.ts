@@ -13,12 +13,24 @@ export type PostRow = {
   hashtags_en_json: string;
   status: "draft" | "generated";
   generation_error: string | null;
+  generation_meta: string | null;
   scheduled_at: string | null;
   scheduled_platform: string | null;
   scheduled_lang: string | null;
   is_revisit: 0 | 1;
   created_at: string;
   updated_at: string;
+};
+
+export type GenerationMeta = {
+  mainModel: string;
+  visionProvider: string;
+  visionModel: string;
+  researchProvider: string;
+  styleContextPosts: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
 };
 
 export type Post = {
@@ -34,6 +46,7 @@ export type Post = {
   hashtagsEn: string[];
   status: "draft" | "generated";
   generationError: string | null;
+  generationMeta: GenerationMeta | null;
   scheduledAt: string | null;
   scheduledPlatform: string | null;
   scheduledLang: string | null;
@@ -56,6 +69,7 @@ function rowToPost(row: PostRow): Post {
     hashtagsEn: JSON.parse(row.hashtags_en_json) as string[],
     status: row.status,
     generationError: row.generation_error,
+    generationMeta: row.generation_meta ? JSON.parse(row.generation_meta) as GenerationMeta : null,
     scheduledAt: row.scheduled_at,
     scheduledPlatform: row.scheduled_platform,
     scheduledLang: row.scheduled_lang,
@@ -110,12 +124,14 @@ export async function updateGenerated(
     titleEn: string;
     contentEn: string;
     hashtagsEn: string[];
+    generationMeta?: GenerationMeta;
   },
 ): Promise<Post | null> {
   const now = new Date().toISOString();
   await execute(
     `UPDATE posts SET title_ko = ?, content_ko = ?, hashtags_ko_json = ?,
      title_en = ?, content_en = ?, hashtags_en_json = ?,
+     generation_meta = ?,
      status = 'generated', generation_error = NULL, updated_at = ?
      WHERE id = ?`,
     data.titleKo,
@@ -124,6 +140,7 @@ export async function updateGenerated(
     data.titleEn,
     data.contentEn,
     JSON.stringify(data.hashtagsEn),
+    data.generationMeta ? JSON.stringify(data.generationMeta) : null,
     now,
     id,
   );

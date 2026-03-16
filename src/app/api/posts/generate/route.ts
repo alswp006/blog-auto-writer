@@ -70,7 +70,10 @@ export async function POST(request: NextRequest) {
       await apiUsageModel.recordUsage(auth.userId, generated.usage.model, generated.usage.inputTokens, generated.usage.outputTokens, cost);
     }
 
-    const updated = await postModel.updateGenerated(post.id, generated);
+    const updated = await postModel.updateGenerated(post.id, {
+      ...generated,
+      generationMeta: generated.generationMeta,
+    });
     return NextResponse.json({ post: updated }, { status: 201 });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Generation failed";

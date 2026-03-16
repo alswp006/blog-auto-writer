@@ -47,9 +47,6 @@ type PastPostSample = { titleKo: string; contentKoExcerpt: string; titleEn: stri
 async function fetchUserPastPosts(userId: number, limit?: number): Promise<PastPostSample[]> {
   // STYLE_CONTEXT_POSTS: 대형 컨텍스트 모델(100만 토큰)에서 더 많은 과거 글을 참조하여 문체 학습 품질 향상
   const postLimit = limit ?? (Number(process.env.STYLE_CONTEXT_POSTS) || 2);
-  // 과거 글이 많을수록 발췌 길이도 조정 (2개: 800자, 5개+: 1500자, 10개+: 2500자)
-  const excerptLen = postLimit <= 2 ? 800 : postLimit <= 5 ? 1500 : 2500;
-  const excerptLenEn = postLimit <= 2 ? 600 : postLimit <= 5 ? 1200 : 2000;
 
   try {
     const rows = await query<{
@@ -70,9 +67,10 @@ async function fetchUserPastPosts(userId: number, limit?: number): Promise<PastP
       .filter((r) => r.content_ko && r.content_ko.length > 500)
       .map((r) => ({
         titleKo: r.title_ko ?? "",
-        contentKoExcerpt: truncateAtParagraph(r.content_ko ?? "", excerptLen),
+        // 전체 글 전달 — [PHOTO:n] 마커만 제거하여 순수 텍스트 전달
+        contentKoExcerpt: (r.content_ko ?? "").replace(/\[PHOTO:\d+\]\s*/g, ""),
         titleEn: r.title_en ?? "",
-        contentEnExcerpt: truncateAtParagraph(r.content_en ?? "", excerptLenEn),
+        contentEnExcerpt: (r.content_en ?? "").replace(/\[PHOTO:\d+\]\s*/g, ""),
       }));
   } catch {
     return [];
@@ -87,6 +85,17 @@ function truncateAtParagraph(text: string, maxLen: number): string {
   return (cut > maxLen * 0.4 ? clean.slice(0, cut) : clean.slice(0, maxLen)) + "...";
 }
 
+export type GenerationMeta = {
+  mainModel: string;
+  visionProvider: string;      // "gemini" | "openai" | "none"
+  visionModel: string;
+  researchProvider: string;    // "gemini" | "openai" | "none"
+  styleContextPosts: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+};
+
 export type GeneratedContent = {
   titleKo: string;
   contentKo: string;
@@ -95,6 +104,7 @@ export type GeneratedContent = {
   contentEn: string;
   hashtagsEn: string[];
   usage?: { model: string; inputTokens: number; outputTokens: number };
+  generationMeta?: GenerationMeta;
 };
 
 // ── Category-specific blog structures ──
@@ -1007,8 +1017,27 @@ export async function generateBlogPost(
   }
 
   // Merge usage from all calls
+  const mainModel = koResult.usage?.model ?? enResult.usage?.model ?? "unknown";
   const totalInput = (koResult.usage?.inputTokens ?? 0) + (enResult.usage?.inputTokens ?? 0) + (retryKoUsage?.inputTokens ?? 0) + (retryEnUsage?.inputTokens ?? 0);
   const totalOutput = (koResult.usage?.outputTokens ?? 0) + (enResult.usage?.outputTokens ?? 0) + (retryKoUsage?.outputTokens ?? 0) + (retryEnUsage?.outputTokens ?? 0);
+
+  // Detect which providers were used
+  const visionProvider = process.env.GEMINI_API_KEY ? "gemini" : process.env.OPENAI_API_KEY ? "openai" : "none";
+  const visionModel = process.env.GEMINI_API_KEY
+    ? (process.env.GEMINI_VISION_MODEL ?? "gemini-2.0-flash-lite")
+    : (process.env.OPENAI_VISION_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini");
+  const researchProvider = process.env.GEMINI_API_KEY ? "gemini" : process.env.OPENAI_API_KEY ? "openai" : "none";
+  const styleContextPosts = Number(process.env.STYLE_CONTEXT_POSTS) || 2;
+
+  // Calculate cost
+  const MODEL_RATES: Record<string, { input: number; output: number }> = {
+    "gpt-4o-mini": { input: 0.15, output: 0.60 },
+    "gpt-4o": { input: 2.50, output: 10.00 },
+    "gpt-5.2": { input: 1.75, output: 14.00 },
+    "gpt-5.4": { input: 2.50, output: 15.00 },
+  };
+  const rate = MODEL_RATES[mainModel] ?? MODEL_RATES["gpt-4o-mini"];
+  const cost = (totalInput * rate.input + totalOutput * rate.output) / 1_000_000;
 
   return {
     titleKo: finalKo.title,
@@ -1018,9 +1047,19 @@ export async function generateBlogPost(
     contentEn: finalEn.content,
     hashtagsEn: Array.isArray(finalEn.hashtags) ? finalEn.hashtags : [],
     usage: {
-      model: koResult.usage?.model ?? enResult.usage?.model ?? "unknown",
+      model: mainModel,
       inputTokens: totalInput,
       outputTokens: totalOutput,
+    },
+    generationMeta: {
+      mainModel,
+      visionProvider,
+      visionModel,
+      researchProvider,
+      styleContextPosts,
+      inputTokens: totalInput,
+      outputTokens: totalOutput,
+      cost,
     },
   };
 }
