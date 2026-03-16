@@ -12,37 +12,30 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Ensure public dir exists (even if empty)
 RUN mkdir -p public
-
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
 # ── Production ──
 FROM base AS runner
-WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create directories
-RUN mkdir -p /tmp/uploads /app/uploads /app/public /app/.next/static
+# Find where server.js actually is (Next.js nests it in monorepo paths)
+# and copy that entire directory as /app
+COPY --from=builder /app/.next/standalone /tmp/standalone
 
-# Copy built assets
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/.next/standalone ./standalone-raw
+RUN SERVERJS=$(find /tmp/standalone -name "server.js" -not -path "*/node_modules/*" | head -1) && \
+    SERVERDIR=$(dirname "$SERVERJS") && \
+    mkdir -p /app && \
+    cp -r "$SERVERDIR"/. /app/ && \
+    rm -rf /tmp/standalone
 
-# Move standalone files to /app — handle nested monorepo output
-RUN if [ -f ./standalone-raw/server.js ]; then \
-      cp -r ./standalone-raw/* ./ ; \
-    else \
-      SERVERJS=$(find ./standalone-raw -name "server.js" -not -path "*/node_modules/*" | head -1) && \
-      SERVERDIR=$(dirname "$SERVERJS") && \
-      cp -r "$SERVERDIR"/* ./ && \
-      cp -r ./standalone-raw/node_modules ./node_modules 2>/dev/null || true ; \
-    fi && \
-    rm -rf ./standalone-raw
+# Copy static assets into the correct .next location inside /app
+COPY --from=builder /app/.next/static /app/.next/static
+
+WORKDIR /app
+RUN mkdir -p /app/uploads /tmp/uploads
 
 EXPOSE 3000
 ENV PORT=3000
