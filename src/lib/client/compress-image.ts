@@ -1,28 +1,54 @@
 /**
  * Client-side image compression using canvas.
- * Resizes to maxWidth and compresses as JPEG to stay under Vercel's 4.5MB limit.
+ * Ensures file stays under Vercel's 4.5MB serverless function payload limit.
  */
 
 const MAX_WIDTH = 1200;
-const JPEG_QUALITY = 0.8;
-const TARGET_SIZE = 4 * 1024 * 1024; // 4MB target (Vercel limit is 4.5MB)
+const MAX_UPLOAD_SIZE = 3 * 1024 * 1024; // 3MB — safe margin under Vercel 4.5MB with FormData overhead
 
 export async function compressImage(file: File): Promise<File> {
-  // Skip if already small enough
-  if (file.size <= TARGET_SIZE) {
+  // Small enough already
+  if (file.size <= MAX_UPLOAD_SIZE) {
     return file;
   }
 
-  return new Promise((resolve, reject) => {
+  // Try canvas compression
+  const compressed = await canvasCompress(file);
+  if (compressed && compressed.size <= MAX_UPLOAD_SIZE) {
+    return compressed;
+  }
+
+  // Canvas failed or still too large — try with createImageBitmap (better HEIC support)
+  const bitmapCompressed = await bitmapCompress(file);
+  if (bitmapCompressed && bitmapCompressed.size <= MAX_UPLOAD_SIZE) {
+    return bitmapCompressed;
+  }
+
+  // Last resort: return whatever is smallest
+  const smallest = [compressed, bitmapCompressed, file]
+    .filter((f): f is File => f !== null)
+    .sort((a, b) => a.size - b.size)[0];
+
+  if (smallest.size > 4 * 1024 * 1024) {
+    throw new Error(`사진이 너무 큽니다 (${(smallest.size / 1024 / 1024).toFixed(1)}MB). 설정에서 카메라 해상도를 낮추거나 작은 사진을 사용해주세요.`);
+  }
+
+  return smallest;
+}
+
+function canvasCompress(file: File): Promise<File | null> {
+  return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
 
+    const cleanup = () => URL.revokeObjectURL(url);
+    const timeout = setTimeout(() => { cleanup(); resolve(null); }, 10000);
+
     img.onload = () => {
-      URL.revokeObjectURL(url);
+      cleanup();
+      clearTimeout(timeout);
 
       let { width, height } = img;
-
-      // Scale down if wider than MAX_WIDTH
       if (width > MAX_WIDTH) {
         height = Math.round((height * MAX_WIDTH) / width);
         width = MAX_WIDTH;
@@ -32,44 +58,66 @@ export async function compressImage(file: File): Promise<File> {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(file); // fallback to original
-        return;
-      }
+      if (!ctx) { resolve(null); return; }
 
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Try progressively lower quality until under target size
-      let quality = JPEG_QUALITY;
-      const tryCompress = () => {
+      // Progressive quality reduction
+      let quality = 0.8;
+      const tryBlob = () => {
         canvas.toBlob(
           (blob) => {
-            if (!blob) {
-              resolve(file);
+            if (!blob) { resolve(null); return; }
+            if (blob.size > MAX_UPLOAD_SIZE && quality > 0.2) {
+              quality -= 0.15;
+              tryBlob();
               return;
             }
-            if (blob.size > TARGET_SIZE && quality > 0.3) {
-              quality -= 0.1;
-              tryCompress();
-              return;
-            }
-            const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-            const newName = file.name.replace(`.${ext}`, ".jpg");
-            resolve(new File([blob], newName, { type: "image/jpeg" }));
+            resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
           },
           "image/jpeg",
           quality,
         );
       };
-      tryCompress();
+      tryBlob();
     };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      // Can't decode (e.g. HEIC on some browsers) — send original, let server handle
-      resolve(file);
-    };
-
+    img.onerror = () => { cleanup(); clearTimeout(timeout); resolve(null); };
     img.src = url;
   });
+}
+
+async function bitmapCompress(file: File): Promise<File | null> {
+  try {
+    if (typeof createImageBitmap === "undefined") return null;
+
+    const bitmap = await createImageBitmap(file);
+    let { width, height } = bitmap;
+    if (width > MAX_WIDTH) {
+      height = Math.round((height * MAX_WIDTH) / width);
+      width = MAX_WIDTH;
+    }
+
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { bitmap.close(); return null; }
+
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    let quality = 0.8;
+    while (quality >= 0.2) {
+      const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+      if (blob.size <= MAX_UPLOAD_SIZE) {
+        return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
+      }
+      quality -= 0.15;
+    }
+
+    // Return lowest quality attempt
+    const lastBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.2 });
+    return new File([lastBlob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
+  } catch {
+    return null;
+  }
 }
