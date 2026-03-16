@@ -236,6 +236,49 @@ function extractArticleText(html: string): string | null {
   return text;
 }
 
+// ── Naver blog content extraction ──
+
+function isNaverBlog(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname === "blog.naver.com" || hostname === "m.blog.naver.com";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch full text from a Naver blog post.
+ * Converts to mobile URL (m.blog.naver.com) which renders content server-side.
+ */
+export async function fetchNaverBlogContent(url: string): Promise<string | null> {
+  if (!isNaverBlog(url)) return null;
+
+  try {
+    // Mobile Naver blog renders content in HTML (desktop uses iframes)
+    const mobileUrl = url.replace("://blog.naver.com", "://m.blog.naver.com");
+
+    const res = await fetch(mobileUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "Accept": "text/html",
+      },
+      signal: AbortSignal.timeout(8000),
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.includes("text/html")) return null;
+
+    const html = await res.text();
+    return extractArticleText(html);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetch and extract content from multiple blog URLs in parallel.
  * Limits to 3 concurrent fetches to be respectful.

@@ -4,6 +4,7 @@ import { requireAuthUser } from "@/lib/api/auth";
 import {
   fetchGoogleBlogUrls,
   fetchMultipleBlogContents,
+  fetchNaverBlogContent,
   isCrawlableDomain,
   type GoogleSearchResult,
 } from "@/lib/ai/enrich";
@@ -44,22 +45,47 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ menus: [] });
     }
 
-    // Phase 2: 크롤 가능한 블로그 본문 가져오기
-    // 네이버 블로그 link 중 크롤 가능한 것 + Google 결과를 합쳐서 크롤링
-    const naverCrawlable: GoogleSearchResult[] = naverItems
-      .filter((item) => item.link && isCrawlableDomain(item.link))
-      .map((item) => ({
-        title: item.title.replace(/<[^>]*>/g, ""),
-        link: item.link,
-        snippet: item.description.replace(/<[^>]*>/g, ""),
-      }));
+    // Phase 2: 블로그 본문 크롤링 (네이버 블로그 + Tistory/WordPress 등)
+    // 2a. 네이버 블로그 본문 크롤링 (모바일 URL로 변환하여 크롤)
+    const naverBlogUrls = naverItems
+      .filter((item) => item.link && item.link.includes("blog.naver.com"))
+      .slice(0, 3);
 
-    const allCrawlTargets: GoogleSearchResult[] = [...naverCrawlable, ...googleResults];
-    const blogContents = await fetchMultipleBlogContents(allCrawlTargets);
+    const naverBlogContents = await Promise.all(
+      naverBlogUrls.map(async (item) => {
+        const content = await fetchNaverBlogContent(item.link);
+        return content
+          ? { title: item.title.replace(/<[^>]*>/g, ""), content }
+          : null;
+      }),
+    );
+    const naverFullTexts = naverBlogContents.filter(
+      (b): b is { title: string; content: string } => b !== null,
+    );
+
+    // 2b. Tistory/WordPress 등 크롤 가능 블로그 (네이버 + Google 결과 합산)
+    const otherCrawlable: GoogleSearchResult[] = [
+      ...naverItems
+        .filter((item) => item.link && isCrawlableDomain(item.link))
+        .map((item) => ({
+          title: item.title.replace(/<[^>]*>/g, ""),
+          link: item.link,
+          snippet: item.description.replace(/<[^>]*>/g, ""),
+        })),
+      ...googleResults,
+    ];
+    const otherBlogContents = await fetchMultipleBlogContents(otherCrawlable);
+
+    const allBlogContents = [...naverFullTexts, ...otherBlogContents];
 
     // Phase 3: 모든 텍스트 소스를 결합
-    // 네이버 블로그 스니펫
+    // 네이버 블로그 스니펫 (본문을 못 가져온 것만)
+    const crawledNaverLinks = new Set(naverFullTexts.map((b) => b.title));
     const snippetTexts = naverItems
+      .filter((item) => {
+        const title = item.title.replace(/<[^>]*>/g, "");
+        return !crawledNaverLinks.has(title);
+      })
       .map((item) => {
         const title = item.title.replace(/<[^>]*>/g, "");
         const desc = item.description.replace(/<[^>]*>/g, "");
@@ -67,23 +93,23 @@ export async function GET(request: NextRequest) {
       })
       .join("\n");
 
-    // Google 검색 스니펫 (크롤 불가한 것만 — 크롤된 건 본문이 있으므로)
+    // Google 검색 스니펫 (크롤 불가한 것만)
     const googleSnippets = googleResults
       .filter((r) => !isCrawlableDomain(r.link) && r.snippet.length > 30)
       .slice(0, 3)
       .map((r) => `[${r.title}] ${r.snippet}`)
       .join("\n");
 
-    // 크롤된 블로그 본문
-    const fullTexts = blogContents
+    // 크롤된 블로그 본문 (네이버 + 기타)
+    const fullTexts = allBlogContents
       .map((b) => `[${b.title}]\n${b.content}`)
       .join("\n\n");
 
-    // 합산 텍스트 (최대 ~5000자)
+    // 합산 텍스트 (최대 ~6000자 — 본문이 추가되어 여유 확보)
     const combinedText = [snippetTexts, googleSnippets, fullTexts]
       .filter(Boolean)
       .join("\n\n---\n\n")
-      .slice(0, 5000);
+      .slice(0, 6000);
 
     // Phase 4: AI로 메뉴명+가격 추출
     const menus = await extractMenusWithAI(placeName, combinedText);
