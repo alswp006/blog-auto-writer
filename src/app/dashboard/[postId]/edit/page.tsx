@@ -119,6 +119,9 @@ export default function PostEditPage({
   // Photo Analysis
   const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
 
+  // Face Mosaic
+  const [faceMosaicApplying, setFaceMosaicApplying] = useState(false);
+
   useEffect(() => {
     fetch(`/api/posts/${postId}`)
       .then((r) => {
@@ -396,6 +399,39 @@ export default function PostEditPage({
       showToast(err instanceof Error ? err.message : "사진 분석 실패");
     } finally {
       setPhotoAnalyzing(false);
+    }
+  };
+
+  // ── Face Mosaic ──
+  const handleFaceMosaic = async () => {
+    if (photos.length === 0) return;
+    setFaceMosaicApplying(true);
+    try {
+      const res = await fetch("/api/photos/face-mosaic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoIds: photos.map((p) => p.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      const resultMap = new Map(
+        (data.results as { photoId: number; filePath: string }[]).map((r) => [r.photoId, r.filePath]),
+      );
+      setPhotos((prev) =>
+        prev.map((p) => {
+          const newPath = resultMap.get(p.id);
+          return newPath ? { ...p, filePath: newPath } : p;
+        }),
+      );
+      if (data.totalFaces > 0) {
+        showToast(`얼굴 ${data.totalFaces}개 모자이크 완료! (${data.processed}장)`);
+      } else {
+        showToast("감지된 얼굴이 없습니다");
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "얼굴 모자이크 실패");
+    } finally {
+      setFaceMosaicApplying(false);
     }
   };
 
@@ -826,6 +862,28 @@ export default function PostEditPage({
                   disabled={photoAnalyzing}
                 >
                   {photoAnalyzing ? "분석 중..." : "AI 캡션 생성"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Face Mosaic */}
+          {photos.length > 0 && (
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">얼굴 모자이크</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    사진에서 얼굴을 감지하여 자동 모자이크 처리합니다 ({photos.length}장)
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFaceMosaic}
+                  disabled={faceMosaicApplying}
+                >
+                  {faceMosaicApplying ? "처리 중..." : "얼굴 모자이크"}
                 </Button>
               </CardContent>
             </Card>
