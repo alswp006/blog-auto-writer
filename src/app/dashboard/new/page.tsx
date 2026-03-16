@@ -86,8 +86,9 @@ export default function DashboardNewPage() {
   const [showMenuSuggestions, setShowMenuSuggestions] = useState(false);
   const menuSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Menu auto-suggest from blogs
-  const menuLoading = false; // kept for template compatibility
+  // Popular menu suggestions from blogs (reference only, not user's order)
+  const [suggestedMenus, setSuggestedMenus] = useState<{ name: string; price: number }[]>([]);
+  const [suggestedMenusLoading, setSuggestedMenusLoading] = useState(false);
 
   // Generation
   const [generating, setGenerating] = useState(false);
@@ -150,6 +151,24 @@ export default function DashboardNewPage() {
     setShowResults(false);
     setSearchResults([]);
 
+    // 맛집/카페면 대표 메뉴 참고 정보 불러오기
+    if (detectedCategory === "restaurant" || detectedCategory === "cafe") {
+      fetchPopularMenus(item.title, item.roadAddress || item.address);
+    }
+  };
+
+  const fetchPopularMenus = async (name: string, addr: string) => {
+    setSuggestedMenusLoading(true);
+    setSuggestedMenus([]);
+    try {
+      const res = await fetch(
+        `/api/places/menu-suggest?name=${encodeURIComponent(name)}&address=${encodeURIComponent(addr)}`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      setSuggestedMenus(data.menus ?? []);
+    } catch { /* ignore */ }
+    finally { setSuggestedMenusLoading(false); }
   };
 
   // ── Existing place search (local filter) ──
@@ -281,7 +300,7 @@ export default function DashboardNewPage() {
       const genRes = await fetch("/api/posts/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ placeId, styleProfileId: selectedStyleId, memo: memo.trim(), isRevisit }),
+        body: JSON.stringify({ placeId, styleProfileId: selectedStyleId, memo: memo.trim(), isRevisit, suggestedMenus }),
       });
       let genData;
       try {
@@ -517,9 +536,27 @@ export default function DashboardNewPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {!menuLoading && menuItems.length === 0 && (
+                {suggestedMenusLoading && (
+                  <div className="text-sm text-[var(--accent)] text-center py-2 animate-pulse">
+                    블로그에서 대표 메뉴 검색 중...
+                  </div>
+                )}
+                {suggestedMenus.length > 0 && (
+                  <div className="bg-[var(--bg-elevated)] rounded-lg p-3 mb-2">
+                    <p className="text-xs text-[var(--text-muted)] mb-1.5">이 가게의 대표 메뉴 (블로그 기반)</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {suggestedMenus.map((m, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--accent-soft)] text-xs text-[var(--accent)]">
+                          {m.name}{m.price > 0 && <span className="text-[var(--text-muted)]">{m.price.toLocaleString()}원</span>}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)] mt-1.5">글 생성 시 참고 정보로 활용됩니다</p>
+                  </div>
+                )}
+                {menuItems.length === 0 && (
                   <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                    먹은 메뉴를 추가해주세요
+                    내가 먹은 메뉴를 추가해주세요
                   </p>
                 )}
                 {menuItems.map((item, i) => (

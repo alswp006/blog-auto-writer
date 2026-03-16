@@ -23,11 +23,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { placeId, styleProfileId, memo, isRevisit } = body as {
+  const { placeId, styleProfileId, memo, isRevisit, suggestedMenus } = body as {
     placeId?: number;
     styleProfileId?: number;
     memo?: string;
     isRevisit?: boolean;
+    suggestedMenus?: { name: string; price: number }[];
   };
 
   if (!placeId || !styleProfileId) {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     const userMemo = typeof memo === "string" ? memo : (place.memo ?? "");
 
     // generateBlogPost handles quality-based retry internally
-    const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, auth.userId);
+    const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, auth.userId, suggestedMenus ?? []);
 
     // Record API usage
     if (generated.usage) {
