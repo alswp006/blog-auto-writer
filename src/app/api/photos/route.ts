@@ -61,9 +61,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Maximum 20 photos per place" }, { status: 400 });
     }
 
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic"];
-    if (!allowedTypes.includes(file.type)) {
+    // Validate file type (mobile browsers may send empty type for HEIC/HEIF)
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+    const fileExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const imageExts = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
+    if (file.type && !allowedTypes.includes(file.type) && !imageExts.includes(fileExt)) {
       return NextResponse.json(
         { error: "Only JPEG, PNG, WebP, HEIC images are allowed" },
         { status: 400 },
@@ -117,13 +119,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ photo }, { status: 201 });
   } catch (error) {
+    console.error("Photo upload error:", error);
     const msg = error instanceof Error ? error.message : "Upload failed";
     if (msg.includes("UNIQUE constraint")) {
       return NextResponse.json(
-        { error: "A photo with that order index already exists for this place" },
+        { error: "해당 순서에 이미 사진이 있습니다. 다시 시도해주세요." },
         { status: 409 },
       );
     }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: `사진 업로드 실패: ${msg}` }, { status: 500 });
   }
 }

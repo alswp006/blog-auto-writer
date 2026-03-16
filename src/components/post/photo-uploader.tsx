@@ -51,11 +51,17 @@ export function PhotoUploader({
   const addFiles = useCallback(
     (files: FileList | File[]) => {
       const fileArr = Array.from(files);
-      const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+      const allowedExts = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
 
       onPhotosChange((prev) => {
         const remaining = MAX_PHOTOS - prev.length;
-        const toAdd = fileArr.filter((f) => allowed.includes(f.type)).slice(0, remaining);
+        const toAdd = fileArr.filter((f) => {
+          if (allowedTypes.includes(f.type)) return true;
+          // Fallback: check extension (mobile may send empty type)
+          const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+          return allowedExts.includes(ext);
+        }).slice(0, remaining);
         return [
           ...prev,
           ...toAdd.map((file, i) => ({
@@ -143,7 +149,7 @@ export function PhotoUploader({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={cn(
-              "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+              "border-2 border-dashed rounded-lg p-4 md:p-8 text-center cursor-pointer transition-colors",
               dragging
                 ? "border-[var(--accent)] bg-[var(--accent-soft)]"
                 : "border-[var(--border)] hover:border-[var(--border-hover)]",
@@ -156,7 +162,7 @@ export function PhotoUploader({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
+              accept="image/*"
               multiple
               onChange={handleFileSelect}
               className="hidden"
@@ -185,7 +191,7 @@ export function PhotoUploader({
                             {...dragProvided.dragHandleProps}
                             className="absolute top-1 left-1 z-10 flex items-center gap-1"
                           >
-                            <span className="bg-black/60 text-white text-[10px] rounded px-1.5 py-0.5 cursor-grab active:cursor-grabbing flex items-center gap-0.5">
+                            <span className="bg-black/60 text-white text-xs rounded px-1.5 py-0.5 cursor-grab active:cursor-grabbing flex items-center gap-0.5">
                               ⠿ {i + 1}
                             </span>
                           </div>
@@ -200,7 +206,7 @@ export function PhotoUploader({
                               "absolute bottom-10 left-1 w-6 h-6 rounded-full text-xs flex items-center justify-center transition-all",
                               thumbnailIdx === i
                                 ? "bg-yellow-400 text-black"
-                                : "bg-black/40 text-white/60 opacity-0 group-hover:opacity-100",
+                                : "bg-black/40 text-white/60 md:opacity-0 md:group-hover:opacity-100",
                             )}
                             title="대표 사진 지정"
                           >
@@ -208,7 +214,7 @@ export function PhotoUploader({
                           </button>
                           <button
                             onClick={() => removePhoto(i)}
-                            className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full text-white text-xs flex items-center justify-center md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                           >
                             X
                           </button>
