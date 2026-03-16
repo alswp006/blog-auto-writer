@@ -48,9 +48,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const orderIndex = orderIndexStr ? parseInt(orderIndexStr, 10) : 1;
-    if (isNaN(orderIndex) || orderIndex < 1 || orderIndex > 20) {
-      return NextResponse.json({ error: "orderIndex must be 1-20" }, { status: 400 });
+    let orderIndex = orderIndexStr ? parseInt(orderIndexStr, 10) : 0;
+    if (isNaN(orderIndex) || orderIndex < 0) orderIndex = 0;
+
+    // Auto-assign next available orderIndex if not specified or conflicts
+    if (orderIndex === 0 || existingPhotos.some((p) => p.orderIndex === orderIndex)) {
+      const maxIdx = existingPhotos.reduce((max, p) => Math.max(max, p.orderIndex), 0);
+      orderIndex = maxIdx + 1;
+    }
+
+    if (orderIndex > 20) {
+      return NextResponse.json({ error: "Maximum 20 photos per place" }, { status: 400 });
     }
 
     // Validate file type

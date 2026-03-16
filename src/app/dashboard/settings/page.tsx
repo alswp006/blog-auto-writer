@@ -1,21 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-export default function SettingsPageWrapper() {
-  return (
-    <Suspense fallback={<div className="max-w-3xl mx-auto px-4 py-8 animate-pulse"><div className="h-8 bg-[var(--bg-elevated)] rounded w-32 mb-6" /><div className="h-48 bg-[var(--bg-elevated)] rounded" /></div>}>
-      <SettingsPage />
-    </Suspense>
-  );
-}
 
 type ConnectionInfo = {
   id: number;
@@ -26,14 +17,7 @@ type ConnectionInfo = {
   hasToken: boolean;
 };
 
-type TistoryBlog = {
-  name: string;
-  url: string;
-  title: string;
-};
-
-function SettingsPage() {
-  const searchParams = useSearchParams();
+export default function SettingsPage() {
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -47,10 +31,9 @@ function SettingsPage() {
   const [loading, setLoading] = useState(true);
 
   // Tistory state
-  const [tistoryStep, setTistoryStep] = useState<"idle" | "blogs" | "saving">("idle");
-  const [tistoryBlogs, setTistoryBlogs] = useState<TistoryBlog[]>([]);
   const [tistoryToken, setTistoryToken] = useState("");
-  const [selectedBlog, setSelectedBlog] = useState("");
+  const [tistoryBlogName, setTistoryBlogName] = useState("");
+  const [tistorySaving, setTistorySaving] = useState(false);
   const [tistoryDisconnecting, setTistoryDisconnecting] = useState(false);
 
   // Medium state
@@ -100,82 +83,25 @@ function SettingsPage() {
     fetchProfile();
   }, [fetchConnections, fetchProfile]);
 
-  // Handle Tistory OAuth callback
-  useEffect(() => {
-    const token = searchParams.get("tistory_token");
-    const error = searchParams.get("tistory_error");
-
-    if (error) {
-      const errorMessages: Record<string, string> = {
-        no_code: "인증 코드를 받지 못했습니다",
-        missing_env: "서버에 TISTORY_APP_ID / TISTORY_SECRET_KEY가 설정되지 않았습니다",
-        token_exchange_failed: "토큰 교환에 실패했습니다",
-        no_token: "액세스 토큰을 받지 못했습니다",
-      };
-      showToast(errorMessages[error] ?? "티스토리 인증 오류");
-      // Clean URL
-      window.history.replaceState({}, "", "/dashboard/settings");
-      return;
-    }
-
-    if (token) {
-      setTistoryToken(token);
-      // Fetch blog list
-      fetchTistoryBlogs(token);
-      // Clean URL
-      window.history.replaceState({}, "", "/dashboard/settings");
-    }
-  }, [searchParams, showToast]);
-
-  // ── Tistory OAuth ──
-  const handleTistoryAuth = () => {
-    const clientId = prompt("티스토리 App ID를 입력해주세요.\n(https://www.tistory.com/guide/api/manage/register 에서 앱 등록)");
-    if (!clientId) return;
-
-    const redirectUri = `${window.location.origin}/api/tistory/callback`;
-    const authUrl = `https://www.tistory.com/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
-    window.location.href = authUrl;
-  };
-
-  const fetchTistoryBlogs = async (token: string) => {
-    setTistoryStep("blogs");
-    try {
-      const res = await fetch("/api/tistory/blogs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: token }),
-      });
-      if (!res.ok) throw new Error("블로그 목록 조회 실패");
-      const data = await res.json();
-      setTistoryBlogs(data.blogs ?? []);
-      if (data.blogs?.length === 1) {
-        setSelectedBlog(data.blogs[0].name);
-      }
-    } catch {
-      showToast("티스토리 블로그 목록 조회 실패");
-      setTistoryStep("idle");
-    }
-  };
-
+  // ── Tistory direct token save ──
   const handleTistorySave = async () => {
-    if (!tistoryToken || !selectedBlog) return;
-    setTistoryStep("saving");
+    if (!tistoryToken.trim() || !tistoryBlogName.trim()) return;
+    setTistorySaving(true);
     try {
       const res = await fetch("/api/connections/tistory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: tistoryToken, blogName: selectedBlog }),
+        body: JSON.stringify({ accessToken: tistoryToken.trim(), blogName: tistoryBlogName.trim() }),
       });
       if (!res.ok) throw new Error("저장 실패");
       showToast("티스토리 연동 완료!");
       setTistoryToken("");
-      setTistoryBlogs([]);
-      setSelectedBlog("");
-      setTistoryStep("idle");
+      setTistoryBlogName("");
       fetchConnections();
     } catch {
       showToast("티스토리 연동 저장 실패");
-      setTistoryStep("blogs");
+    } finally {
+      setTistorySaving(false);
     }
   };
 
@@ -309,60 +235,41 @@ function SettingsPage() {
                     {tistoryDisconnecting ? "해제 중..." : "연동 해제"}
                   </Button>
                 </>
-              ) : tistoryStep === "blogs" && tistoryBlogs.length > 0 ? (
-                <>
-                  <div className="space-y-2">
-                    <Label>블로그 선택</Label>
-                    <select
-                      value={selectedBlog}
-                      onChange={(e) => setSelectedBlog(e.target.value)}
-                      className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm"
-                    >
-                      <option value="">블로그를 선택하세요</option>
-                      {tistoryBlogs.map((blog) => (
-                        <option key={blog.name} value={blog.name}>
-                          {blog.title} ({blog.name}.tistory.com)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={handleTistorySave} disabled={!selectedBlog}>
-                      연동 저장
-                    </Button>
-                    <Button variant="ghost" onClick={() => { setTistoryStep("idle"); setTistoryToken(""); }}>
-                      취소
-                    </Button>
-                  </div>
-                </>
               ) : (
                 <div className="space-y-4">
-                  <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-                    <h4 className="text-sm font-medium mb-2">연동 방법</h4>
-                    <ol className="text-xs text-[var(--text-muted)] space-y-1.5 list-decimal list-inside">
-                      <li>
-                        <a
-                          href="https://www.tistory.com/guide/api/manage/register"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[var(--accent)] hover:underline"
-                        >
-                          티스토리 API 앱 등록
-                        </a>
-                        에서 앱을 등록합니다
-                      </li>
-                      <li>
-                        Callback URL을 <code className="text-xs bg-[var(--bg-card)] px-1 py-0.5 rounded">{typeof window !== "undefined" ? window.location.origin : ""}/api/tistory/callback</code> 으로 설정
-                      </li>
-                      <li>발급받은 App ID와 Secret Key를 서버 환경변수에 설정합니다</li>
-                      <li>아래 버튼으로 인증합니다</li>
-                    </ol>
+                  <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+                    <p className="text-xs text-yellow-400">
+                      티스토리 Open API는 2023년에 신규 앱 등록이 중단되었습니다.
+                      기존에 발급받은 Access Token이 있는 경우에만 연동할 수 있습니다.
+                    </p>
                   </div>
-                  <div className="text-xs text-[var(--text-muted)] space-y-1">
-                    <p>환경 변수: <code className="bg-[var(--bg-card)] px-1 py-0.5 rounded">TISTORY_APP_ID</code>, <code className="bg-[var(--bg-card)] px-1 py-0.5 rounded">TISTORY_SECRET_KEY</code></p>
+                  <div className="space-y-2">
+                    <Label htmlFor="tistory-token">Access Token</Label>
+                    <Input
+                      id="tistory-token"
+                      type="password"
+                      value={tistoryToken}
+                      onChange={(e) => setTistoryToken(e.target.value)}
+                      placeholder="기존에 발급받은 Access Token"
+                    />
                   </div>
-                  <Button onClick={handleTistoryAuth}>
-                    티스토리 인증하기
+                  <div className="space-y-2">
+                    <Label htmlFor="tistory-blog">블로그 이름</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="tistory-blog"
+                        value={tistoryBlogName}
+                        onChange={(e) => setTistoryBlogName(e.target.value)}
+                        placeholder="myblog"
+                      />
+                      <span className="text-sm text-[var(--text-muted)] whitespace-nowrap shrink-0">.tistory.com</span>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleTistorySave}
+                    disabled={tistorySaving || !tistoryToken.trim() || !tistoryBlogName.trim()}
+                  >
+                    {tistorySaving ? "연동 중..." : "티스토리 연동하기"}
                   </Button>
                 </div>
               )}
@@ -496,14 +403,15 @@ function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="rounded-lg bg-[var(--bg-elevated)] p-4 font-mono text-xs space-y-1 text-[var(--text-muted)]">
-                <p># 티스토리 (OAuth용)</p>
-                <p>TISTORY_APP_ID=your_app_id</p>
-                <p>TISTORY_SECRET_KEY=your_secret_key</p>
-                <p className="pt-2"># 또는 직접 토큰 설정 (레거시)</p>
+                <p># 티스토리</p>
                 <p>TISTORY_ACCESS_TOKEN=your_token</p>
                 <p>TISTORY_BLOG_NAME=your_blog</p>
                 <p className="pt-2"># Medium</p>
                 <p>MEDIUM_INTEGRATION_TOKEN=your_token</p>
+                <p className="pt-2"># WordPress</p>
+                <p>WORDPRESS_URL=https://your-site.com</p>
+                <p>WORDPRESS_USERNAME=your_username</p>
+                <p>WORDPRESS_APP_PASSWORD=your_app_password</p>
               </div>
             </CardContent>
           </Card>

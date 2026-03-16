@@ -283,10 +283,10 @@ export default function PostEditPage({
     }
   };
 
-  // Build rich HTML with base64 images for Naver clipboard
-  const buildNaverRichHtml = async (): Promise<string> => {
-    const variantPlatform = "naver" as const;
-    const variant = variants.find((v) => v.platform === variantPlatform && v.lang === lang);
+  // Build rich HTML with base64 images for clipboard paste
+  const buildRichHtml = async (platform: Platform): Promise<string> => {
+    const variantPlatform = platform === "wordpress" ? null : platform as "naver" | "tistory" | "medium";
+    const variant = variantPlatform ? variants.find((v) => v.platform === variantPlatform && v.lang === lang) : null;
     const title = variant ? variant.title : getTitle();
     const content = variant ? variant.content : getContent();
     const tagStr = variant
@@ -349,30 +349,30 @@ export default function PostEditPage({
   };
 
   const handleCopy = async (platform: Platform) => {
+    // Rich HTML copy with embedded images for all platforms
+    try {
+      showToast("사진 포함 복사 중...");
+      const html = await buildRichHtml(platform);
+      const plainText = formatForPlatform(platform);
+
+      const htmlBlob = new Blob([html], { type: "text/html" });
+      const textBlob = new Blob([plainText], { type: "text/plain" });
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": htmlBlob,
+          "text/plain": textBlob,
+        }),
+      ]);
+      showToast(`${PLATFORM_LABELS[platform]} 복사 완료! (사진 포함)`);
+    } catch {
+      // Fallback to plain text if rich clipboard fails
+      const text = formatForPlatform(platform);
+      await navigator.clipboard.writeText(text);
+      showToast(`${PLATFORM_LABELS[platform]} 복사됨 (텍스트만)`);
+    }
+
+    // Record naver copy in publish history
     if (platform === "naver") {
-      // Rich HTML copy with embedded images
-      try {
-        showToast("사진 포함 복사 중...");
-        const html = await buildNaverRichHtml();
-        const plainText = formatForPlatform(platform);
-
-        const htmlBlob = new Blob([html], { type: "text/html" });
-        const textBlob = new Blob([plainText], { type: "text/plain" });
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            "text/html": htmlBlob,
-            "text/plain": textBlob,
-          }),
-        ]);
-        showToast("네이버 복사 완료! (사진 포함)");
-      } catch {
-        // Fallback to plain text if rich clipboard fails
-        const text = formatForPlatform(platform);
-        await navigator.clipboard.writeText(text);
-        showToast("네이버 복사됨 (텍스트만 — 브라우저가 이미지 복사를 지원하지 않습니다)");
-      }
-
-      // Record copy
       try {
         await fetch(`/api/posts/${postId}/record-copy`, {
           method: "POST",
@@ -385,13 +385,7 @@ export default function PostEditPage({
           setPublishHistory(data.publishHistory ?? []);
         }
       } catch { /* non-critical */ }
-      return;
     }
-
-    // Other platforms: plain text markdown
-    const text = formatForPlatform(platform);
-    await navigator.clipboard.writeText(text);
-    showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
   };
 
   const handleSuggestKeywords = async () => {

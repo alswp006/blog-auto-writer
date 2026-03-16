@@ -95,13 +95,91 @@ export default function DashboardNewPage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
 
+  // Toast
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  // ── Auto-save draft to localStorage ──
+  const DRAFT_KEY = "blog-new-post-draft";
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRestored = useRef(false);
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (draft.placeName) setPlaceName(draft.placeName);
+        if (draft.category) setCategory(draft.category);
+        if (draft.address) setAddress(draft.address);
+        if (draft.rating) setRating(draft.rating);
+        if (draft.memo) setMemo(draft.memo);
+        if (draft.menuItems?.length > 0) {
+          setMenuItems(draft.menuItems.map((m: { name: string; price: string }) => ({
+            name: m.name, price: m.price, photos: [], photoPreviews: [],
+          })));
+        }
+        if (draft.selectedStyleId != null) setSelectedStyleId(draft.selectedStyleId);
+        if (draft.isRevisit != null) setIsRevisit(draft.isRevisit);
+        if (draft.selectedExistingPlaceId != null) setSelectedExistingPlaceId(draft.selectedExistingPlaceId);
+        if (draft.placeSearchQuery) setPlaceSearchQuery(draft.placeSearchQuery);
+        draftRestored.current = true;
+        showToast("임시저장된 글이 복원되었습니다");
+      }
+    } catch { /* ignore corrupt data */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save draft on field changes (debounced 1s)
+  useEffect(() => {
+    // Skip saving during generation or before first render settles
+    if (generating) return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      // Only save if there's actual content
+      const hasContent = placeName.trim() || memo.trim() || menuItems.some((m) => m.name.trim());
+      if (!hasContent) return;
+      try {
+        const draft = {
+          placeName, category, address, rating, memo,
+          menuItems: menuItems.map((m) => ({ name: m.name, price: m.price })),
+          selectedStyleId, isRevisit, selectedExistingPlaceId, placeSearchQuery,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch { /* storage full — ignore */ }
+    }, 1000);
+    return () => { if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current); };
+  }, [placeName, category, address, rating, memo, menuItems, selectedStyleId, isRevisit, selectedExistingPlaceId, placeSearchQuery, generating]);
+
+  const saveDraftNow = () => {
+    try {
+      const draft = {
+        placeName, category, address, rating, memo,
+        menuItems: menuItems.map((m) => ({ name: m.name, price: m.price })),
+        selectedStyleId, isRevisit, selectedExistingPlaceId, placeSearchQuery,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch { /* storage full — ignore */ }
+  };
+
+  const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     fetch("/api/style-profiles")
       .then((r) => r.json())
       .then((data) => {
         const all = [...(data.presets ?? []), ...(data.customs ?? [])];
         setStyles(all);
-        if (all.length > 0) setSelectedStyleId(all[0].id);
+        // Only set default style if no draft restored a selection
+        if (all.length > 0 && !draftRestored.current) setSelectedStyleId(all[0].id);
       })
       .catch(() => {});
 
@@ -295,7 +373,7 @@ export default function DashboardNewPage() {
       }
 
       // 2. Upload menu food photos first, then place photos
-      let photoOrder = 1;
+      // orderIndex is auto-assigned by server to avoid UNIQUE conflicts
       const menusWithPhotos = menuItems.filter((m) => m.photos.length > 0 && m.name.trim());
       const totalMenuPhotos = menusWithPhotos.reduce((sum, m) => sum + m.photos.length, 0);
       let menuPhotoUploaded = 0;
@@ -306,14 +384,12 @@ export default function DashboardNewPage() {
           const formData = new FormData();
           formData.append("file", item.photos[pi]);
           formData.append("placeId", placeId.toString());
-          formData.append("orderIndex", photoOrder.toString());
           formData.append("caption", `[음식] ${item.name.trim()}${item.photos.length > 1 ? ` (${pi + 1})` : ""}`);
           const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
           if (!photoRes.ok) {
             const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
             throw new Error(errData.error ?? `메뉴 사진 업로드 실패`);
           }
-          photoOrder++;
         }
       }
 
@@ -329,14 +405,12 @@ export default function DashboardNewPage() {
         const formData = new FormData();
         formData.append("file", photo._file);
         formData.append("placeId", placeId.toString());
-        formData.append("orderIndex", photoOrder.toString());
         if (photo.caption) formData.append("caption", photo.caption);
         const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
         if (!photoRes.ok) {
           const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
           throw new Error(errData.error ?? `사진 ${i + 1} 업로드 실패`);
         }
-        photoOrder++;
       }
 
       // 3. Create menu items (all of them — both eaten and reference)
@@ -371,7 +445,8 @@ export default function DashboardNewPage() {
       }
       if (!genRes.ok) throw new Error(genData.error ?? "글 생성 실패");
 
-      // 5. Navigate to edit page
+      // 5. Clear draft and navigate to edit page
+      clearDraft();
       router.push(`/dashboard/${genData.post.id}/edit`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");
@@ -387,11 +462,49 @@ export default function DashboardNewPage() {
     <section className="w-full py-12">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold">새 글 작성</h1>
-            <p className="text-sm text-[var(--text-muted)] mt-1">
-              장소 정보와 사진을 입력하면 AI가 한영 블로그 글을 자동 생성합니다.
-            </p>
+          {/* Toast */}
+          {toast && (
+            <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+              {toast}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">새 글 작성</h1>
+              <p className="text-sm text-[var(--text-muted)] mt-1">
+                장소 정보와 사진을 입력하면 AI가 한영 블로그 글을 자동 생성합니다.
+              </p>
+            </div>
+            {(placeName.trim() || memo.trim() || menuItems.some((m) => m.name.trim())) && (
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    saveDraftNow();
+                    showToast("임시저장 완료!");
+                  }}
+                  className="text-xs"
+                >
+                  임시저장
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    clearDraft();
+                    setPlaceName(""); setCategory("restaurant"); setAddress(""); setRating(""); setMemo("");
+                    setMenuItems([]); setPhotos([]); setThumbnailIdx(0);
+                    setIsRevisit(false); setSelectedExistingPlaceId(null); setPlaceSearchQuery("");
+                    showToast("초기화 완료");
+                  }}
+                  className="text-xs text-[var(--text-muted)]"
+                >
+                  초기화
+                </Button>
+              </div>
+            )}
           </div>
 
           {error && (
