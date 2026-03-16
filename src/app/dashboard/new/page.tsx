@@ -385,10 +385,17 @@ export default function DashboardNewPage() {
           formData.append("file", item.photos[pi]);
           formData.append("placeId", placeId.toString());
           formData.append("caption", `[음식] ${item.name.trim()}${item.photos.length > 1 ? ` (${pi + 1})` : ""}`);
-          const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+          let photoRes: Response;
+          try {
+            photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+          } catch (fetchErr) {
+            throw new Error(`메뉴 사진 네트워크 오류: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`);
+          }
           if (!photoRes.ok) {
-            const errData = await photoRes.json().catch(() => null);
-            throw new Error(errData?.error ?? `메뉴 사진 업로드 실패 (${photoRes.status})`);
+            const text = await photoRes.text().catch(() => "");
+            let errMsg: string;
+            try { errMsg = JSON.parse(text).error; } catch { errMsg = text || `HTTP ${photoRes.status}`; }
+            throw new Error(`메뉴 사진 실패: ${errMsg}`);
           }
         }
       }
@@ -406,10 +413,17 @@ export default function DashboardNewPage() {
         formData.append("file", photo._file);
         formData.append("placeId", placeId.toString());
         if (photo.caption) formData.append("caption", photo.caption);
-        const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+        let photoRes: Response;
+        try {
+          photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+        } catch (fetchErr) {
+          throw new Error(`사진 ${i + 1} 네트워크 오류: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`);
+        }
         if (!photoRes.ok) {
-          const errData = await photoRes.json().catch(() => null);
-          throw new Error(errData?.error ?? `사진 ${i + 1} 업로드 실패 (${photoRes.status})`);
+          const text = await photoRes.text().catch(() => "");
+          let errMsg: string;
+          try { errMsg = JSON.parse(text).error; } catch { errMsg = text || `HTTP ${photoRes.status}`; }
+          throw new Error(`사진 ${i + 1} 실패: ${errMsg}`);
         }
       }
 
