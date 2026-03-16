@@ -150,20 +150,81 @@ export async function fetchGoogleBlogUrls(
   }
 }
 
+// ── robots.txt check ──
+
+const BOT_USER_AGENT = "Mozilla/5.0 (compatible; BlogAutoWriter/1.0; +blog-reference)";
+const BOT_NAME = "BlogAutoWriter";
+
+/** Cache robots.txt results per origin (in-memory, per-process lifetime) */
+const robotsCache = new Map<string, boolean>();
+
+/**
+ * Check if our bot is allowed to crawl the given URL per robots.txt.
+ * Caches results per origin. Returns true (allow) on any fetch/parse error.
+ */
+async function isAllowedByRobots(url: string): Promise<boolean> {
+  try {
+    const origin = new URL(url).origin;
+    if (robotsCache.has(origin)) return robotsCache.get(origin)!;
+
+    const res = await fetch(`${origin}/robots.txt`, {
+      headers: { "User-Agent": BOT_USER_AGENT },
+      signal: AbortSignal.timeout(3000),
+    });
+
+    if (!res.ok) {
+      // No robots.txt or error → assume allowed
+      robotsCache.set(origin, true);
+      return true;
+    }
+
+    const text = await res.text();
+    const allowed = parseRobotsTxt(text, new URL(url).pathname);
+    robotsCache.set(origin, allowed);
+    return allowed;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Minimal robots.txt parser. Checks User-agent: * and our bot name.
+ * Only handles Disallow directives (enough for compliance).
+ */
+function parseRobotsTxt(text: string, path: string): boolean {
+  const lines = text.split("\n").map((l) => l.trim().toLowerCase());
+  let inRelevantBlock = false;
+  const disallowed: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("user-agent:")) {
+      const agent = line.slice("user-agent:".length).trim();
+      inRelevantBlock = agent === "*" || agent === BOT_NAME.toLowerCase();
+    } else if (inRelevantBlock && line.startsWith("disallow:")) {
+      const rule = line.slice("disallow:".length).trim();
+      if (rule) disallowed.push(rule);
+    }
+  }
+
+  return !disallowed.some((rule) => path.startsWith(rule));
+}
+
 // ── Blog content extraction ──
 
 /**
  * Fetch a blog page and extract main text content.
  * Only fetches from CRAWLABLE_DOMAINS (Tistory, WordPress, etc.)
+ * Respects robots.txt before crawling.
  * Returns truncated text (max 1500 chars) focused on the article body.
  */
 export async function fetchBlogContent(url: string): Promise<string | null> {
   if (!isCrawlableDomain(url)) return null;
+  if (!(await isAllowedByRobots(url))) return null;
 
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; BlogAutoWriter/1.0; +blog-reference)",
+        "User-Agent": BOT_USER_AGENT,
         "Accept": "text/html",
       },
       signal: AbortSignal.timeout(8000),
@@ -250,18 +311,20 @@ function isNaverBlog(url: string): boolean {
 /**
  * Fetch full text from a Naver blog post.
  * Converts to mobile URL (m.blog.naver.com) which renders content server-side.
+ * Uses honest bot User-Agent and respects robots.txt.
  */
 export async function fetchNaverBlogContent(url: string): Promise<string | null> {
   if (!isNaverBlog(url)) return null;
 
-  try {
-    // Mobile Naver blog renders content in HTML (desktop uses iframes)
-    const mobileUrl = url.replace("://blog.naver.com", "://m.blog.naver.com");
+  // Mobile Naver blog renders content in HTML (desktop uses iframes)
+  const mobileUrl = url.replace("://blog.naver.com", "://m.blog.naver.com");
 
+  if (!(await isAllowedByRobots(mobileUrl))) return null;
+
+  try {
     const res = await fetch(mobileUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "User-Agent": BOT_USER_AGENT,
         "Accept": "text/html",
       },
       signal: AbortSignal.timeout(8000),
