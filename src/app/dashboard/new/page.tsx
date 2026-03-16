@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { PhotoUploader, type LocalPhoto } from "@/components/post/photo-uploader";
+import { compressImage } from "@/lib/client/compress-image";
 
 type SearchResult = {
   title: string;
@@ -380,9 +381,10 @@ export default function DashboardNewPage() {
       for (const item of menusWithPhotos) {
         for (let pi = 0; pi < item.photos.length; pi++) {
           menuPhotoUploaded++;
-          setUploadProgress(`메뉴 사진 업로드 중... (${menuPhotoUploaded}/${totalMenuPhotos})`);
+          setUploadProgress(`메뉴 사진 압축/업로드 중... (${menuPhotoUploaded}/${totalMenuPhotos})`);
+          const compressed = await compressImage(item.photos[pi]);
           const formData = new FormData();
-          formData.append("file", item.photos[pi]);
+          formData.append("file", compressed);
           formData.append("placeId", placeId.toString());
           formData.append("caption", `[음식] ${item.name.trim()}${item.photos.length > 1 ? ` (${pi + 1})` : ""}`);
           let photoRes: Response;
@@ -407,10 +409,11 @@ export default function DashboardNewPage() {
         orderedPhotos.unshift(thumb);
       }
       for (let i = 0; i < orderedPhotos.length; i++) {
-        setUploadProgress(`장소 사진 업로드 중... (${i + 1}/${orderedPhotos.length})`);
+        setUploadProgress(`장소 사진 압축/업로드 중... (${i + 1}/${orderedPhotos.length})`);
         const photo = orderedPhotos[i];
+        const compressed = await compressImage(photo._file);
         const formData = new FormData();
-        formData.append("file", photo._file);
+        formData.append("file", compressed);
         formData.append("placeId", placeId.toString());
         if (photo.caption) formData.append("caption", photo.caption);
         let photoRes: Response;
