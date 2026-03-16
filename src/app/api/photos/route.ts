@@ -78,55 +78,68 @@ export async function POST(request: NextRequest) {
     }
 
     // Read file buffer
-    let buffer: Buffer = Buffer.from(await file.arrayBuffer());
-
-    // Resize if width exceeds MAX_WIDTH using sharp
-    const metadata = await sharp(buffer).metadata();
-    if (metadata.width && metadata.width > MAX_WIDTH) {
-      const resized = await sharp(buffer)
-        .resize({ width: MAX_WIDTH, withoutEnlargement: true })
-        .toBuffer();
-      buffer = Buffer.from(resized);
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(await file.arrayBuffer());
+    } catch (err) {
+      console.error("Photo read error:", err);
+      return NextResponse.json({ error: "파일 읽기 실패" }, { status: 500 });
     }
 
-    // Determine output format (keep original, but normalize HEIC to JPEG)
+    // Resize if width exceeds MAX_WIDTH using sharp
     let ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    if (ext === "heic" || ext === "heif") {
-      try {
-        const converted = await sharp(buffer).jpeg({ quality: 85 }).toBuffer();
-        buffer = Buffer.from(converted);
+    try {
+      // Normalize HEIC to JPEG first
+      if (ext === "heic" || ext === "heif") {
+        buffer = Buffer.from(await sharp(buffer).jpeg({ quality: 85 }).toBuffer());
         ext = "jpg";
-      } catch {
-        return NextResponse.json(
-          { error: "HEIC 이미지 변환에 실패했습니다. JPEG 또는 PNG로 변환 후 업로드해주세요." },
-          { status: 400 },
+      }
+
+      const metadata = await sharp(buffer).metadata();
+      if (metadata.width && metadata.width > MAX_WIDTH) {
+        buffer = Buffer.from(
+          await sharp(buffer).resize({ width: MAX_WIDTH, withoutEnlargement: true }).toBuffer(),
         );
       }
+    } catch (err) {
+      console.error("Photo processing error:", err);
+      return NextResponse.json(
+        { error: `이미지 처리 실패 (${ext}): ${err instanceof Error ? err.message : "unknown"}` },
+        { status: 500 },
+      );
     }
 
     // Save file
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    const uploadDir = await getUploadDir();
-    const filePath = `${uploadDir}/${filename}`;
-    await writeFile(filePath, buffer);
+    try {
+      const filename = `${crypto.randomUUID()}.${ext}`;
+      const uploadDir = await getUploadDir();
+      const filePath = `${uploadDir}/${filename}`;
+      await writeFile(filePath, buffer);
 
-    const photo = await photoModel.create({
-      placeId,
-      filePath: `/uploads/${filename}`,
-      caption: caption?.trim() || null,
-      orderIndex,
-    });
+      const photo = await photoModel.create({
+        placeId,
+        filePath: `/uploads/${filename}`,
+        caption: caption?.trim() || null,
+        orderIndex,
+      });
 
-    return NextResponse.json({ photo }, { status: 201 });
-  } catch (error) {
-    console.error("Photo upload error:", error);
-    const msg = error instanceof Error ? error.message : "Upload failed";
-    if (msg.includes("UNIQUE constraint")) {
-      return NextResponse.json(
-        { error: "해당 순서에 이미 사진이 있습니다. 다시 시도해주세요." },
-        { status: 409 },
-      );
+      return NextResponse.json({ photo }, { status: 201 });
+    } catch (err) {
+      console.error("Photo save error:", err);
+      const msg = err instanceof Error ? err.message : "Save failed";
+      if (msg.includes("UNIQUE constraint")) {
+        return NextResponse.json(
+          { error: "해당 순서에 이미 사진이 있습니다. 다시 시도해주세요." },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json({ error: `사진 저장 실패: ${msg}` }, { status: 500 });
     }
-    return NextResponse.json({ error: `사진 업로드 실패: ${msg}` }, { status: 500 });
+  } catch (error) {
+    console.error("Photo upload unexpected error:", error);
+    return NextResponse.json(
+      { error: `사진 업로드 실패: ${error instanceof Error ? error.message : "unknown"}` },
+      { status: 500 },
+    );
   }
 }

@@ -387,8 +387,8 @@ export default function DashboardNewPage() {
           formData.append("caption", `[음식] ${item.name.trim()}${item.photos.length > 1 ? ` (${pi + 1})` : ""}`);
           const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
           if (!photoRes.ok) {
-            const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
-            throw new Error(errData.error ?? `메뉴 사진 업로드 실패`);
+            const errData = await photoRes.json().catch(() => null);
+            throw new Error(errData?.error ?? `메뉴 사진 업로드 실패 (${photoRes.status})`);
           }
         }
       }
@@ -408,8 +408,8 @@ export default function DashboardNewPage() {
         if (photo.caption) formData.append("caption", photo.caption);
         const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
         if (!photoRes.ok) {
-          const errData = await photoRes.json().catch(() => ({ error: "사진 업로드 실패" }));
-          throw new Error(errData.error ?? `사진 ${i + 1} 업로드 실패`);
+          const errData = await photoRes.json().catch(() => null);
+          throw new Error(errData?.error ?? `사진 ${i + 1} 업로드 실패 (${photoRes.status})`);
         }
       }
 
