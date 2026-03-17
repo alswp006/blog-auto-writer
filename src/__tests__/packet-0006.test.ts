@@ -1,31 +1,28 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getDb } from "@/lib/db";
-import type Database from "better-sqlite3";
+import { execute, query, queryOne } from "@/lib/db";
 import { createSessionToken } from "@/lib/auth";
 
-let db: Database.Database;
 let userId: number;
 let sessionToken: string;
 
-beforeEach(() => {
-  db = getDb();
-
+beforeEach(async () => {
   // Create a test user
   const timestamp = Date.now();
   const email = `test-profile-${timestamp}-${Math.random()}@example.com`;
-  const result = db.prepare(
-    `INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)`
-  ).run(email, "test_hash", new Date().toISOString());
+  const result = await execute(
+    `INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)`,
+    email, "test_hash", new Date().toISOString()
+  );
 
-  userId = result.lastInsertRowid as number;
-  sessionToken = createSessionToken(userId);
+  userId = result.lastInsertRowid;
+  sessionToken = await createSessionToken(userId);
 });
 
-afterEach(() => {
+afterEach(async () => {
   // Clean up profile first (child table)
-  db.prepare("DELETE FROM user_profiles WHERE user_id = ?").run(userId);
+  await execute("DELETE FROM user_profiles WHERE user_id = ?", userId);
   // Then clean up user (parent table)
-  db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  await execute("DELETE FROM users WHERE id = ?", userId);
 });
 
 function createRequest(
@@ -158,12 +155,11 @@ describe("POST /api/profile", () => {
 });
 
 describe("PATCH /api/profile", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create a profile for PATCH tests
-    db.prepare(
+    await execute(
       `INSERT INTO user_profiles (user_id, nickname, age_group, preferred_tone, primary_platform, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       userId,
       "InitialProfile",
       "20s",
@@ -180,12 +176,13 @@ describe("PATCH /api/profile", () => {
     // Create new user without profile
     const timestamp = Date.now();
     const email = `test-patch-${timestamp}-${Math.random()}@example.com`;
-    const result = db.prepare(
-      `INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)`
-    ).run(email, "test_hash", new Date().toISOString());
+    const result = await execute(
+      `INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)`,
+      email, "test_hash", new Date().toISOString()
+    );
 
-    const newUserId = result.lastInsertRowid as number;
-    const newToken = createSessionToken(newUserId);
+    const newUserId = result.lastInsertRowid;
+    const newToken = await createSessionToken(newUserId);
 
     try {
       const req = createRequest("PATCH", {
@@ -198,7 +195,7 @@ describe("PATCH /api/profile", () => {
       const body = await res.json();
       expect(body.error.code).toBe("NOT_FOUND");
     } finally {
-      db.prepare("DELETE FROM users WHERE id = ?").run(newUserId);
+      await execute("DELETE FROM users WHERE id = ?", newUserId);
     }
   });
 

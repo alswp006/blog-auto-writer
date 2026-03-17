@@ -257,6 +257,39 @@ export async function listByUserWithMeta(userId: number): Promise<PostWithMeta[]
   }));
 }
 
+export async function listRecentGenerated(
+  userId: number,
+  category: string,
+  excludePostId?: number,
+  limit: number = 2,
+): Promise<Post[]> {
+  const rows = await query<PostRow>(
+    `SELECT p.* FROM posts p
+     JOIN places pl ON pl.id = p.place_id
+     WHERE p.user_id = ? AND p.status = 'generated' AND p.content_ko IS NOT NULL
+       AND pl.category = ?
+       ${excludePostId ? "AND p.id != ?" : ""}
+     ORDER BY p.created_at DESC, p.rowid DESC
+     LIMIT ?`,
+    ...(excludePostId
+      ? [userId, category, excludePostId, limit]
+      : [userId, category, limit]),
+  );
+  return rows.map(rowToPost);
+}
+
+export async function cleanupStaleDrafts(userId: number): Promise<number> {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const result = await execute(
+    `DELETE FROM posts WHERE user_id = ? AND status = 'draft'
+     AND content_ko IS NULL AND content_en IS NULL
+     AND created_at < ?`,
+    userId,
+    cutoff,
+  );
+  return result.changes;
+}
+
 export async function countByUserThisMonth(userId: number): Promise<number> {
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

@@ -26,6 +26,7 @@ export type PhotoRow = {
   place_id: number;
   file_path: string;
   caption: string | null;
+  alt_text: string | null;
   order_index: number;
   created_at: string;
 };
@@ -89,6 +90,7 @@ export type Photo = {
   placeId: number;
   filePath: string;
   caption: string | null;
+  altText: string | null;
   orderIndex: number;
   createdAt: string;
 };
@@ -124,6 +126,7 @@ export function rowToPhoto(row: PhotoRow): Photo {
     placeId: row.place_id,
     filePath: row.file_path,
     caption: row.caption,
+    altText: row.alt_text ?? null,
     orderIndex: row.order_index,
     createdAt: row.created_at,
   };

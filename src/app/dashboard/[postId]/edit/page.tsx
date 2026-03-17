@@ -9,22 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { SeoScoreCard } from "@/components/post/seo-score-card";
-import { CompetitorAnalysisCard } from "@/components/post/competitor-analysis-card";
-import { PublishHistoryCard, type PublishHistoryItem } from "@/components/post/publish-history-card";
-import { SchedulePublishCard } from "@/components/post/schedule-publish-card";
-import { PlatformOptimizeCard } from "@/components/post/platform-optimize-card";
-
-type GenerationMeta = {
-  mainModel: string;
-  visionProvider: string;
-  visionModel: string;
-  researchProvider: string;
-  styleContextPosts: number;
-  inputTokens: number;
-  outputTokens: number;
-  cost: number;
-};
 
 type Post = {
   id: number;
@@ -36,7 +20,6 @@ type Post = {
   hashtagsEn: string[];
   status: string;
   generationError: string | null;
-  generationMeta: GenerationMeta | null;
   placeId: number;
   scheduledAt: string | null;
   scheduledPlatform: string | null;
@@ -47,6 +30,7 @@ type Photo = {
   id: number;
   filePath: string;
   caption: string | null;
+  altText: string | null;
   orderIndex: number;
 };
 
@@ -56,16 +40,15 @@ type Place = {
   category: string;
 };
 
-type PostVariant = {
+type PublishHistoryItem = {
   id: number;
   postId: number;
-  platform: "naver" | "tistory" | "medium";
-  lang: "ko" | "en";
-  title: string;
-  content: string;
-  hashtags: string[];
-  createdAt: string;
-  updatedAt: string;
+  platform: string;
+  lang: string;
+  publishedUrl: string | null;
+  status: "published" | "failed" | "copied";
+  error: string | null;
+  publishedAt: string;
 };
 
 type Tab = "preview" | "edit";
@@ -77,6 +60,13 @@ const PLATFORM_LABELS: Record<Platform, string> = {
   tistory: "티스토리",
   medium: "Medium",
   wordpress: "WordPress",
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  naver: "bg-green-500/15 text-green-400 border-green-500/30",
+  tistory: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  medium: "bg-white/15 text-white border-white/30",
+  wordpress: "bg-blue-500/15 text-blue-400 border-blue-500/30",
 };
 
 export default function PostEditPage({
@@ -119,9 +109,23 @@ export default function PostEditPage({
   const [watermarkApplying, setWatermarkApplying] = useState(false);
   const [hasWatermarkText, setHasWatermarkText] = useState(false);
 
+  // Scheduling
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [schedulePlatform, setSchedulePlatform] = useState<Platform>("tistory");
+  const [scheduling, setScheduling] = useState(false);
+
   // Keywords
   const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
+
+  // SEO Score
+  const [seoScore, setSeoScore] = useState<{
+    score: number;
+    grade: string;
+    breakdown: { category: string; score: number; max: number; detail: string; tips: string[] }[];
+  } | null>(null);
+  const [seoLoading, setSeoLoading] = useState(false);
 
   // Partial Regeneration
   const [regenIndex, setRegenIndex] = useState<number | null>(null);
@@ -129,15 +133,31 @@ export default function PostEditPage({
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenPreview, setRegenPreview] = useState<string | null>(null);
 
+  // Competitor Analysis
+  const [competitors, setCompetitors] = useState<{
+    benchmarks: { avgContentLength: string; avgPhotoCount: string; commonElements: string[] };
+    missing: string[];
+    strengths: string[];
+    improvements: string[];
+    competitiveScore: number;
+  } | null>(null);
+  const [competitorsLoading, setCompetitorsLoading] = useState(false);
+
   // Photo Analysis
   const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
 
-  // Face Mosaic
-  const [faceMosaicApplying, setFaceMosaicApplying] = useState(false);
+  // Title candidates
+  const [titleCandidates, setTitleCandidates] = useState<{ titleKo: string; titleEn: string; style: string }[]>([]);
+  const [titlesLoading, setTitlesLoading] = useState(false);
 
-  // Platform Variants
-  const [variants, setVariants] = useState<PostVariant[]>([]);
-  const [activeVariant, setActiveVariant] = useState<"base" | "naver" | "tistory" | "medium">("base");
+  // Version history
+  const [versions, setVersions] = useState<{ id: number; titleKo: string | null; changeReason: string; createdAt: string }[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
+
+  // Related posts (internal links)
+  const [relatedPosts, setRelatedPosts] = useState<{ id: number; titleKo: string | null; titleEn: string | null; placeName: string; placeCategory: string }[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
 
   useEffect(() => {
     fetch(`/api/posts/${postId}`)
@@ -150,7 +170,6 @@ export default function PostEditPage({
         setPhotos(data.photos ?? []);
         setPlace(data.place ?? null);
         setPublishHistory(data.publishHistory ?? []);
-        setVariants(data.variants ?? []);
         setTitleKo(data.post.titleKo ?? "");
         setContentKo(data.post.contentKo ?? "");
         setHashtagsKo((data.post.hashtagsKo ?? []).join(" "));
@@ -206,19 +225,21 @@ export default function PostEditPage({
   const getHashtags = () => (lang === "ko" ? hashtagsKo : hashtagsEn).split(/\s+/).filter(Boolean);
   const getTagStr = () => getHashtags().map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
 
+  const getPhotoAlt = (p: Photo) => p.altText ?? p.caption ?? `Photo ${p.orderIndex}`;
+
   const buildPhotoImgTags = (format: "html" | "markdown"): string => {
     if (photos.length === 0) return "";
     if (format === "html") {
       return photos
         .map((p) => {
-          const alt = p.caption ?? `Photo ${p.orderIndex}`;
+          const alt = getPhotoAlt(p);
           return `<img src="${p.filePath}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${p.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${p.caption}</p>` : ""}`;
         })
         .join("\n");
     }
     // markdown
     return photos
-      .map((p) => `![${p.caption ?? `Photo ${p.orderIndex}`}](${p.filePath})${p.caption ? `\n*${p.caption}*` : ""}`)
+      .map((p) => `![${getPhotoAlt(p)}](${p.filePath})${p.caption ? `\n*${p.caption}*` : ""}`)
       .join("\n\n");
   };
 
@@ -228,157 +249,88 @@ export default function PostEditPage({
       const photo = photoByIndex.get(idx);
       if (!photo) return "";
       if (format === "html") {
-        const alt = photo.caption ?? `Photo ${photo.orderIndex}`;
+        const alt = getPhotoAlt(photo);
         return `<img src="${photo.filePath}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${photo.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${photo.caption}</p>` : ""}`;
       }
-      return `![${photo.caption ?? `Photo ${photo.orderIndex}`}](${photo.filePath})${photo.caption ? `\n*${photo.caption}*` : ""}`;
+      return `![${getPhotoAlt(photo)}](${photo.filePath})${photo.caption ? `\n*${photo.caption}*` : ""}`;
     });
   };
 
-  const formatForPlatform = (platform: Platform): string => {
-    // Use variant content if available for this platform+lang
-    const variantPlatform = platform === "wordpress" ? null : platform;
-    const variant = variantPlatform ? variants.find((v) => v.platform === variantPlatform && v.lang === lang) : null;
-    const title = variant ? variant.title : getTitle();
-    const content = variant ? variant.content : getContent();
-    const tagStr = variant
-      ? variant.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")
-      : getTagStr();
-    // Naver: plain text (just paste into editor)
-    if (platform === "naver") {
-      const cleanContent = content.replace(/\[PHOTO:\d+\]\s*/g, "").trim();
-      return `${title}\n\n${cleanContent}\n\n${tagStr}`;
-    }
+  const formatNaver = (title: string, htmlParts: string[], tagStr: string): string => {
+    const header = `<div style="text-align:center;margin-bottom:30px;">
+<h2 style="font-size:22px;font-weight:bold;">${title}</h2>
+<hr style="border:none;border-top:1px solid #ddd;margin:20px 0;" />
+</div>`;
+    const footer = `<hr style="border:none;border-top:1px solid #ddd;margin:30px 0 15px;" />
+<p style="color:#888;font-size:14px;">${tagStr}</p>
+${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.name}${place.category ? ` | ${place.category}` : ""}</p>` : ""}`;
+    return `${header}\n${htmlParts.join("\n\n")}\n\n${footer}`;
+  };
 
-    // Other platforms: markdown with photo markers
+  const formatTistory = (title: string, htmlParts: string[], tagStr: string): string => {
+    const header = `<h2 style="text-align:center;">${title}</h2>
+<p>&nbsp;</p>`;
+    const body = htmlParts.map((part) => {
+      if (part.startsWith("<img ")) return `<div style="text-align:center;">${part}</div>`;
+      return part;
+    }).join("\n\n<p>&nbsp;</p>\n\n");
+    const footer = `<p>&nbsp;</p>
+<hr />
+<p style="color:#888;font-size:14px;">${tagStr}</p>
+${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.category ? ` | ${place.category}` : ""}</p>` : ""}`;
+    return `${header}\n\n${body}\n\n${footer}`;
+  };
+
+  const formatForPlatform = (platform: Platform): string => {
+    const title = getTitle();
+    const content = getContent();
+    const tagStr = getTagStr();
     const contentHasMarkers = /\[PHOTO:\d+\]/.test(content);
+    const format = (platform === "naver" || platform === "tistory") ? "html" : "markdown";
 
     if (contentHasMarkers) {
-      const replaced = replacePhotoMarkers(content, "markdown");
+      // Replace [PHOTO:n] markers with actual image tags
+      const replaced = replacePhotoMarkers(content, format);
+      if (platform === "naver" || platform === "tistory") {
+        const htmlParts = replaced.split("\n\n").map((p) => {
+          if (p.startsWith("<img ")) return p;
+          return `<p style="font-size:16px;line-height:1.8;margin-bottom:20px;">${p}</p>`;
+        });
+        if (platform === "tistory") return formatTistory(title, htmlParts, tagStr);
+        return formatNaver(title, htmlParts, tagStr);
+      }
       return `# ${title}\n\n${replaced}\n\n${tagStr}`;
     }
 
-    const paragraphs = content.split("\n\n");
-    const photoBlock = buildPhotoImgTags("markdown");
-    const insertIdx = Math.min(1, paragraphs.length);
-    const mdParts = [...paragraphs];
+    // Fallback: insert all photos after first paragraph
+    const contentParagraphs = content.split("\n\n");
+    const photoBlock = buildPhotoImgTags(format);
+    const insertIdx = Math.min(1, contentParagraphs.length);
+
+    if (platform === "naver" || platform === "tistory") {
+      const htmlParts = contentParagraphs.map((p) => `<p style="font-size:16px;line-height:1.8;margin-bottom:20px;">${p}</p>`);
+      htmlParts.splice(insertIdx, 0, photoBlock);
+      if (platform === "tistory") return formatTistory(title, htmlParts, tagStr);
+      return formatNaver(title, htmlParts, tagStr);
+    }
+    const mdParts = [...contentParagraphs];
     mdParts.splice(insertIdx, 0, photoBlock);
     return `# ${title}\n\n${mdParts.join("\n\n")}\n\n${tagStr}`;
   };
 
-  // Convert photo to base64 data URI for rich clipboard
-  const photoToDataUri = async (photo: Photo): Promise<string | null> => {
-    try {
-      const res = await fetch(photo.filePath);
-      if (!res.ok) return null;
-      const blob = await res.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return null;
-    }
-  };
-
-  // Build rich HTML with base64 images for clipboard paste
-  const buildRichHtml = async (platform: Platform): Promise<string> => {
-    const variantPlatform = platform === "wordpress" ? null : platform as "naver" | "tistory" | "medium";
-    const variant = variantPlatform ? variants.find((v) => v.platform === variantPlatform && v.lang === lang) : null;
-    const title = variant ? variant.title : getTitle();
-    const content = variant ? variant.content : getContent();
-    const tagStr = variant
-      ? variant.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")
-      : getTagStr();
-
-    // Pre-load all photo data URIs
-    const dataUriMap = new Map<number, string>();
-    for (const photo of photos) {
-      const dataUri = await photoToDataUri(photo);
-      if (dataUri) dataUriMap.set(photo.orderIndex, dataUri);
-    }
-
-    const hasMarkers = /\[PHOTO:\d+\]/.test(content);
-
-    // Replace [PHOTO:n] markers with <img> tags using data URIs
-    let htmlBody: string;
-    if (hasMarkers) {
-      htmlBody = content.replace(/\[PHOTO:(\d+)\]/g, (_m, idxStr) => {
-        const idx = parseInt(idxStr, 10);
-        const dataUri = dataUriMap.get(idx);
-        const photo = photoByIndex.get(idx);
-        if (!dataUri) return "";
-        const alt = photo?.caption ?? `Photo ${idx}`;
-        let img = `<img src="${dataUri}" alt="${alt}" style="max-width:100%;margin:12px 0;" />`;
-        if (photo?.caption) {
-          img += `<p style="text-align:center;color:#888;font-size:14px;">${photo.caption}</p>`;
-        }
-        return img;
-      });
-    } else {
-      // No markers — insert all photos after first paragraph
-      htmlBody = content;
-      if (dataUriMap.size > 0) {
-        const paragraphs = content.split("\n\n");
-        const insertIdx = Math.min(1, paragraphs.length);
-        const photoHtml = photos
-          .map((p) => {
-            const dataUri = dataUriMap.get(p.orderIndex);
-            if (!dataUri) return "";
-            const alt = p.caption ?? `Photo ${p.orderIndex}`;
-            return `<img src="${dataUri}" alt="${alt}" style="max-width:100%;margin:12px 0;" />`;
-          })
-          .filter(Boolean)
-          .join("\n");
-        paragraphs.splice(insertIdx, 0, photoHtml);
-        htmlBody = paragraphs.join("\n\n");
-      }
-    }
-
-    // Convert paragraphs to <p> tags (skip img blocks)
-    const htmlParts = htmlBody.split("\n\n").map((p) => {
-      const trimmed = p.trim();
-      if (!trimmed) return "";
-      if (trimmed.startsWith("<img ") || trimmed.startsWith("<p")) return trimmed;
-      return `<p>${trimmed}</p>`;
-    });
-
-    return `<h2>${title}</h2>\n${htmlParts.join("\n")}\n<p>${tagStr}</p>`;
-  };
-
   const handleCopy = async (platform: Platform) => {
-    // Rich HTML copy with embedded images for all platforms
-    try {
-      showToast("사진 포함 복사 중...");
-      const html = await buildRichHtml(platform);
-      const plainText = formatForPlatform(platform);
-
-      const htmlBlob = new Blob([html], { type: "text/html" });
-      const textBlob = new Blob([plainText], { type: "text/plain" });
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/html": htmlBlob,
-          "text/plain": textBlob,
-        }),
-      ]);
-      showToast(`${PLATFORM_LABELS[platform]} 복사 완료! (사진 포함)`);
-    } catch {
-      // Fallback to plain text if rich clipboard fails
-      const text = formatForPlatform(platform);
-      await navigator.clipboard.writeText(text);
-      showToast(`${PLATFORM_LABELS[platform]} 복사됨 (텍스트만)`);
-    }
-
-    // Record naver copy in publish history
-    if (platform === "naver") {
+    const text = formatForPlatform(platform);
+    await navigator.clipboard.writeText(text);
+    showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
+    // Record copy in publish history
+    if (platform === "naver" || platform === "tistory") {
       try {
         await fetch(`/api/posts/${postId}/record-copy`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ platform: "naver", lang }),
+          body: JSON.stringify({ platform, lang }),
         });
+        // Refresh publish history
         const res = await fetch(`/api/posts/${postId}`);
         if (res.ok) {
           const data = await res.json();
@@ -423,6 +375,47 @@ export default function PostEditPage({
     showToast(`${keyword} 추가됨`);
   };
 
+  const handleSchedule = async () => {
+    if (!scheduleDate || !scheduleTime) {
+      showToast("날짜와 시간을 선택해주세요");
+      return;
+    }
+    setScheduling(true);
+    try {
+      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+      const res = await fetch(`/api/posts/${postId}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduledAt, platform: schedulePlatform, lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Schedule failed");
+      setPost(data.post);
+      showToast("예약 발행이 설정되었습니다!");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "예약 설정 실패");
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const handleUnschedule = async () => {
+    setScheduling(true);
+    try {
+      const res = await fetch(`/api/posts/${postId}/schedule`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unschedule failed");
+      setPost(data.post);
+      setScheduleDate("");
+      setScheduleTime("");
+      showToast("예약이 취소되었습니다");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "예약 취소 실패");
+    } finally {
+      setScheduling(false);
+    }
+  };
+
   const handleApplyWatermark = async () => {
     if (photos.length === 0) return;
     setWatermarkApplying(true);
@@ -447,6 +440,22 @@ export default function PostEditPage({
       showToast(err instanceof Error ? err.message : "워터마크 적용 실패");
     } finally {
       setWatermarkApplying(false);
+    }
+  };
+
+  // ── SEO Score ──
+  const handleFetchSeoScore = async () => {
+    setSeoLoading(true);
+    setSeoScore(null);
+    try {
+      const res = await fetch(`/api/posts/${postId}/seo-score?lang=${lang}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setSeoScore(data);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "SEO 분석 실패");
+    } finally {
+      setSeoLoading(false);
     }
   };
 
@@ -485,6 +494,108 @@ export default function PostEditPage({
     showToast("문단이 교체되었습니다. 저장을 눌러주세요.");
   };
 
+  // ── Competitor Analysis ──
+  const handleFetchCompetitors = async () => {
+    setCompetitorsLoading(true);
+    setCompetitors(null);
+    try {
+      const res = await fetch(`/api/posts/${postId}/competitors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setCompetitors(data.analysis);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "경쟁 분석 실패");
+    } finally {
+      setCompetitorsLoading(false);
+    }
+  };
+
+  // ── Title Candidates ──
+  const handleGenerateTitles = async () => {
+    setTitlesLoading(true);
+    setTitleCandidates([]);
+    try {
+      const res = await fetch(`/api/posts/${postId}/titles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setTitleCandidates(data.titles ?? []);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "제목 생성 실패");
+    } finally {
+      setTitlesLoading(false);
+    }
+  };
+
+  const handleSelectTitle = (candidate: { titleKo: string; titleEn: string }) => {
+    setTitleKo(candidate.titleKo);
+    setTitleEn(candidate.titleEn);
+    setTitleCandidates([]);
+    showToast("제목이 변경되었습니다. 저장을 눌러주세요.");
+  };
+
+  // ── Version History ──
+  const handleLoadVersions = async () => {
+    if (showVersions) { setShowVersions(false); return; }
+    setVersionsLoading(true);
+    try {
+      const res = await fetch(`/api/posts/${postId}/versions`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setVersions(data.versions ?? []);
+      setShowVersions(true);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "버전 로드 실패");
+    } finally {
+      setVersionsLoading(false);
+    }
+  };
+
+  const handleRestoreVersion = async (versionId: number) => {
+    try {
+      const res = await fetch(`/api/posts/${postId}/versions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ versionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      const p = data.post;
+      setPost(p);
+      setTitleKo(p.titleKo ?? "");
+      setContentKo(p.contentKo ?? "");
+      setHashtagsKo((p.hashtagsKo ?? []).join(" "));
+      setTitleEn(p.titleEn ?? "");
+      setContentEn(p.contentEn ?? "");
+      setHashtagsEn((p.hashtagsEn ?? []).join(" "));
+      setShowVersions(false);
+      showToast("이전 버전으로 복원되었습니다!");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "복원 실패");
+    }
+  };
+
+  // ── Related Posts ──
+  const handleLoadRelated = async () => {
+    setRelatedLoading(true);
+    try {
+      const res = await fetch(`/api/posts/${postId}/related`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setRelatedPosts(data.related ?? []);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "관련 글 로드 실패");
+    } finally {
+      setRelatedLoading(false);
+    }
+  };
+
   // ── Photo Analysis ──
   const handleAnalyzePhotos = async () => {
     if (photos.length === 0) return;
@@ -516,44 +627,10 @@ export default function PostEditPage({
     }
   };
 
-  // ── Face Mosaic ──
-  const handleFaceMosaic = async () => {
-    if (photos.length === 0) return;
-    setFaceMosaicApplying(true);
-    try {
-      const res = await fetch("/api/photos/face-mosaic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoIds: photos.map((p) => p.id) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      const resultMap = new Map(
-        (data.results as { photoId: number; filePath: string }[]).map((r) => [r.photoId, r.filePath]),
-      );
-      setPhotos((prev) =>
-        prev.map((p) => {
-          const newPath = resultMap.get(p.id);
-          return newPath ? { ...p, filePath: newPath } : p;
-        }),
-      );
-      if (data.totalFaces > 0) {
-        showToast(`얼굴 ${data.totalFaces}개 모자이크 완료! (${data.processed}장)`);
-      } else {
-        showToast("감지된 얼굴이 없습니다");
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "얼굴 모자이크 실패");
-    } finally {
-      setFaceMosaicApplying(false);
-    }
-  };
-
-  const hasTistoryConnection = connections.some((c) => c.platform === "tistory" && c.hasToken);
   const hasMediumConnection = connections.some((c) => c.platform === "medium" && c.hasToken);
   const hasWordPressConfig = typeof window !== "undefined"; // WordPress uses env vars, always show button
 
-  const handlePublish = async (platform: "tistory" | "medium" | "wordpress") => {
+  const handlePublish = async (platform: "medium" | "wordpress") => {
     setPublishing(true);
     setPublishedUrl(null);
     try {
@@ -607,13 +684,9 @@ export default function PostEditPage({
   }
 
   // ── Preview helpers ──
-  const currentVariant = activeVariant !== "base"
-    ? variants.find((v) => v.platform === activeVariant && v.lang === lang)
-    : null;
-  const previewTitle = currentVariant ? currentVariant.title : ((lang === "ko" ? post?.titleKo : post?.titleEn) ?? "");
-  const previewContent = currentVariant ? currentVariant.content : ((lang === "ko" ? post?.contentKo : post?.contentEn) ?? "");
-  const previewHashtags = currentVariant ? currentVariant.hashtags : ((lang === "ko" ? post?.hashtagsKo : post?.hashtagsEn) ?? []);
-  const variantsForLang = variants.filter((v) => v.lang === lang);
+  const previewTitle = (lang === "ko" ? post?.titleKo : post?.titleEn) ?? "";
+  const previewContent = (lang === "ko" ? post?.contentKo : post?.contentEn) ?? "";
+  const previewHashtags = (lang === "ko" ? post?.hashtagsKo : post?.hashtagsEn) ?? [];
 
   // Split content into paragraphs — detect [PHOTO:n] markers for smart placement
   const paragraphs = previewContent ? previewContent.split("\n\n") : [];
@@ -633,7 +706,7 @@ export default function PostEditPage({
       <div className="my-4">
         <img
           src={photo.filePath}
-          alt={photo.caption ?? `Photo ${photo.orderIndex}`}
+          alt={getPhotoAlt(photo)}
           className="w-full rounded-lg max-h-[400px] object-cover"
         />
         {photo.caption && (
@@ -680,7 +753,7 @@ export default function PostEditPage({
           )}
 
           {/* Tab + Lang Switcher */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
               {(["preview", "edit"] as Tab[]).map((t) => (
                 <button key={t} onClick={() => setTab(t)} className={cn(
@@ -691,21 +764,19 @@ export default function PostEditPage({
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
-              <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
-                {(["ko", "en"] as Lang[]).map((l) => (
-                  <button key={l} onClick={() => { setLang(l); setActiveVariant("base"); }} className={cn(
-                    "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                    lang === l ? "bg-[var(--bg-card)] text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
-                  )}>
-                    {l === "ko" ? "한국어" : "English"}
-                  </button>
-                ))}
-              </div>
-              <Badge variant={post?.status === "generated" ? "default" : "secondary"}>
-                {post?.status === "generated" ? "완료" : "초안"}
-              </Badge>
+            <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
+              {(["ko", "en"] as Lang[]).map((l) => (
+                <button key={l} onClick={() => setLang(l)} className={cn(
+                  "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  lang === l ? "bg-[var(--bg-card)] text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                )}>
+                  {l === "ko" ? "한국어" : "English"}
+                </button>
+              ))}
             </div>
+            <Badge variant={post?.status === "generated" ? "default" : "secondary"}>
+              {post?.status === "generated" ? "완료" : "초안"}
+            </Badge>
           </div>
 
           {/* Content */}
@@ -713,30 +784,6 @@ export default function PostEditPage({
             <CardContent className="p-6 space-y-4">
               {tab === "preview" ? (
                 <>
-                  {/* Variant toggle */}
-                  {variantsForLang.length > 0 && (
-                    <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1 mb-2">
-                      {(["base", "naver", "tistory", "medium"] as const).map((v) => {
-                        if (v !== "base" && !variants.find((vr) => vr.platform === v && vr.lang === lang)) return null;
-                        const label = v === "base" ? "기본" : v === "naver" ? "네이버" : v === "tistory" ? "티스토리" : "Medium";
-                        return (
-                          <button
-                            key={v}
-                            onClick={() => setActiveVariant(v)}
-                            className={cn(
-                              "px-3 py-1 rounded-md text-xs font-medium transition-colors",
-                              activeVariant === v
-                                ? "bg-[var(--accent)] text-white"
-                                : "text-[var(--text-muted)] hover:text-[var(--text)]",
-                            )}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
                   <h2 className="text-xl font-bold">{previewTitle || "(제목 없음)"}</h2>
 
                   {/* Interleave paragraphs with photos */}
@@ -812,16 +859,42 @@ export default function PostEditPage({
               ) : (
                 <>
                   <div className="space-y-1.5">
-                    <Label>제목</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>제목</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleGenerateTitles}
+                        disabled={titlesLoading}
+                        className="text-xs h-6 px-2"
+                      >
+                        {titlesLoading ? "생성 중..." : "AI 제목 3개 추천"}
+                      </Button>
+                    </div>
                     {lang === "ko"
                       ? <Input value={titleKo} onChange={(e) => setTitleKo(e.target.value)} />
                       : <Input value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />}
+                    {titleCandidates.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        {titleCandidates.map((c, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleSelectTitle(c)}
+                            className="w-full text-left rounded-md border border-[var(--border)] hover:border-[var(--accent)] p-2.5 transition-colors"
+                          >
+                            <p className="text-xs font-medium text-[var(--text)]">{c.titleKo}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{c.titleEn}</p>
+                            <Badge variant="secondary" className="text-[10px] mt-1">{c.style}</Badge>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>본문</Label>
                     {lang === "ko"
-                      ? <Textarea value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={6} className="font-mono text-sm leading-relaxed min-h-[200px] md:min-h-[400px]" />
-                      : <Textarea value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={6} className="font-mono text-sm leading-relaxed min-h-[200px] md:min-h-[400px]" />}
+                      ? <Textarea value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
+                      : <Textarea value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />}
                   </div>
                   {/* Partial Regeneration */}
                   <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
@@ -916,9 +989,46 @@ export default function PostEditPage({
                       </div>
                     )}
                   </div>
-                  <Button onClick={handleSave} disabled={saving} className="w-full">
-                    {saving ? "저장 중..." : "수정 저장"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={handleSave} disabled={saving} className="flex-1">
+                      {saving ? "저장 중..." : "수정 저장"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleLoadVersions}
+                      disabled={versionsLoading}
+                      className="text-xs"
+                    >
+                      {versionsLoading ? "..." : showVersions ? "닫기" : "버전 기록"}
+                    </Button>
+                  </div>
+                  {showVersions && (
+                    <div className="rounded-lg border border-[var(--border)] p-3 space-y-2 max-h-60 overflow-y-auto">
+                      <p className="text-xs font-medium text-[var(--text-secondary)]">버전 히스토리</p>
+                      {versions.length === 0 ? (
+                        <p className="text-xs text-[var(--text-muted)]">저장된 버전이 없습니다</p>
+                      ) : (
+                        versions.map((v) => (
+                          <div key={v.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--border)] last:border-0">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-[var(--text)] truncate">{v.titleKo ?? "(제목 없음)"}</p>
+                              <p className="text-[10px] text-[var(--text-muted)]">
+                                {new Date(v.createdAt).toLocaleString("ko")} · {v.changeReason === "manual_edit" ? "수동 편집" : v.changeReason === "before_restore" ? "복원 전" : v.changeReason}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRestoreVersion(v.id)}
+                              className="text-[10px] h-6 px-2 shrink-0 text-[var(--accent)]"
+                            >
+                              복원
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>
@@ -946,68 +1056,69 @@ export default function PostEditPage({
             </Card>
           )}
 
-          {/* Generation Info */}
-          {post?.generationMeta && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">AI 생성 정보</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
-                    <p className="text-[10px] text-[var(--text-muted)] mb-1">글 생성 모델</p>
-                    <p className="text-sm font-semibold text-[var(--text)]">{post.generationMeta.mainModel}</p>
-                  </div>
-                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
-                    <p className="text-[10px] text-[var(--text-muted)] mb-1">사진 분석</p>
-                    <p className="text-sm font-semibold text-[var(--text)]">
-                      {post.generationMeta.visionProvider === "gemini" ? "Gemini" : post.generationMeta.visionProvider === "openai" ? "OpenAI" : "없음"}
-                    </p>
-                    <p className="text-[10px] text-[var(--text-muted)]">{post.generationMeta.visionModel}</p>
-                  </div>
-                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
-                    <p className="text-[10px] text-[var(--text-muted)] mb-1">에이전트 리서치</p>
-                    <p className="text-sm font-semibold text-[var(--text)]">
-                      {post.generationMeta.researchProvider === "gemini" ? "Gemini" : post.generationMeta.researchProvider === "openai" ? "OpenAI" : "없음"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3">
-                    <p className="text-[10px] text-[var(--text-muted)] mb-1">문체 학습</p>
-                    <p className="text-sm font-semibold text-[var(--text)]">과거 글 {post.generationMeta.styleContextPosts}개</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
-                  <span>토큰: {(post.generationMeta.inputTokens + post.generationMeta.outputTokens).toLocaleString()} ({post.generationMeta.inputTokens.toLocaleString()} in / {post.generationMeta.outputTokens.toLocaleString()} out)</span>
-                  <span>${post.generationMeta.cost.toFixed(4)}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* SEO Score */}
           {post?.status === "generated" && (
-            <SeoScoreCard postId={postId} lang={lang} onError={showToast} />
-          )}
-
-          {/* Platform SEO Optimize */}
-          {post?.status === "generated" && (
-            <PlatformOptimizeCard
-              postId={postId}
-              lang={lang}
-              variants={variants}
-              onOptimized={(variant) => {
-                setVariants((prev) => {
-                  const idx = prev.findIndex((v) => v.platform === variant.platform && v.lang === variant.lang);
-                  if (idx >= 0) {
-                    const updated = [...prev];
-                    updated[idx] = variant;
-                    return updated;
-                  }
-                  return [...prev, variant];
-                });
-              }}
-              onToast={showToast}
-            />
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">SEO 점수</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleFetchSeoScore}
+                    disabled={seoLoading}
+                  >
+                    {seoLoading ? "분석 중..." : seoScore ? "다시 분석" : "분석하기"}
+                  </Button>
+                </div>
+              </CardHeader>
+              {seoScore && (
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "text-3xl font-bold w-16 h-16 rounded-full flex items-center justify-center border-2",
+                      seoScore.grade === "A" ? "border-green-500 text-green-400" :
+                      seoScore.grade === "B" ? "border-blue-500 text-blue-400" :
+                      seoScore.grade === "C" ? "border-yellow-500 text-yellow-400" :
+                      "border-red-500 text-red-400",
+                    )}>
+                      {seoScore.grade}
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{seoScore.score}점</p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {seoScore.score >= 85 ? "훌륭합니다!" :
+                         seoScore.score >= 70 ? "양호합니다" :
+                         seoScore.score >= 50 ? "개선이 필요합니다" : "많은 개선이 필요합니다"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {seoScore.breakdown.map((item, i) => (
+                      <div key={i} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[var(--text-secondary)]">{item.category}</span>
+                          <span className="text-[var(--text-muted)]">{item.detail} ({item.score}/{item.max})</span>
+                        </div>
+                        <div className="h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              item.score / item.max >= 0.8 ? "bg-green-500" :
+                              item.score / item.max >= 0.5 ? "bg-yellow-500" : "bg-red-500",
+                            )}
+                            style={{ width: `${(item.score / item.max) * 100}%` }}
+                          />
+                        </div>
+                        {item.tips.length > 0 && (
+                          <p className="text-[10px] text-[var(--text-muted)]">{item.tips[0]}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
           )}
 
           {/* Photo Analysis */}
@@ -1032,40 +1143,24 @@ export default function PostEditPage({
             </Card>
           )}
 
-          {/* Face Mosaic */}
-          {photos.length > 0 && (
-            <Card>
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">얼굴 모자이크</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    사진에서 얼굴을 감지하여 자동 모자이크 처리합니다 ({photos.length}장)
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleFaceMosaic}
-                  disabled={faceMosaicApplying}
-                >
-                  {faceMosaicApplying ? "처리 중..." : "얼굴 모자이크"}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Platform Copy */}
           <Card>
             <CardHeader><CardTitle className="text-lg">플랫폼별 복사</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-xs text-[var(--text-muted)] mb-3">사진 img 태그와 해시태그가 포함됩니다</p>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-[var(--text-muted)]">사진 img 태그와 해시태그가 포함됩니다</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
-                  네이버 복사
-                </Button>
-                <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full">
-                  티스토리 복사 (MD)
-                </Button>
+                <div className="space-y-1">
+                  <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
+                    네이버 복사 (HTML)
+                  </Button>
+                  <p className="text-[10px] text-[var(--text-muted)] text-center">에디터 최적화 포맷</p>
+                </div>
+                <div className="space-y-1">
+                  <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full">
+                    티스토리 복사 (HTML)
+                  </Button>
+                  <p className="text-[10px] text-[var(--text-muted)] text-center">HTML 모드에 붙여넣기</p>
+                </div>
                 <Button variant="outline" onClick={() => handleCopy("medium")} className="w-full">
                   Medium 복사 (MD)
                 </Button>
@@ -1077,24 +1172,7 @@ export default function PostEditPage({
           <Card>
             <CardHeader><CardTitle className="text-lg">자동 발행</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Button
-                    variant="outline"
-                    onClick={() => handlePublish("tistory")}
-                    disabled={publishing}
-                    className="w-full"
-                  >
-                    {publishing ? "발행 중..." : "티스토리에 발행"}
-                  </Button>
-                  {hasTistoryConnection ? (
-                    <p className="text-[10px] text-green-500 text-center">연동됨</p>
-                  ) : (
-                    <p className="text-[10px] text-[var(--text-muted)] text-center">
-                      <Link href="/dashboard/settings" className="text-[var(--accent)] hover:underline">설정에서 연동</Link>
-                    </p>
-                  )}
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Button
                     variant="outline"
@@ -1142,22 +1220,256 @@ export default function PostEditPage({
 
           {/* Schedule Publish */}
           {post?.status === "generated" && (
-            <SchedulePublishCard
-              postId={postId}
-              post={{ scheduledAt: post.scheduledAt, scheduledPlatform: post.scheduledPlatform, scheduledLang: post.scheduledLang }}
-              lang={lang}
-              onUpdate={(updated) => setPost((prev) => prev ? { ...prev, ...updated } : prev)}
-              onToast={showToast}
-            />
+            <Card>
+              <CardHeader><CardTitle className="text-lg">예약 발행</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {post.scheduledAt ? (
+                  <div className="space-y-3">
+                    <div className="rounded-lg bg-[var(--accent-soft)] border border-[var(--accent)]/30 px-4 py-3">
+                      <p className="text-sm font-medium">예약됨</p>
+                      <p className="text-xs text-[var(--text-secondary)] mt-1">
+                        {new Date(post.scheduledAt).toLocaleString("ko-KR", {
+                          year: "numeric", month: "long", day: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                        {" · "}
+                        {PLATFORM_LABELS[post.scheduledPlatform as Platform] ?? post.scheduledPlatform}
+                        {" · "}
+                        {post.scheduledLang === "ko" ? "한국어" : "English"}
+                      </p>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleUnschedule}
+                      disabled={scheduling}
+                    >
+                      {scheduling ? "취소 중..." : "예약 취소"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>날짜</Label>
+                        <Input
+                          type="date"
+                          value={scheduleDate}
+                          onChange={(e) => setScheduleDate(e.target.value)}
+                          min={new Date().toISOString().split("T")[0]}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>시간</Label>
+                        <Input
+                          type="time"
+                          value={scheduleTime}
+                          onChange={(e) => setScheduleTime(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>발행 플랫폼</Label>
+                      <select
+                        value={schedulePlatform}
+                        onChange={(e) => setSchedulePlatform(e.target.value as Platform)}
+                        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 py-2 text-sm"
+                      >
+                        <option value="tistory">티스토리</option>
+                        <option value="medium">Medium</option>
+                        <option value="wordpress">WordPress</option>
+                      </select>
+                    </div>
+                    <Button
+                      onClick={handleSchedule}
+                      disabled={scheduling || !scheduleDate || !scheduleTime}
+                      className="w-full"
+                    >
+                      {scheduling ? "설정 중..." : "예약 발행 설정"}
+                    </Button>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      현재 선택된 언어({lang === "ko" ? "한국어" : "English"})로 발행됩니다
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Publish History */}
-          <PublishHistoryCard history={publishHistory} />
+          {publishHistory.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-lg">발행 이력</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {publishHistory.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn("text-[10px] border", PLATFORM_COLORS[h.platform] ?? "")}>
+                          {PLATFORM_LABELS[h.platform as Platform] ?? h.platform}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {h.lang === "ko" ? "한국어" : "English"}
+                        </Badge>
+                        {h.status === "published" && (
+                          <span className="text-[10px] text-green-400">발행됨</span>
+                        )}
+                        {h.status === "copied" && (
+                          <span className="text-[10px] text-blue-400">복사됨</span>
+                        )}
+                        {h.status === "failed" && (
+                          <span className="text-[10px] text-red-400">실패</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {h.publishedUrl && (
+                          <a href={h.publishedUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] text-[var(--accent)] hover:underline">
+                            열기
+                          </a>
+                        )}
+                        <span className="text-[10px] text-[var(--text-muted)]">
+                          {new Date(h.publishedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Competitor Analysis */}
           {post?.status === "generated" && (
-            <CompetitorAnalysisCard postId={postId} lang={lang} onError={showToast} />
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">경쟁 글 분석</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleFetchCompetitors}
+                    disabled={competitorsLoading}
+                  >
+                    {competitorsLoading ? "분석 중..." : competitors ? "다시 분석" : "분석하기"}
+                  </Button>
+                </div>
+              </CardHeader>
+              {competitors && (
+                <CardContent className="space-y-4">
+                  {/* Competitive Score */}
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "text-2xl font-bold w-12 h-12 rounded-full flex items-center justify-center border-2",
+                      competitors.competitiveScore >= 8 ? "border-green-500 text-green-400" :
+                      competitors.competitiveScore >= 6 ? "border-blue-500 text-blue-400" :
+                      competitors.competitiveScore >= 4 ? "border-yellow-500 text-yellow-400" :
+                      "border-red-500 text-red-400",
+                    )}>
+                      {competitors.competitiveScore}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">경쟁력 점수</p>
+                      <p className="text-xs text-[var(--text-muted)]">상위 글 대비 10점 만점</p>
+                    </div>
+                  </div>
+
+                  {/* Benchmarks */}
+                  <div className="rounded-lg bg-[var(--bg-elevated)] p-3 space-y-1.5">
+                    <p className="text-xs font-medium">상위 글 기준</p>
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      평균 글자수: {competitors.benchmarks.avgContentLength} | 평균 사진: {competitors.benchmarks.avgPhotoCount}
+                    </p>
+                    {competitors.benchmarks.commonElements.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {competitors.benchmarks.commonElements.map((el, i) => (
+                          <Badge key={i} variant="secondary" className="text-[10px]">{el}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Strengths */}
+                  {competitors.strengths.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-green-400">강점</p>
+                      {competitors.strengths.map((s, i) => (
+                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-green-500/30">{s}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Missing */}
+                  {competitors.missing.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-yellow-400">부족한 요소</p>
+                      {competitors.missing.map((m, i) => (
+                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-yellow-500/30">{m}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Improvements */}
+                  {competitors.improvements.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-[var(--accent)]">개선 제안</p>
+                      {competitors.improvements.map((imp, i) => (
+                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-[var(--accent)]/30">{imp}</p>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
           )}
+
+          {/* Related Posts (Internal Links) */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">관련 글 추천</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLoadRelated}
+                  disabled={relatedLoading}
+                  className="text-xs"
+                >
+                  {relatedLoading ? "검색 중..." : "관련 글 찾기"}
+                </Button>
+              </div>
+            </CardHeader>
+            {relatedPosts.length > 0 && (
+              <CardContent className="space-y-2">
+                <p className="text-xs text-[var(--text-muted)]">같은 카테고리/지역의 내 글 — 본문에 내부 링크로 활용하세요</p>
+                {relatedPosts.map((rp) => (
+                  <div key={rp.id} className="flex items-center gap-2 py-1.5 border-b border-[var(--border)] last:border-0">
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/dashboard/${rp.id}/edit`} className="text-xs text-[var(--accent)] hover:underline truncate block">
+                        {rp.titleKo ?? rp.placeName}
+                      </Link>
+                      <p className="text-[10px] text-[var(--text-muted)]">{rp.placeName}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        const linkText = lang === "ko"
+                          ? `\n\n👉 이 근처 다른 곳도 다녀왔어요: ${rp.titleKo ?? rp.placeName}`
+                          : `\n\n👉 Also nearby: ${rp.titleEn ?? rp.placeName}`;
+                        if (lang === "ko") setContentKo((prev) => prev + linkText);
+                        else setContentEn((prev) => prev + linkText);
+                        showToast("관련 글 링크가 본문 끝에 추가되었습니다. 저장해주세요.");
+                      }}
+                      className="text-[10px] h-6 px-2 shrink-0"
+                    >
+                      삽입
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            )}
+          </Card>
 
           <div className="text-center">
             <Button variant="ghost" size="sm" asChild>

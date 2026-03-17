@@ -2,99 +2,6 @@ import type { Place } from "@/lib/models/modelTypes";
 import type { MenuItem } from "@/lib/models/modelTypes";
 import type { Photo } from "@/lib/models/modelTypes";
 import type { StyleProfile, UserProfile } from "@/lib/models/modelTypes";
-import { enrichPlace, type EnrichedPlaceInfo } from "@/lib/ai/enrich";
-import { describePhotosForGeneration, type PhotoDescription } from "@/lib/ai/photoDescribe";
-import { researchPlace, type PlaceInsight } from "@/lib/ai/agentResearch";
-import { query } from "@/lib/db";
-
-const KRW_USD_RATE = Number(process.env.KRW_USD_RATE) || 1300;
-
-// ── Opening pattern variation (prevents repetitive AI openings) ──
-
-const OPENING_PATTERNS_KO = [
-  "날씨/계절 묘사로 시작 (예: '바람이 선선해진 어느 가을 오후, ~')",
-  "감각 묘사로 시작 — 냄새, 소리, 촉감 (예: '문을 열자마자 고소한 향이 ~')",
-  "동행자와의 대화로 시작 (예: '친구가 갑자기 \"여기 꼭 가봐야 해\" 라고 ~')",
-  "장소를 찾아가는 과정으로 시작 (예: '지하철에서 내려서 골목을 두 번 꺾으니 ~')",
-  "의외의 발견으로 시작 (예: '사실 다른 가게를 가려다가 우연히 ~')",
-  "음식/메뉴에 대한 기대로 시작 (예: '인스타에서 본 그 비주얼을 직접 보려고 ~')",
-  "시간대 묘사로 시작 (예: '평일 점심시간이 살짝 지난 한적한 시간에 ~')",
-  "개인적 맥락으로 시작 (예: '요즘 스트레스가 좀 쌓여서 맛있는 거라도 먹으러 ~')",
-  "외관/간판 묘사로 시작 (예: '낡은 건물 사이에 눈에 띄는 초록색 간판이 ~')",
-  "재방문 이유로 시작 (예: '한 번 다녀온 뒤로 자꾸 생각나서 ~')",
-];
-
-const OPENING_PATTERNS_EN = [
-  "Start with the journey there (subway, walking, getting lost)",
-  "Start with a sensory detail (smell, sound, crowd atmosphere)",
-  "Start with the cultural context (why this place is special in Korean culture)",
-  "Start with a personal anecdote (what led you here, who recommended it)",
-  "Start with a surprising first impression (something unexpected)",
-  "Start with the neighborhood vibe (what the area around the place feels like)",
-  "Start with a comparison to something back home",
-  "Start with the exterior/signage and trying to find the entrance",
-];
-
-function pickOpeningPattern(lang: "ko" | "en"): string {
-  const patterns = lang === "ko" ? OPENING_PATTERNS_KO : OPENING_PATTERNS_EN;
-  return patterns[Math.floor(Math.random() * patterns.length)];
-}
-
-// ── Past post retrieval for few-shot ──
-
-type PastPostSample = { titleKo: string; contentKoExcerpt: string; titleEn: string; contentEnExcerpt: string };
-
-async function fetchUserPastPosts(userId: number, limit?: number): Promise<PastPostSample[]> {
-  // STYLE_CONTEXT_POSTS: 대형 컨텍스트 모델(100만 토큰)에서 더 많은 과거 글을 참조하여 문체 학습 품질 향상
-  const postLimit = limit ?? (Number(process.env.STYLE_CONTEXT_POSTS) || 2);
-
-  try {
-    const rows = await query<{
-      title_ko: string | null;
-      content_ko: string | null;
-      title_en: string | null;
-      content_en: string | null;
-    }>(
-      `SELECT title_ko, content_ko, title_en, content_en
-       FROM posts
-       WHERE user_id = ? AND status = 'generated' AND content_ko IS NOT NULL
-       ORDER BY updated_at DESC, rowid DESC
-       LIMIT ?`,
-      userId, postLimit,
-    );
-
-    return rows
-      .filter((r) => r.content_ko && r.content_ko.length > 500)
-      .map((r) => ({
-        titleKo: r.title_ko ?? "",
-        // 전체 글 전달 — [PHOTO:n] 마커만 제거하여 순수 텍스트 전달
-        contentKoExcerpt: (r.content_ko ?? "").replace(/\[PHOTO:\d+\]\s*/g, ""),
-        titleEn: r.title_en ?? "",
-        contentEnExcerpt: (r.content_en ?? "").replace(/\[PHOTO:\d+\]\s*/g, ""),
-      }));
-  } catch {
-    return [];
-  }
-}
-
-function truncateAtParagraph(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  // Strip [PHOTO:n] markers for the excerpt
-  const clean = text.replace(/\[PHOTO:\d+\]\s*/g, "");
-  const cut = clean.lastIndexOf("\n\n", maxLen);
-  return (cut > maxLen * 0.4 ? clean.slice(0, cut) : clean.slice(0, maxLen)) + "...";
-}
-
-export type GenerationMeta = {
-  mainModel: string;
-  visionProvider: string;      // "gemini" | "openai" | "none"
-  visionModel: string;
-  researchProvider: string;    // "gemini" | "openai" | "none"
-  styleContextPosts: number;
-  inputTokens: number;
-  outputTokens: number;
-  cost: number;
-};
 
 export type GeneratedContent = {
   titleKo: string;
@@ -104,7 +11,6 @@ export type GeneratedContent = {
   contentEn: string;
   hashtagsEn: string[];
   usage?: { model: string; inputTokens: number; outputTokens: number };
-  generationMeta?: GenerationMeta;
 };
 
 // ── Category-specific blog structures ──
@@ -121,7 +27,7 @@ const CATEGORY_STRUCTURE: Record<string, { ko: string; en: string }> = {
 - 위치나 찾아가는 팁`,
     en: `Weave the following naturally into a flowing narrative (NO numbered lists, NO subheadings):
 - Your first impression walking up to the place
-- Settling in and browsing the menu, what caught your eye (mention prices in USD, 1 USD ≈ ${KRW_USD_RATE.toLocaleString()} KRW)
+- Settling in and browsing the menu, what caught your eye (mention prices in USD, 1 USD = 1,300 KRW)
 - How the food looked when it arrived (colors, plating, portion size)
 - Detailed taste notes — texture, temperature, sauce, seasoning
 - The vibe, who you were with, the atmosphere
@@ -139,7 +45,7 @@ const CATEGORY_STRUCTURE: Record<string, { ko: string; en: string }> = {
     en: `Weave the following naturally into a flowing narrative (NO numbered lists, NO subheadings):
 - How you discovered this cafe, exterior and signage vibes
 - Walking in — the interior, lighting, music, seating layout
-- What you ordered (drinks & desserts with prices in USD, 1 USD ≈ ${KRW_USD_RATE.toLocaleString()} KRW) and how it tasted
+- What you ordered (drinks & desserts with prices in USD, 1 USD = 1,300 KRW) and how it tasted
 - The overall atmosphere — good for working, chatting, or just chilling?
 - Practical info: power outlets, WiFi, restroom
 - How to get there (nearest subway station)`,
@@ -158,7 +64,7 @@ const CATEGORY_STRUCTURE: Record<string, { ko: string; en: string }> = {
 - Entering the room — bed, amenities, cleanliness, space
 - The view from the window
 - Breakfast or facilities you used
-- Overall verdict and tips, price in USD (1 USD ≈ ${KRW_USD_RATE.toLocaleString()} KRW)`,
+- Overall verdict and tips, price in USD (1 USD = 1,300 KRW)`,
   },
   attraction: {
     ko: `자연스럽게 아래 내용을 녹여서 서술하세요 (번호/목록 형식 절대 금지, 소제목도 쓰지 마세요):
@@ -174,7 +80,7 @@ const CATEGORY_STRUCTURE: Record<string, { ko: string; en: string }> = {
 - Your route through the attraction and memorable moments
 - Best photo spots you discovered
 - How much time you spent and physical difficulty
-- Tips for foreign visitors (English signage, admission in USD with 1 USD ≈ ${KRW_USD_RATE.toLocaleString()} KRW)`,
+- Tips for foreign visitors (English signage, admission in USD with 1 USD = 1,300 KRW)`,
   },
 };
 
@@ -182,36 +88,12 @@ const CATEGORY_STRUCTURE: Record<string, { ko: string; en: string }> = {
 
 const CATEGORY_EXAMPLE: Record<string, { ko: string; en: string }> = {
   restaurant: {
-    ko: `골목 안쪽에 자리 잡은 작은 간판을 보고 반신반의하며 들어갔는데, 문을 여는 순간 고소한 참기름 향이 확 퍼지더라고요. 2인 테이블에 앉아서 메뉴판을 펼쳤는데 생각보다 가짓수가 많지 않아서 오히려 마음이 놓였어요. 이런 집이 진짜 맛집이거든요.
-
-갈비탕이 나오자마자 국물 색깔부터 달랐어요. 맑은데 깊은 그 느낌, 한 숟가락 떠서 호호 불어 먹으니까 입안에서 사르르 녹는 것 같았어요. 갈비 살도 젓가락으로 쏙 빠질 정도로 푹 고아져 있더라고요. 같이 간 친구가 "여기 어떻게 찾았어?" 하면서 연신 감탄하길래 괜히 뿌듯했어요.
-
-밑반찬도 정성이 느껴졌어요. 깍두기가 딱 제가 좋아하는 아삭한 스타일이었고, 계란말이도 서비스로 나오는 건데 어떤 집 메인 메뉴보다 나은 수준이었어요. 밥을 국물에 말아 먹으니까 한 그릇이 순삭이더라고요.`,
-    en: `I almost walked right past it. The sign was barely bigger than a postcard, wedged between a dry cleaner and what looked like someone's apartment entrance. But my Korean friend had been insistent — "trust me, just go" — so I ducked inside.
-
-[PHOTO:0]
-
-The menu was a single laminated page, maybe eight items total. No English, but the ajumma behind the counter pointed at the galbitang when I looked confused, so galbitang it was. About $12 for what turned out to be one of the best bowls of soup I've had in Seoul.
-
-The broth arrived almost clear but tasting like it had been simmered for a geological age — deep, beefy, with this subtle sesame undertone that kept pulling me back for another spoonful. The short ribs basically dissolved at the touch of chopsticks.
-
-[PHOTO:1]
-
-What really got me were the banchan. The radish kimchi had that satisfying crunch-then-tang thing going on, and the egg roll — a freebie! — was genuinely better than some restaurants' paid appetizers. I scraped every grain of rice out of that dolsot.`,
+    ko: `골목 안쪽에 자리 잡은 작은 간판을 보고 반신반의하며 들어갔는데, 문을 여는 순간 고소한 참기름 향이 확 퍼지더라고요. 2인 테이블에 앉아서 메뉴판을 펼쳤는데 생각보다 가짓수가 많지 않아서 오히려 마음이 놓였어요. 이런 집이 진짜 맛집이거든요. 갈비탕이 나오자마자 국물 색깔부터 달랐어요. 맑은데 깊은 그 느낌, 한 숟가락 떠서 호호 불어 먹으니까 입안에서 사르르 녹는 것 같았어요.`,
+    en: `Tucked away in a narrow alley, this place had me skeptical at first — the sign was tiny and easy to miss. But the moment I stepped inside, the rich aroma of sesame oil hit me and I knew I was in for something good. The menu was refreshingly short, which in my experience is always a promising sign. When the galbitang arrived, the broth had that beautiful clear-yet-deeply-flavored look, and one sip confirmed it — this was the real deal.`,
   },
   cafe: {
-    ko: `인스타에서 우연히 보고 찾아간 곳인데 실물이 사진보다 훨씬 분위기 있었어요. 2층 창가 자리에 앉으니까 바깥으로 은행나무가 보이는데 노란 잎이 햇빛에 반짝거리더라고요. 원목 테이블이랑 간접 조명이 은근 따뜻한 느낌을 주더라고요.
-
-시그니처 라떼를 시켰는데 한 모금 마시니까 바닐라인 줄 알았는데 은은하게 헤이즐넛이 숨어 있는 맛이었어요. 디저트로 시킨 바스크 치즈케이크가 겉은 살짝 그을린 느낌인데 속은 크림치즈 그 자체라 커피랑 완벽 조합이었어요. 콘센트도 자리마다 있어서 작업하기에도 딱이었고, 음악 볼륨이 적당해서 대화하기도 좋았어요.`,
-    en: `The Instagram photos didn't do it justice, which almost never happens. From the second-floor window seat, I watched ginkgo leaves drift past like tiny golden parachutes — the kind of scene that makes you forget you came here to work.
-
-[PHOTO:0]
-
-I ordered their signature latte expecting the usual vanilla sweetness, but caught something else entirely — hazelnut, maybe? It was subtle enough that I spent half the cup trying to identify it. The Basque cheesecake had that perfect burnt-caramel crust giving way to what was essentially warm cream cheese. Not cheesecake-flavored cream cheese. Actual cream cheese.
-
-[PHOTO:1]
-
-Every seat had a power outlet, the WiFi password was printed on the receipt without me having to ask, and whoever curated the playlist understood that cafe music should be heard but not listened to. I stayed three hours and regretted nothing.`,
+    ko: `인스타에서 우연히 보고 찾아간 곳인데 실물이 사진보다 훨씬 분위기 있었어요. 2층 창가 자리에 앉으니까 바깥으로 은행나무가 보이는데 노란 잎이 햇빛에 반짝거리더라고요. 시그니처 라떼를 시켰는데 한 모금 마시니까 바닐라인 줄 알았는데 은은하게 헤이즐넛이 숨어 있는 맛이었어요. 콘센트도 자리마다 있어서 작업하기에도 딱이었어요.`,
+    en: `I stumbled upon this cafe through Instagram and it honestly looked even better in person. Sitting by the second-floor window, I had a perfect view of ginkgo trees with golden leaves catching the afternoon sunlight. Their signature latte surprised me — what I expected to be vanilla had this subtle hazelnut undertone. Power outlets at every seat made it perfect for working remotely too.`,
   },
   accommodation: {
     ko: `체크인할 때 프론트 직원이 웰컴 드링크를 건네주면서 조식 시간이랑 루프탑 바 오픈 시간을 친절하게 안내해줬어요. 방에 들어가니까 킹사이즈 침대 베딩이 정말 뽀송한 느낌이더라고요. 창밖으로 남산타워가 살짝 보여서 괜히 기분이 좋아졌어요. 어메니티가 이솝 제품이라 향도 좋고 쓰기도 좋았어요.`,
@@ -222,6 +104,81 @@ Every seat had a power outlet, the WiFi password was printed on the receipt with
     en: `From Anguk Station Exit 1, it was just a five-minute walk to the entrance. Going on a weekday morning meant barely any crowds, so I could wander freely. Walking along the stone walls with a cool breeze, I understood why this draws millions yearly. The deeper I went, the more stunning it got — traditional pavilions framed by pine trees, like something straight out of a painting.`,
   },
 };
+
+// ── Sensory detail framework per category ──
+
+const SENSORY_FRAMEWORK: Record<string, { ko: string; en: string }> = {
+  restaurant: {
+    ko: `### 오감 묘사 (반드시 2개 이상 포함)
+- 후각: 가게 들어설 때 맡은 향 (고소한/매콤한/달콤한 등 구체적)
+- 시각: 음식의 색감, 그릇, 플레이팅, 김이 모락모락
+- 미각: 첫 맛, 씹을수록 느껴지는 맛, 식감(바삭/쫄깃/부드러운), 온도감
+- 청각: 고기 굽는 지글지글, 국물 보글보글, 주방의 활기
+- 촉각: 뜨거운 국물그릇, 나무젓가락 감촉`,
+    en: `### Sensory Details (include at least 2)
+- Smell: aroma upon entering (savory, smoky, sweet — be specific)
+- Sight: dish colors, steam rising, plating presentation
+- Taste: first bite, evolving flavors, texture (crispy/chewy/tender), temperature
+- Sound: sizzling, bubbling, kitchen energy
+- Touch: warmth of the bowl, chopstick feel`,
+  },
+  cafe: {
+    ko: `### 오감 묘사 (반드시 2개 이상 포함)
+- 후각: 문 열자마자 퍼지는 원두 향, 베이킹 냄새
+- 시각: 인테리어 색감, 조명 톤, 음료 색상과 라떼아트
+- 미각: 첫 모금의 온도와 맛, 산미/단맛/쓴맛 밸런스, 디저트 식감
+- 청각: 배경 음악 장르, 커피머신 소리, 대화 소리의 크기
+- 촉각: 컵의 질감(도자기/유리), 소파나 의자의 편안함`,
+    en: `### Sensory Details (include at least 2)
+- Smell: coffee aroma upon entering, baking scents
+- Sight: interior colors, lighting mood, latte art, drink presentation
+- Taste: first sip temperature, acidity/sweetness balance, dessert texture
+- Sound: background music genre, espresso machine, ambient chatter
+- Touch: cup material (ceramic/glass), seating comfort`,
+  },
+  accommodation: {
+    ko: `### 오감 묘사 (반드시 2개 이상 포함)
+- 촉각: 침구의 감촉(뽀송한/부드러운), 수건 질감, 슬리퍼 착용감
+- 시각: 방 들어갈 때 첫 시야, 창밖 뷰, 조명 분위기
+- 후각: 로비 향, 어메니티 향, 방의 깨끗한 냄새
+- 청각: 방음 상태, 복도 소음, 창밖 소리`,
+    en: `### Sensory Details (include at least 2)
+- Touch: bedding texture, towel quality, slipper comfort
+- Sight: room reveal moment, window view, lighting ambiance
+- Smell: lobby fragrance, amenity scents, room freshness
+- Sound: soundproofing quality, hallway noise, outside sounds`,
+  },
+  attraction: {
+    ko: `### 오감 묘사 (반드시 2개 이상 포함)
+- 시각: 풍경의 색감, 빛의 방향, 계절감, 인상적인 장면
+- 촉각: 바람의 세기와 온도, 돌담/난간의 감촉, 햇살의 따뜻함
+- 청각: 새소리, 물소리, 발걸음, 주변 사람들 소리
+- 후각: 풀냄새, 꽃향기, 흙냄새 등 자연의 향`,
+    en: `### Sensory Details (include at least 2)
+- Sight: landscape colors, light direction, seasonal feel, standout scenes
+- Touch: wind strength and temperature, stone/railing texture, sunlight warmth
+- Sound: birdsong, water, footsteps, crowd levels
+- Smell: grass, flowers, earth — nature's scents`,
+  },
+};
+
+// ── Opening hook patterns ──
+
+const OPENING_HOOKS_KO = [
+  "장면 묘사로 시작: 그날의 날씨, 시간대, 거리 풍경을 먼저 그려주세요 (예: '비가 부슬부슬 내리던 화요일 오후, 골목 안쪽으로 걸어가다가...')",
+  "독자에게 질문으로 시작: 호기심을 유발하세요 (예: '혹시 ~동에 이런 숨은 골목이 있는 줄 알았어요?')",
+  "반전/대비로 시작: 기대와 현실의 차이 (예: '겉보기엔 평범한 가게인데, 문을 열자마자...')",
+  "에피소드로 시작: 이 장소를 알게 된 계기 (예: '친구가 여기 꼭 가보라고 한 게 벌써 석 달 전이에요')",
+  "감정 직구로 시작: 솔직한 감정 표현 (예: '솔직히 처음엔 기대 안 했어요', '진짜 여기는 꼭 알려드리고 싶었어요')",
+];
+
+const OPENING_HOOKS_EN = [
+  "Start with scene-setting: paint the day — weather, time, the street vibe (e.g., 'It was a drizzly Tuesday afternoon when I turned into a narrow alley...')",
+  "Start with a hook question: draw the reader in (e.g., 'Have you ever stumbled upon a place so good you wanted to keep it secret?')",
+  "Start with contrast/surprise: set up then subvert expectations (e.g., 'From the outside, nothing about this place screams special — but step inside and...')",
+  "Start with a personal anecdote: how you discovered it (e.g., 'A friend had been raving about this spot for months before I finally made it')",
+  "Start with a direct emotional hook: honest and upfront (e.g., 'I have to be honest — I wasn't expecting much. But this place completely won me over.')",
+];
 
 // ── Age-based tone instructions ──
 
@@ -246,218 +203,82 @@ function getAgeToneInstruction(ageGroup: string): { ko: string; en: string } {
   }
 }
 
-// ── Shared context builder (place/menu/photos/memo/enriched) ──
+// ── Build the full prompt ──
 
-function buildBaseContext(
-  place: Place,
-  menuItems: MenuItem[],
-  photos: Photo[],
-  userMemo: string,
-  isRevisit: boolean,
-  enriched: EnrichedPlaceInfo | null,
-  photoDescs: PhotoDescription[] | null = null,
-  agentInsight: PlaceInsight | null = null,
-  suggestedMenus: SuggestedMenu[] = [],
-  orderedMenus: SuggestedMenu[] = [],
-): string {
-  let ctx = `## 장소 정보
-- 이름: ${place.name}
-- 카테고리: ${place.category}
-- 주소: ${enriched?.roadAddress ?? place.address ?? "미입력"}
-- 별점: ${place.rating ?? "미입력"}/5
-${enriched?.naverCategory ? `- 네이버 분류: ${enriched.naverCategory}` : ""}
-`;
-
-  if (orderedMenus.length > 0) {
-    ctx += `\n## 내가 먹은 메뉴 (실제 주문 — 사진 있음)\n`;
-    for (const item of orderedMenus) {
-      ctx += `- ${item.name}${item.price > 0 ? `: ${item.price.toLocaleString()}원 (~$${(item.price / KRW_USD_RATE).toFixed(1)})` : ""}\n`;
-    }
-    ctx += `※ 글의 주요 내용은 반드시 내가 먹은 메뉴 중심으로 서술. 맛, 비주얼, 감상을 자세히.\n`;
-  } else if (menuItems.length > 0) {
-    // fallback: DB에 저장된 메뉴 (orderedMenus가 없을 때)
-    ctx += `\n## 내가 먹은 메뉴\n`;
-    for (const item of menuItems) {
-      ctx += `- ${item.name}: ${item.priceKrw.toLocaleString()}원 (~$${(item.priceKrw / KRW_USD_RATE).toFixed(1)})\n`;
-    }
-  }
-
-  if (suggestedMenus.length > 0) {
-    ctx += `\n## 이 가게의 대표 메뉴 (블로그 기반 참고 정보)\n`;
-    for (const item of suggestedMenus) {
-      ctx += `- ${item.name}${item.price > 0 ? `: ${item.price.toLocaleString()}원 (~$${(item.price / KRW_USD_RATE).toFixed(1)})` : ""}\n`;
-    }
-    ctx += `※ 대표 메뉴는 자연스럽게 언급 가능 (예: "이 가게는 ○○로 유명한데, 나는 △△를 주문했다")\n`;
-    ctx += `※ 대표 메뉴 정보가 없으면 이 섹션 무시\n`;
-  }
-
-  if (photos.length > 0) {
-    ctx += `\n## 사진 정보 / Photo Info (${photos.length}장)\n`;
-    ctx += `Insert [PHOTO:index] markers at appropriate positions (e.g. [PHOTO:0], [PHOTO:1]).\n`;
-    ctx += `사진을 넣을 위치에 [PHOTO:인덱스] 마커를 삽입하세요.\n`;
-    ctx += `Do NOT cluster all photos together — distribute them throughout the post where contextually relevant.\n`;
-    ctx += `모든 사진을 한 곳에 몰아넣지 말고, 글의 맥락에 맞게 분산 배치하세요.\n`;
-    ctx += `각 사진의 상세 묘사를 참고하여 해당 사진 주변의 글을 더 구체적으로 작성하세요.\n\n`;
-    ctx += `### 사진 유형별 배치 가이드 / Photo Placement Guide\n`;
-    ctx += `- 외관/간판 사진 → 도입부나 가게 첫인상 서술 부분 / Place near opening or first impression section\n`;
-    ctx += `- 주차장/주변환경 사진 → 위치 설명이나 찾아가는 과정 부분 / Place near location/directions section\n`;
-    ctx += `- 인테리어/좌석 사진 → 분위기 묘사 부분 / Place near atmosphere description\n`;
-    ctx += `- 음식/음료 사진 → 해당 메뉴 맛 묘사 직전이나 직후 / Place before or after taste description\n`;
-    ctx += `- 풍경/거리 사진 → 동네 분위기나 마무리 부분 / Place near neighborhood vibe or closing\n\n`;
-    const TYPE_LABELS: Record<string, string> = {
-      food: "음식/Food", exterior: "외관/Exterior", interior: "인테리어/Interior",
-      parking: "주차장/Parking", street: "주변/Surroundings", menu: "메뉴판/Menu board",
-      other: "기타/Other",
-    };
-    for (const photo of photos) {
-      const desc = photoDescs?.find((d) => d.orderIndex === photo.orderIndex);
-      const typeLabel = desc?.photoType ? (TYPE_LABELS[desc.photoType] ?? desc.photoType) : "";
-      if (desc && desc.richDescription && desc.richDescription !== desc.caption) {
-        ctx += `- [PHOTO:${photo.orderIndex}]${typeLabel ? ` (${typeLabel})` : ""}: ${desc.caption || "(no caption)"}\n  → Detail: ${desc.richDescription}\n`;
-      } else {
-        ctx += `- [PHOTO:${photo.orderIndex}]${typeLabel ? ` (${typeLabel})` : ""}: ${photo.caption ?? "(no caption)"}\n`;
-      }
-    }
-  }
-
-  if (userMemo) {
-    ctx += `\n## 작성자 메모\n${userMemo}\n`;
-  }
-
-  if (isRevisit) {
-    ctx += `\n## 재방문 리뷰
-- 이 글은 재방문 리뷰입니다. "다시 찾은", "재방문" 등의 표현을 자연스럽게 사용하세요.
-`;
-  }
-
-  // Enriched blog references
-  const hasExcerpts = enriched && enriched.blogExcerpts.length > 0;
-  const hasFullTexts = enriched && enriched.blogFullTexts.length > 0;
-  const hasKeywords = enriched && enriched.blogKeywords.length > 0;
-
-  if (hasExcerpts || hasFullTexts || hasKeywords) {
-    ctx += `\n## 참고: 다른 블로거들의 리뷰 (실제 데이터)
-이 장소에 대한 다른 블로그 글을 참고하여 디테일을 풍부하게 만드세요.
-단, 아래 내용을 그대로 복사하지 말고 자연스럽게 녹여서 활용하세요.
-`;
-
-    // Full blog texts (richest source — from crawled Tistory/WordPress/etc.)
-    if (hasFullTexts) {
-      ctx += `\n### 블로그 본문 참고 (상세)\n`;
-      for (const fullText of enriched!.blogFullTexts.slice(0, 2)) {
-        ctx += `---\n${fullText}\n---\n\n`;
-      }
-    }
-
-    // Shorter snippets from Naver + Google (supplementary)
-    if (hasExcerpts) {
-      ctx += `\n### 다른 블로그 발췌 (요약)\n`;
-      for (const excerpt of enriched!.blogExcerpts.slice(0, 4)) {
-        ctx += `- ${excerpt}\n`;
-      }
-    }
-
-    if (hasKeywords) {
-      ctx += `\n### 자주 언급되는 키워드\n`;
-      ctx += enriched!.blogKeywords.join(", ") + "\n";
-      ctx += `→ 이 키워드들을 자연스럽게 본문에 녹여주세요 (억지로 넣지 말고 맥락에 맞을 때만)\n`;
-    }
-
-    ctx += `\n### 참고 데이터 활용 규칙 (중요!)
-- 다른 블로그 내용은 "참고"일 뿐, 직접 방문한 것처럼 자연스럽게 재구성하세요
-- 다른 블로그의 문장을 그대로 복사하면 안 됩니다 — 반드시 자기 표현으로 다시 쓰세요
-- "다른 블로그에서 봤는데" 같은 메타 언급은 절대 하지 마세요
-- 사용자가 직접 입력한 정보(메모, 메뉴, 사진 설명)가 가장 우선순위가 높습니다
-- 참고 블로그에만 있고 사용자 입력에 없는 구체적 수치(가격, 시간)는 사용하지 마세요
-`;
-  }
-
-  // AI Agent Research Insights
-  const hasInsight = agentInsight && (
-    agentInsight.popularMenus.length > 0 ||
-    agentInsight.atmosphere ||
-    agentInsight.tips.length > 0 ||
-    agentInsight.nearbyLandmarks.length > 0 ||
-    agentInsight.bestPhotoSpots.length > 0 ||
-    agentInsight.visitorSentiment
-  );
-
-  if (hasInsight) {
-    ctx += `\n## AI 리서치 인사이트 (자동 수집된 참고 데이터)
-`;
-    if (agentInsight!.popularMenus.length > 0) {
-      ctx += `- 인기 메뉴: ${agentInsight!.popularMenus.join(", ")}\n`;
-    }
-    if (agentInsight!.atmosphere) {
-      ctx += `- 분위기: ${agentInsight!.atmosphere}\n`;
-    }
-    if (agentInsight!.visitorSentiment) {
-      ctx += `- 방문자 평: ${agentInsight!.visitorSentiment}\n`;
-    }
-    if (agentInsight!.tips.length > 0) {
-      ctx += `- 방문 팁: ${agentInsight!.tips.join("; ")}\n`;
-    }
-    if (agentInsight!.nearbyLandmarks.length > 0) {
-      ctx += `- 근처: ${agentInsight!.nearbyLandmarks.join(", ")}\n`;
-    }
-    if (agentInsight!.bestPhotoSpots.length > 0) {
-      ctx += `- 사진 포인트: ${agentInsight!.bestPhotoSpots.join(", ")}\n`;
-    }
-    if (agentInsight!.recentTrends) {
-      ctx += `- 최근 트렌드: ${agentInsight!.recentTrends}\n`;
-    }
-    ctx += `\n→ 위 인사이트는 참고용입니다. 사용자 입력 정보가 최우선이며, 인사이트 내용은 자연스럽게 녹여서 활용하세요.\n`;
-  }
-
-  return ctx;
-}
-
-// ── Korean prompt builder ──
-
-function buildKoreanPrompt(
+function buildPrompt(
   place: Place,
   menuItems: MenuItem[],
   photos: Photo[],
   style: StyleProfile,
   userProfile: UserProfile | null,
   userMemo: string,
-  isRevisit: boolean,
-  enriched: EnrichedPlaceInfo | null,
-  photoDescs: PhotoDescription[] | null = null,
-  pastPosts: PastPostSample[] = [],
-  qualityFeedback: string | null = null,
-  agentInsight: PlaceInsight | null = null,
-  suggestedMenus: SuggestedMenu[] = [],
-  orderedMenus: SuggestedMenu[] = [],
+  isRevisit: boolean = false,
+  pastExcerpts?: string,
 ): string {
   const cat = place.category;
   const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
   const example = CATEGORY_EXAMPLE[cat] ?? CATEGORY_EXAMPLE.restaurant;
+  const sensory = SENSORY_FRAMEWORK[cat] ?? SENSORY_FRAMEWORK.restaurant;
   const ageTone = getAgeToneInstruction(userProfile?.ageGroup ?? "30s");
   const toneDesc = style.analyzedTone;
-  const openingPattern = pickOpeningPattern("ko");
 
-  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight, suggestedMenus, orderedMenus);
+  // Randomly select opening hook pattern
+  const hookIdxKo = Math.floor(Math.random() * OPENING_HOOKS_KO.length);
+  const hookIdxEn = Math.floor(Math.random() * OPENING_HOOKS_EN.length);
+  const hookKo = OPENING_HOOKS_KO[hookIdxKo];
+  const hookEn = OPENING_HOOKS_EN[hookIdxEn];
 
-  let prompt = `아래 장소 방문 경험을 바탕으로 한국어 블로그 글을 작성하세요.
+  let prompt = `당신은 한국의 인기 블로거입니다. 아래 장소 방문 경험을 바탕으로 한국어 블로그 글과 영어 블로그 글을 각각 작성하세요.
 
-${baseCtx}
+## 장소 정보
+- 이름: ${place.name}
+- 카테고리: ${cat}
+- 주소: ${place.address ?? "미입력"}
+- 별점: ${place.rating ?? "미입력"}/5
+`;
 
+  if (menuItems.length > 0) {
+    prompt += `\n## 메뉴\n`;
+    for (const item of menuItems) {
+      prompt += `- ${item.name}: ${item.priceKrw.toLocaleString()}원 (~$${(item.priceKrw / 1300).toFixed(1)})\n`;
+    }
+  }
+
+  if (photos.length > 0) {
+    prompt += `\n## 사진 정보 (${photos.length}장)\n`;
+    prompt += `아래 사진들을 글의 흐름에 맞는 위치에 자연스럽게 배치하세요.\n`;
+    prompt += `사진을 넣을 위치에 [PHOTO:인덱스] 마커를 삽입하세요 (예: [PHOTO:0], [PHOTO:1]).\n`;
+    prompt += `모든 사진을 한 곳에 몰아넣지 말고, 글의 맥락에 맞게 분산 배치하세요.\n\n`;
+    for (const photo of photos) {
+      prompt += `- [PHOTO:${photo.orderIndex}]: ${photo.caption ?? "(설명 없음)"}\n`;
+    }
+  }
+
+  if (userMemo) {
+    prompt += `\n## 작성자 메모\n${userMemo}\n`;
+  }
+
+  if (isRevisit) {
+    prompt += `\n## 재방문 리뷰
+- 이 글은 재방문 리뷰입니다. "다시 찾은", "재방문" 등의 표현을 자연스럽게 사용하세요.
+- 한국어: 이전 방문과 비교하는 느낌을 살려주세요 (예: "지난번에 왔을 때보다...", "변함없이 맛있는...", "이번에는 새로운 메뉴를...")
+- 영어: Use phrases like "returning to", "this time around", "compared to my last visit"
+- 한국어 해시태그에 #재방문 을 반드시 포함하세요
+- 영어 해시태그에 #revisit 을 반드시 포함하세요
+`;
+  }
+
+  prompt += `
 ## 한국어 글 작성 지침
 ${structure.ko}
 
+### 도입부 스타일 (이번 글에 적용)
+${hookKo}
+
 ### 참고 예시 (이런 톤과 흐름으로 작성하세요)
 ${example.ko}
-${pastPosts.length > 0 ? `
-### 이 사용자의 이전 글 (이 스타일을 따라하세요 — 가장 중요한 참고자료!)
-${pastPosts.map((p, i) => `#### 이전 글 ${i + 1}: "${p.titleKo}"
-${p.contentKoExcerpt}`).join("\n\n")}
 
-→ 위 ${pastPosts.length}개 이전 글의 어투, 문장 패턴, 감정 표현 방식을 최대한 모방하세요. 이 사용자만의 고유한 글쓰기 스타일입니다.
-→ 반복되는 표현 패턴, 문장 길이 분포, 감탄사 사용 빈도, 문단 전환 방식을 분석하여 일관되게 적용하세요.
-` : ""}
-### 도입부 패턴 (이번 글은 이 방식으로 시작하세요)
-${openingPattern}
+${sensory.ko}
 
 ### 글 분량 (중요!)
 - 최소 2500자, 권장 3000~4000자의 충분한 분량으로 작성하세요.
@@ -468,420 +289,83 @@ ${openingPattern}
 ### 어투 스타일
 ${ageTone.ko}
 - 문체 톤: ${toneDesc.tone ?? "casual"} / 격식: ${toneDesc.formality ?? "medium"} / 감정: ${toneDesc.emotion ?? "warm"}
-${style.sampleTexts.map((s, i) => `- 문체 샘플 ${i + 1}: "${s}"`).join("\n")}
+${style.sampleTexts.slice(0, 3).map((s, i) => `- 문체 샘플 ${i + 1}: "${s}"`).join("\n")}
 
-위 문체 샘플들의 어투, 문장 구조, 표현 방식을 분석하여 최대한 비슷한 스타일로 작성하세요.
-
-### 자연스러운 블로그 글쓰기 (중요!)
+${pastExcerpts ? `### 이전에 작성한 글 (이 문체와 톤을 유지하세요)
+${pastExcerpts}
+` : ""}### 자연스러운 블로그 글쓰기 (중요!)
 - 절대 번호를 매기지 마세요 (1. 2. 3. 금지)
 - 소제목(##, ###) 사용 금지 — 문단 흐름으로 자연스럽게 전환
 - 구어체 사용 (블로그답게 자연스럽게)
 - 문장 길이를 랜덤하게 (짧은 감탄문과 긴 서술문 섞기)
 - "~인 것 같아요", "~더라고요", "~거든요" 같은 개인 경험 표현 사용
 - 접속사 패턴을 다양하게 ("그래서", "근데", "아무튼", "솔직히" 등)
+- 완벽한 문법보다 자연스러운 구어 표현 우선
 - 중간중간 개인 감상이나 에피소드 삽입 (예: 동행자와의 대화, 날씨, 그날의 기분)
+- 마치 친구에게 이야기하듯 편하게 써주세요
 
 ### AI스러운 표현 금지 (절대 사용하지 마세요)
 - "~을 소개해 드리겠습니다", "~에 대해 알아보겠습니다" 같은 안내형 도입부
 - "첫째, 둘째, 셋째" 같은 나열식 전개
 - "마지막으로", "결론적으로" 같은 딱딱한 마무리
 - "~한 경험을 하게 되었습니다" 같은 수동적/간접적 표현
+- 한 문단 안에서 "~요"와 "~습니다"를 무분별하게 혼용
 - "다양한", "특별한", "완벽한", "최고의" 같은 의미 없는 형용사 남발
 - "그럼 지금부터", "자 그러면" 같은 방송 진행자식 표현
 
-${isRevisit ? `### 재방문 표현
-- "지난번에 왔을 때보다...", "변함없이 맛있는...", "이번에는 새로운 메뉴를..."
-- 해시태그에 #재방문 반드시 포함
-` : ""}
-
-### 사진 배치 규칙
-${photos.length > 0 ? `- 반드시 모든 [PHOTO:n] 마커를 본문 중 적절한 위치에 삽입하세요.
-- 사진은 해당 내용을 서술한 직후에 배치하세요.
-- [PHOTO:n] 마커는 반드시 독립된 줄에 단독으로 작성하세요.` : "- 사진이 없으므로 [PHOTO] 마커를 사용하지 마세요."}
-
 ### SEO 제목
 - 장소명 + 카테고리 키워드 포함
-- 클릭 유도하는 매력적인 제목 (20~40자)`;
+- 클릭 유도하는 매력적인 제목 (20~40자)
 
-  if (qualityFeedback) {
-    prompt += `\n\n### ⚠️ 이전 생성 결과 품질 피드백 (반드시 반영하세요!)
-${qualityFeedback}`;
-  }
+## 영어 글 작성 지침
+영어 글은 한국어를 번역하지 말고, 한국을 방문한 외국인 관점에서 완전히 새로 작성하세요.
+${structure.en}
 
-  prompt += `
+### Opening Style (use this for the English post)
+${hookEn}
+
+### English Style Example (write with this tone and flow)
+${example.en}
+
+${sensory.en}
+
+### 영어 글 분량
+- 최소 1500자, 권장 2000~2500자로 충분히 작성하세요.
+- 각 문단을 3~5문장 이상으로 상세하게 서술하세요.
+
+### 외국인 관점 필수 포함 사항
+- 가장 가까운 지하철역 및 출구 번호 (알고 있다면)
+- 가격은 모두 달러로 환산 (1 USD = 1,300 KRW 고정환율)
+- 영어 메뉴 유무 ("English menu available" 또는 "Korean-only menu, but...")
+- 카드 결제 가능 여부
+- 외국인이 알면 좋은 팁 (예: 물은 셀프, 신발 벗는 곳 등)
+
+## 사진 배치 규칙
+${photos.length > 0 ? `- 반드시 모든 [PHOTO:n] 마커를 본문 중 적절한 위치에 삽입하세요.
+- 사진은 해당 내용을 서술한 직후에 배치하세요 (예: 음식 묘사 후 음식 사진).
+- 한 곳에 사진을 몰아넣지 말고 글 전체에 골고루 분산하세요.
+- [PHOTO:n] 마커는 반드시 독립된 줄에 단독으로 작성하세요 (문장 중간에 넣지 마세요).` : "- 사진이 없으므로 [PHOTO] 마커를 사용하지 마세요."}
 
 ## 글 작성 전 계획 (중요!)
 글을 바로 쓰지 말고, 먼저 아래 사항을 계획한 뒤 plan 필드에 간략히 적으세요:
 - 어떤 에피소드나 장면으로 도입부를 열 것인가
-- 중간에 어떤 감각 묘사를 배치할 것인가
+- 중간에 어떤 감각 묘사(시각, 미각, 촉각, 후각)를 배치할 것인가
+- 어떤 개인적 감상이나 동행자와의 대화를 넣을 것인가
 - 마무리를 어떤 느낌으로 끝낼 것인가
+이 계획을 바탕으로 한국어, 영어 글을 각각 작성하세요.
 
 ## 출력 형식 (JSON)
 {
-  "plan": "도입: ..., 중간: ..., 마무리: ... (2~3줄 요약)",
-  "title": "SEO 최적화된 한국어 제목 (20~40자)",
-  "content": "한국어 블로그 본문 (2500~4000자, 문단 구분은 \\n\\n, 사진 위치에 [PHOTO:n] 마커 삽입)",
-  "hashtags": ["#해시태그1", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5", "#해시태그6", "#해시태그7"]
+  "plan": "도입: ..., 중간: ..., 마무리: ... (한국어 2~3줄 요약)",
+  "titleKo": "SEO 최적화된 한국어 제목 (20~40자)",
+  "contentKo": "한국어 블로그 본문 (2500~4000자, 문단 구분은 \\n\\n, 사진 위치에 [PHOTO:n] 마커 삽입)",
+  "hashtagsKo": ["#해시태그1", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5", "#해시태그6", "#해시태그7"],
+  "titleEn": "SEO optimized English title",
+  "contentEn": "English blog post (1500~2500 chars, use \\n\\n for paragraphs, insert [PHOTO:n] markers at appropriate positions)",
+  "hashtagsEn": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
 }`;
 
   return prompt;
-}
-
-// ── English prompt builder ──
-
-function buildEnglishPrompt(
-  place: Place,
-  menuItems: MenuItem[],
-  photos: Photo[],
-  style: StyleProfile,
-  userProfile: UserProfile | null,
-  userMemo: string,
-  isRevisit: boolean,
-  enriched: EnrichedPlaceInfo | null,
-  photoDescs: PhotoDescription[] | null = null,
-  pastPosts: PastPostSample[] = [],
-  qualityFeedback: string | null = null,
-  agentInsight: PlaceInsight | null = null,
-  suggestedMenus: SuggestedMenu[] = [],
-  orderedMenus: SuggestedMenu[] = [],
-): string {
-  const cat = place.category;
-  const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
-  const example = CATEGORY_EXAMPLE[cat] ?? CATEGORY_EXAMPLE.restaurant;
-  const ageTone = getAgeToneInstruction(userProfile?.ageGroup ?? "30s");
-  const openingPattern = pickOpeningPattern("en");
-
-  const baseCtx = buildBaseContext(place, menuItems, photos, userMemo, isRevisit, enriched, photoDescs, agentInsight, suggestedMenus, orderedMenus);
-
-  let prompt = `Write an English blog post about this place from the perspective of a foreign tourist visiting Korea.
-
-${baseCtx}
-
-## CRITICAL: This is NOT a translation task
-- Write an ORIGINAL English blog post — do NOT translate from Korean
-- Use completely different opening, structure, and anecdotes than a Korean version would
-- Write from the perspective of someone who doesn't speak Korean
-- Include cultural observations that a foreigner would notice
-
-## English Writing Guidelines
-${structure.en}
-
-### Style Example (write with this tone and flow)
-${example.en}
-${pastPosts.length > 0 && pastPosts.some((p) => p.contentEnExcerpt.length > 100) ? `
-### This user's previous English posts (match this style!)
-${pastPosts.filter((p) => p.contentEnExcerpt.length > 100).map((p, i) => `#### Previous post ${i + 1}: "${p.titleEn}"
-${p.contentEnExcerpt}`).join("\n\n")}
-
-→ Match this user's unique writing voice, sentence patterns, and expression style as closely as possible.
-→ Analyze recurring patterns across all ${pastPosts.filter((p) => p.contentEnExcerpt.length > 100).length} posts: vocabulary choices, sentence length distribution, humor style, and paragraph transitions.
-` : ""}
-### Opening approach (start THIS post with this pattern)
-${openingPattern}
-
-### Length Requirements
-- Minimum 1500 characters, recommended 2000~2500 characters
-- Each paragraph should be 3~5 sentences minimum
-- Include sensory details, personal reactions, and practical tips
-
-### Tone
-${ageTone.en}
-
-### Writing Quality (CRITICAL — what separates good from generic)
-- NEVER use these clichés: "hidden gem", "must-visit", "foodie paradise", "mouth-watering", "a feast for the senses", "nestled in", "boasts", "tucked away"
-- Replace generic praise with specific observations: instead of "the food was amazing", describe WHAT made it amazing
-- Use at least 2-3 moments of genuine personal reaction (surprise, confusion, delight, disappointment-turned-pleasant)
-- Include one small cultural observation that only someone physically present would notice
-- Vary paragraph length — some short (2 sentences), some longer (4-5 sentences)
-
-### Foreign Tourist Perspective (weave in naturally, don't list)
-- Nearest subway station and exit number (if known)
-- All prices converted to USD (1 USD ≈ ${KRW_USD_RATE.toLocaleString()} KRW)
-- English menu availability ("English menu available" or "Korean-only menu, but...")
-- Card payment availability
-- Cultural tips foreigners should know (e.g., self-service water, shoe removal, etc.)
-- Navigation tips for non-Korean speakers
-- Weave these details naturally into the narrative — do NOT create a "practical info" section
-
-${isRevisit ? `### Revisit Expressions
-- Use phrases like "returning to", "this time around", "compared to my last visit"
-- Include #revisit in hashtags
-` : ""}
-
-### Photo Placement (MANDATORY — do NOT skip this)
-${photos.length > 0 ? `- You MUST insert ALL ${photos.length} [PHOTO:n] markers in the text. Missing ANY marker is a failure.
-- Each [PHOTO:n] marker must be on its own line, after describing the relevant content.
-- Match photo type to content: exterior photos near arrival description, food photos near taste description, etc.
-- Distribute photos throughout — never cluster more than 2 consecutive markers.
-- Refer to the photo type labels (Food, Exterior, Interior, Parking, etc.) to decide placement.` : "- No photos available — do NOT use [PHOTO] markers."}
-
-### SEO Title
-- Include place name + relevant English keywords
-- Engaging, clickable title (40~80 characters)`;
-
-  if (qualityFeedback) {
-    prompt += `\n\n### ⚠️ Quality feedback from previous attempt (MUST address!)
-${qualityFeedback}`;
-  }
-
-  prompt += `
-
-## Write a brief plan first
-Before writing, plan in the "plan" field:
-- Opening hook / first scene
-- Key sensory details to include
-- Closing impression
-
-## Output Format (JSON)
-{
-  "plan": "Opening: ..., Middle: ..., Closing: ... (2-3 line summary)",
-  "title": "SEO optimized English title",
-  "content": "English blog post (1500~2500 chars, use \\n\\n for paragraphs, insert [PHOTO:n] markers)",
-  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
-}`;
-
-  return prompt;
-}
-
-// ── System messages ──
-
-const SYSTEM_MSG_KO = `당신은 한국에서 가장 인기 있는 블로거입니다. 실제 방문 경험을 생생하게 전달하는 것이 특기입니다.
-
-작성 원칙:
-- 절대 번호 매기기(1. 2. 3.)나 글머리 기호(- •)를 사용하지 마세요
-- 소제목(##, ###)을 사용하지 마세요
-- 모든 정보를 자연스러운 서술형 문단으로 풀어쓰세요
-- 마치 친구에게 이야기하듯 생동감 있게 작성하세요
-- 충분히 길고 상세하게 작성하세요 (한국어 2500자 이상)
-- "소개해 드리겠습니다", "알아보겠습니다" 같은 AI스러운 표현 절대 금지
-- 반드시 plan 필드를 먼저 작성한 후 그 계획에 따라 글을 쓰세요
-
-팩트 체크 규칙 (매우 중요!):
-- 제공된 정보에 없는 영업시간, 전화번호, 가격을 지어내지 마세요
-- 메뉴 가격은 ## 메뉴 섹션에 있는 것만 정확히 사용하세요
-- 주소는 ## 장소 정보에 있는 것을 사용하세요
-- 모르는 구체적 정보(층수, 좌석수, 주차 여부 등)는 언급하지 않거나 "확인해보시길" 정도로 처리하세요`;
-
-const SYSTEM_MSG_EN = `You are a witty, observant travel writer with a distinctive personal voice — think Anthony Bourdain meets a modern lifestyle blogger. You write about Korea for English-speaking readers who are curious, adventurous, and appreciate authentic local experiences over tourist traps.
-
-Voice & Style:
-- Write like you're journaling after a great day out — relaxed, specific, honest
-- Vary your sentence rhythm: mix short punchy observations with longer flowing descriptions
-- Use concrete sensory details instead of generic adjectives ("the broth had a deep, almost smoky sesame undertone" NOT "the soup was delicious")
-- Show personality through small asides, self-deprecating humor, or cultural observations
-- Avoid travel-blog clichés: "hidden gem", "must-visit", "foodie paradise", "mouth-watering", "a feast for the senses"
-- Never use numbered lists (1. 2. 3.), bullet points (- •), or subheadings (##, ###)
-- Write flowing narrative paragraphs — each one a scene or moment
-- Be detailed and vivid — minimum 1500 characters
-
-Cultural authenticity:
-- Write from the perspective of a foreigner who is genuinely curious about Korean culture
-- Include small moments of cultural discovery (ordering process, etiquette, interactions with staff)
-- Romanize Korean terms naturally and explain them in context, not parenthetically
-- Don't exoticize — treat Korean food culture as sophisticated and nuanced, not "exotic" or "adventurous"
-
-You must write the plan field FIRST, then write the post following that plan.
-
-Fact-check rules (CRITICAL):
-- Do NOT invent business hours, phone numbers, or prices not in the provided data
-- Use ONLY menu prices from the ## 메뉴 section
-- Use the address from ## 장소 정보
-- If you don't know specific details (floor count, seat count, parking), don't mention them`;
-
-// ── OpenAI API call ──
-
-type SingleLangResult = {
-  title: string;
-  content: string;
-  hashtags: string[];
-  plan?: string;
-};
-
-type OpenAIUsage = { model: string; inputTokens: number; outputTokens: number };
-
-async function callOpenAISingle(
-  systemMsg: string,
-  prompt: string,
-  apiKey: string,
-): Promise<{ result: SingleLangResult; usage: OpenAIUsage | undefined }> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000);
-
-  let response: Response;
-  try {
-    response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemMsg },
-          { role: "user", content: prompt },
-        ],
-        max_completion_tokens: 6144,
-        response_format: { type: "json_object" },
-      }),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timeout);
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("AI 응답 시간이 초과되었습니다 (120초). 다시 시도해주세요.");
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} - ${errText}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenAI로부터 응답이 없습니다");
-
-  const jsonStr = content.replace(/^```json?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-
-  let parsed: SingleLangResult;
-  try {
-    parsed = JSON.parse(jsonStr) as SingleLangResult;
-  } catch {
-    throw new Error("AI 응답이 잘렸습니다. 다시 시도해주세요.");
-  }
-
-  delete parsed.plan;
-
-  if (!parsed.title || !parsed.content) {
-    throw new Error("AI 응답이 불완전합니다");
-  }
-
-  const usage = data.usage
-    ? {
-        model: data.model ?? "unknown",
-        inputTokens: data.usage.prompt_tokens ?? 0,
-        outputTokens: data.usage.completion_tokens ?? 0,
-      }
-    : undefined;
-
-  return { result: parsed, usage };
-}
-
-// ── Inline quality scoring ──
-
-type QualityIssue = { category: string; detail: string };
-
-function quickQualityCheck(
-  content: string,
-  title: string,
-  hashtags: string[],
-  placeName: string,
-  lang: "ko" | "en",
-  photos: Photo[],
-): { score: number; issues: QualityIssue[] } {
-  const issues: QualityIssue[] = [];
-  let score = 0;
-  const maxScore = 100;
-
-  // 1. Content length (30 pts)
-  const minLen = lang === "ko" ? 2500 : 1500;
-  const optLen = lang === "ko" ? 3500 : 2000;
-  if (content.length >= optLen) score += 30;
-  else if (content.length >= minLen) score += 20;
-  else if (content.length >= minLen * 0.6) { score += 10; issues.push({ category: "분량 부족", detail: `${content.length}자 (최소 ${minLen}자 필요)` }); }
-  else { score += 3; issues.push({ category: "분량 매우 부족", detail: `${content.length}자 (최소 ${minLen}자 필요)` }); }
-
-  // 2. Paragraph structure (15 pts)
-  const paragraphs = content.split("\n\n").filter((p) => p.trim().length > 0 && !p.trim().match(/^\[PHOTO:\d+\]$/));
-  if (paragraphs.length >= 5) score += 15;
-  else if (paragraphs.length >= 4) score += 10;
-  else { score += 5; issues.push({ category: "문단 부족", detail: `${paragraphs.length}개 문단 (4개 이상 필요)` }); }
-
-  // 3. Title quality (15 pts)
-  const titleHasPlace = title.includes(placeName);
-  const titleLenOk = lang === "ko" ? (title.length >= 15 && title.length <= 45) : (title.length >= 20 && title.length <= 80);
-  if (titleHasPlace && titleLenOk) score += 15;
-  else if (titleHasPlace) score += 10;
-  else { score += 3; issues.push({ category: "제목 개선 필요", detail: titleHasPlace ? "제목 길이 조정" : `"${placeName}" 미포함` }); }
-
-  // 4. Hashtags (10 pts)
-  const tagOk = lang === "ko" ? (hashtags.length >= 5 && hashtags.length <= 10) : (hashtags.length >= 3 && hashtags.length <= 7);
-  if (tagOk) score += 10;
-  else if (hashtags.length > 0) score += 5;
-  else { issues.push({ category: "해시태그 없음", detail: "해시태그 추가 필요" }); }
-
-  // 5. No forbidden patterns (15 pts)
-  const FORBIDDEN = lang === "ko"
-    ? ["소개해 드리겠습니다", "알아보겠습니다", "살펴보겠습니다", "결론적으로", "첫째,", "둘째,"]
-    : ["in conclusion", "firstly,", "secondly,", "let me introduce"];
-  const hasForbidden = FORBIDDEN.some((f) => content.toLowerCase().includes(f.toLowerCase()));
-  const hasHeaders = /^#{1,3}\s+/m.test(content);
-  const hasNumberedList = /^\d+\.\s+/m.test(content);
-  if (!hasForbidden && !hasHeaders && !hasNumberedList) score += 15;
-  else { score += 5; if (hasForbidden) issues.push({ category: "AI 표현 감지", detail: "AI스러운 표현 제거 필요" }); }
-
-  // 6. Photo markers (15 pts)
-  if (photos.length === 0) {
-    score += 15;
-  } else {
-    const usedMarkers = new Set((content.match(/\[PHOTO:\d+\]/g) ?? []).map(m => m));
-    const allPresent = photos.every((p) => usedMarkers.has(`[PHOTO:${p.orderIndex}]`));
-    if (allPresent) score += 15;
-    else { score += 5; issues.push({ category: "사진 마커 누락", detail: `${usedMarkers.size}/${photos.length}개만 배치됨` }); }
-  }
-
-  return { score: Math.round((score / maxScore) * 100), issues };
-}
-
-function buildQualityFeedback(issues: QualityIssue[], lang: "ko" | "en"): string {
-  if (lang === "ko") {
-    return issues.map((i) => `- ${i.category}: ${i.detail}`).join("\n");
-  }
-  return issues.map((i) => `- ${i.category}: ${i.detail}`).join("\n");
-}
-
-// ── Post-processing ──
-
-const FORBIDDEN_PHRASES_KO = [
-  "소개해 드리겠습니다", "알아보겠습니다", "소개해드리겠습니다", "알아보도록",
-  "살펴보겠습니다", "안내해 드리겠습니다", "함께 알아볼까요",
-  "그럼 지금부터", "자 그러면", "결론적으로",
-  "첫째,", "둘째,", "셋째,",
-];
-
-function postProcessSingle(content: string, photos: Photo[], lang: "ko" | "en"): string {
-  // 1. Remove forbidden AI-sounding phrases (Korean)
-  if (lang === "ko") {
-    for (const phrase of FORBIDDEN_PHRASES_KO) {
-      content = content.replace(new RegExp(phrase, "g"), "");
-    }
-  }
-
-  // 2. Clean up markdown headers
-  content = content.replace(/^#{1,3}\s+.+$/gm, (match) => match.replace(/^#{1,3}\s+/, ""));
-
-  // 3. Clean up numbered lists
-  content = content.replace(/^\d+\.\s+/gm, "");
-
-  // 4. Validate photo markers
-  if (photos.length > 0) {
-    const used = new Set((content.match(/\[PHOTO:\d+\]/g) ?? []).map(m => m));
-    for (const photo of photos) {
-      const marker = `[PHOTO:${photo.orderIndex}]`;
-      if (!used.has(marker)) {
-        content += `\n\n${marker}`;
-      }
-    }
-  }
-
-  // 5. Clean double blank lines
-  content = content.replace(/\n{3,}/g, "\n\n").trim();
-
-  return content;
 }
 
 // ── Fallback (no OpenAI key) ──
@@ -901,30 +385,50 @@ function generateFallback(
   const ce = catEn[place.category] ?? place.category;
   const nickname = userProfile?.nickname ?? "나";
 
-  const titleKo = isCasual ? `${place.name} 솔직 후기 | ${ck} 추천` : `${place.name} 방문 리뷰 - ${ck} 탐방기`;
+  // Korean
+  const titleKo = isCasual
+    ? `${place.name} 솔직 후기 | ${ck} 추천`
+    : `${place.name} 방문 리뷰 - ${ck} 탐방기`;
+
   const parts: string[] = [];
-  parts.push("[참고: OpenAI API 키가 설정되지 않아 기본 템플릿으로 생성되었습니다. API 키를 설정하면 AI가 더 풍부한 글을 작성합니다.]");
-  if (isCasual) parts.push(`안녕하세요, ${nickname}입니다! 오늘은 ${place.name}에 다녀온 후기를 들려드릴게요.`);
-  else parts.push(`${place.name}을(를) 방문한 리뷰를 작성합니다.`);
-  if (place.address) parts.push(`위치는 ${place.address}에 있어요.${place.rating ? ` 개인적으로 별점 ${place.rating}점을 주고 싶습니다.` : ""}`);
+
+  if (isCasual) {
+    parts.push(`안녕하세요, ${nickname}입니다! 오늘은 ${place.name}에 다녀온 후기를 들려드릴게요.`);
+  } else {
+    parts.push(`${place.name}을(를) 방문한 리뷰를 작성합니다.`);
+  }
+
+  if (place.address) {
+    parts.push(`위치는 ${place.address}에 있어요.${place.rating ? ` 개인적으로 별점 ${place.rating}점을 주고 싶습니다.` : ""}`);
+  }
+
   if (photos.length > 0) {
     const captions = photos.filter((p) => p.caption).map((p) => p.caption);
-    if (captions.length > 0) parts.push(`사진으로 보면 ${captions.slice(0, 3).join(", ")} 이런 느낌이에요.`);
+    if (captions.length > 0) {
+      parts.push(`사진으로 보면 ${captions.slice(0, 3).join(", ")} 이런 느낌이에요.`);
+    }
   }
+
   if (menuItems.length > 0) {
     const menuText = menuItems.map((m) => `${m.name}(${m.priceKrw.toLocaleString()}원)`).join(", ");
-    parts.push(isCasual ? `메뉴로는 ${menuText}을(를) 시켜봤는데 다 괜찮았어요!` : `주문한 메뉴는 ${menuText}입니다.`);
+    parts.push(isCasual
+      ? `메뉴로는 ${menuText}을(를) 시켜봤는데 다 괜찮았어요!`
+      : `주문한 메뉴는 ${menuText}입니다.`);
   }
-  if (userMemo) parts.push(userMemo);
-  parts.push(isCasual ? "또 가고 싶은 곳이에요! 강추합니다 :)" : "재방문 의사가 있는 곳입니다.");
 
+  if (userMemo) parts.push(userMemo);
+
+  parts.push(isCasual
+    ? "또 가고 싶은 곳이에요! 강추합니다 :)"
+    : "재방문 의사가 있는 곳입니다.");
+
+  // English (foreigner perspective)
   const titleEn = `${place.name} Review | ${ce} in ${place.address?.includes("서울") ? "Seoul" : "Korea"}`;
   const enParts: string[] = [];
-  enParts.push("[Note: Generated using a basic template because no OpenAI API key is configured. Set up an API key for AI-powered content.]");
   enParts.push(`I recently visited ${place.name}, a popular ${ce.toLowerCase()} in Korea.`);
   if (place.address) enParts.push(`It's located at ${place.address}.`);
   if (menuItems.length > 0) {
-    const usdItems = menuItems.map((m) => `${m.name} (~$${(m.priceKrw / KRW_USD_RATE).toFixed(1)})`).join(", ");
+    const usdItems = menuItems.map((m) => `${m.name} (~$${(m.priceKrw / 1300).toFixed(1)})`).join(", ");
     enParts.push(`We tried ${usdItems}.`);
   }
   if (place.rating) enParts.push(`I'd give it a ${place.rating}/5.`);
@@ -940,12 +444,212 @@ function generateFallback(
   };
 }
 
-// ── Quality threshold for auto-retry ──
-const QUALITY_THRESHOLD = 60;
+// ── OpenAI call with retry ──
+
+async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedContent> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000); // 120s timeout for gpt-5
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `당신은 한국에서 가장 인기 있는 블로거입니다. 실제 방문 경험을 생생하게 전달하는 것이 특기입니다.
+
+작성 원칙:
+- 절대 번호 매기기(1. 2. 3.)나 글머리 기호(- •)를 사용하지 마세요
+- 소제목(##, ###)을 사용하지 마세요
+- 모든 정보를 자연스러운 서술형 문단으로 풀어쓰세요
+- 마치 친구에게 이야기하듯 생동감 있게 작성하세요
+- 충분히 길고 상세하게 작성하세요 (한국어 2500자 이상, 영어 1500자 이상)
+- "소개해 드리겠습니다", "알아보겠습니다" 같은 AI스러운 표현 절대 금지
+- 반드시 plan 필드를 먼저 작성한 후 그 계획에 따라 글을 쓰세요`,
+          },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("AI 응답 시간이 초과되었습니다 (50초). 다시 시도해주세요.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error("OpenAI로부터 응답이 없습니다");
+
+  // response_format: json_object guarantees valid JSON, but keep fallback cleanup
+  const jsonStr = content.replace(/^```json?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+
+  let parsed: GeneratedContent & { plan?: string };
+  try {
+    parsed = JSON.parse(jsonStr) as GeneratedContent & { plan?: string };
+  } catch {
+    // Response was likely truncated by max_tokens
+    throw new Error("AI 응답이 잘렸습니다. 다시 시도해주세요.");
+  }
+
+  // Strip the plan field (used for chain-of-thought, not shown to user)
+  delete parsed.plan;
+
+  if (!parsed.titleKo || !parsed.contentKo || !parsed.titleEn || !parsed.contentEn) {
+    throw new Error("AI 응답이 불완전합니다");
+  }
+
+  const usageData = data.usage
+    ? {
+        model: data.model ?? "unknown",
+        inputTokens: data.usage.prompt_tokens ?? 0,
+        outputTokens: data.usage.completion_tokens ?? 0,
+      }
+    : undefined;
+
+  return {
+    titleKo: parsed.titleKo,
+    contentKo: parsed.contentKo,
+    hashtagsKo: Array.isArray(parsed.hashtagsKo) ? parsed.hashtagsKo : [],
+    titleEn: parsed.titleEn,
+    contentEn: parsed.contentEn,
+    hashtagsEn: Array.isArray(parsed.hashtagsEn) ? parsed.hashtagsEn : [],
+    usage: usageData,
+  };
+}
+
+// ── Self-refine: polish pass ──
+
+async function polishContent(
+  content: GeneratedContent,
+  apiKey: string,
+): Promise<GeneratedContent> {
+  const prompt = `블로그 글을 검토하고 품질을 높여주세요.
+
+## 검토 기준 (이것만 수정)
+1. AI스러운 표현 제거 ("소개해 드리겠습니다", "다양한", "특별한", "완벽한" 등)
+2. 같은 단어/표현이 2번 이상 반복되면 유의어로 교체
+3. 약한 묘사 → 오감을 활용한 구체적 표현으로 강화
+4. 부자연스러운 문단 전환 → 자연스러운 연결
+5. "~것 같아요"가 3회 이상이면 일부를 "~더라고요", "~거든요" 등으로 교체
+
+## 절대 하지 마세요
+- 글의 전체 구조, 문단 수, 길이를 크게 바꾸지 마세요
+- [PHOTO:n] 마커를 절대 제거하거나 이동하지 마세요
+- 새로운 정보를 추가하지 마세요 (없는 메뉴, 없는 경험 등)
+- 해시태그를 수정하지 마세요
+
+## 한국어 글
+제목: ${content.titleKo}
+본문:
+${content.contentKo}
+
+## 영어 글
+제목: ${content.titleEn}
+본문:
+${content.contentEn}
+
+수정된 글만 JSON으로 반환:
+{
+  "titleKo": "수정된 한국어 제목",
+  "contentKo": "수정된 한국어 본문 (\\n\\n으로 문단 구분)",
+  "titleEn": "Polished English title",
+  "contentEn": "Polished English content (\\n\\n for paragraphs)"
+}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "블로그 편집 전문가입니다. 원문의 톤, 길이, 구조를 유지하면서 표현만 다듬어주세요. [PHOTO:n] 마커는 절대 건드리지 마세요.",
+          },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return content; // polish 실패 시 원본 반환
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) return content;
+
+    let polished: Partial<GeneratedContent>;
+    try {
+      polished = JSON.parse(text) as Partial<GeneratedContent>;
+    } catch {
+      return content;
+    }
+
+    // Validate that polish didn't strip PHOTO markers
+    const originalMarkers = (content.contentKo?.match(/\[PHOTO:\d+\]/g) ?? []).sort();
+    const polishedMarkers = (polished.contentKo?.match(/\[PHOTO:\d+\]/g) ?? []).sort();
+    const markersIntact = originalMarkers.length === polishedMarkers.length &&
+      originalMarkers.every((m, i) => m === polishedMarkers[i]);
+
+    if (!markersIntact) return content; // 마커가 손실되면 원본 반환
+
+    // Calculate polish usage for tracking
+    const polishUsage = data.usage
+      ? {
+          model: data.model ?? "unknown",
+          inputTokens: (content.usage?.inputTokens ?? 0) + (data.usage.prompt_tokens ?? 0),
+          outputTokens: (content.usage?.outputTokens ?? 0) + (data.usage.completion_tokens ?? 0),
+        }
+      : content.usage;
+
+    return {
+      titleKo: polished.titleKo || content.titleKo,
+      contentKo: polished.contentKo || content.contentKo,
+      hashtagsKo: content.hashtagsKo, // 해시태그는 수정 안 함
+      titleEn: polished.titleEn || content.titleEn,
+      contentEn: polished.contentEn || content.contentEn,
+      hashtagsEn: content.hashtagsEn,
+      usage: polishUsage,
+    };
+  } catch {
+    return content; // 어떤 에러든 원본 반환
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 // ── Main export ──
 
-export type SuggestedMenu = { name: string; price: number };
+export type ProgressCallback = (step: string, message: string) => void;
 
 export async function generateBlogPost(
   place: Place,
@@ -955,9 +659,8 @@ export async function generateBlogPost(
   userProfile: UserProfile | null,
   userMemo: string,
   isRevisit: boolean = false,
-  userId: number | null = null,
-  suggestedMenus: SuggestedMenu[] = [],
-  orderedMenus: SuggestedMenu[] = [],
+  pastExcerpts?: string,
+  onProgress?: ProgressCallback,
 ): Promise<GeneratedContent> {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -965,127 +668,14 @@ export async function generateBlogPost(
     return generateFallback(place, menuItems, photos, style, userProfile, userMemo);
   }
 
-  // Phase 1: Parallel data preparation (enrichment + vision + style + agent research)
-  const [enriched, photoDescs, pastPosts, agentInsight] = await Promise.all([
-    // External data enrichment (Naver + Google)
-    enrichPlace(place.name, place.address ?? null),
-    // Rich photo descriptions via Vision API (Gemini preferred, OpenAI fallback)
-    photos.length > 0 ? describePhotosForGeneration(photos) : Promise.resolve(null),
-    // User's past posts for few-shot style matching (STYLE_CONTEXT_POSTS env로 개수 조절)
-    userId ? fetchUserPastPosts(userId) : Promise.resolve([]),
-    // AI Agent research — 자동으로 장소 리서치
-    researchPlace(place.name, place.category, place.address ?? null),
-  ]);
+  onProgress?.("generating", "AI 글 생성 중...");
+  const prompt = buildPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, pastExcerpts);
+  const draft = await callOpenAI(prompt, apiKey);
 
-  // Phase 2: Build prompts for Korean and English separately
-  const koPrompt = buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight, suggestedMenus, orderedMenus);
-  const enPrompt = buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, null, agentInsight, suggestedMenus, orderedMenus);
+  // Self-refine: polish pass (실패해도 원본 반환)
+  onProgress?.("polishing", "글 다듬는 중...");
+  const result = await polishContent(draft, apiKey);
 
-  // Phase 3: Generate Korean and English in parallel (separate LLM calls)
-  const [koResult, enResult] = await Promise.all([
-    callOpenAISingle(SYSTEM_MSG_KO, koPrompt, apiKey),
-    callOpenAISingle(SYSTEM_MSG_EN, enPrompt, apiKey),
-  ]);
-
-  // Post-process both
-  const contentKo = postProcessSingle(koResult.result.content, photos, "ko");
-  const contentEn = postProcessSingle(enResult.result.content, photos, "en");
-
-  // Quality check both languages
-  const koQuality = quickQualityCheck(contentKo, koResult.result.title, koResult.result.hashtags ?? [], place.name, "ko", photos);
-  const enQuality = quickQualityCheck(contentEn, enResult.result.title, enResult.result.hashtags ?? [], place.name, "en", photos);
-
-  // If either fails quality threshold, retry that language with feedback
-  const needsKoRetry = koQuality.score < QUALITY_THRESHOLD && koQuality.issues.length > 0;
-  const needsEnRetry = enQuality.score < QUALITY_THRESHOLD && enQuality.issues.length > 0;
-
-  let finalKo = { title: koResult.result.title, content: contentKo, hashtags: koResult.result.hashtags ?? [] };
-  let finalEn = { title: enResult.result.title, content: contentEn, hashtags: enResult.result.hashtags ?? [] };
-  let retryKoUsage: OpenAIUsage | undefined;
-  let retryEnUsage: OpenAIUsage | undefined;
-
-  if (needsKoRetry || needsEnRetry) {
-    const retries = await Promise.all([
-      needsKoRetry
-        ? callOpenAISingle(
-            SYSTEM_MSG_KO,
-            buildKoreanPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(koQuality.issues, "ko"), agentInsight, suggestedMenus, orderedMenus),
-            apiKey,
-          )
-        : null,
-      needsEnRetry
-        ? callOpenAISingle(
-            SYSTEM_MSG_EN,
-            buildEnglishPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, enriched, photoDescs, pastPosts, buildQualityFeedback(enQuality.issues, "en"), agentInsight, suggestedMenus, orderedMenus),
-            apiKey,
-          )
-        : null,
-    ]);
-
-    if (retries[0]) {
-      const retryContent = postProcessSingle(retries[0].result.content, photos, "ko");
-      const retryQuality = quickQualityCheck(retryContent, retries[0].result.title, retries[0].result.hashtags ?? [], place.name, "ko", photos);
-      // Use retry only if it's actually better
-      if (retryQuality.score > koQuality.score) {
-        finalKo = { title: retries[0].result.title, content: retryContent, hashtags: retries[0].result.hashtags ?? [] };
-      }
-      retryKoUsage = retries[0].usage;
-    }
-
-    if (retries[1]) {
-      const retryContent = postProcessSingle(retries[1].result.content, photos, "en");
-      const retryQuality = quickQualityCheck(retryContent, retries[1].result.title, retries[1].result.hashtags ?? [], place.name, "en", photos);
-      if (retryQuality.score > enQuality.score) {
-        finalEn = { title: retries[1].result.title, content: retryContent, hashtags: retries[1].result.hashtags ?? [] };
-      }
-      retryEnUsage = retries[1].usage;
-    }
-  }
-
-  // Merge usage from all calls
-  const mainModel = koResult.usage?.model ?? enResult.usage?.model ?? "unknown";
-  const totalInput = (koResult.usage?.inputTokens ?? 0) + (enResult.usage?.inputTokens ?? 0) + (retryKoUsage?.inputTokens ?? 0) + (retryEnUsage?.inputTokens ?? 0);
-  const totalOutput = (koResult.usage?.outputTokens ?? 0) + (enResult.usage?.outputTokens ?? 0) + (retryKoUsage?.outputTokens ?? 0) + (retryEnUsage?.outputTokens ?? 0);
-
-  // Detect which providers were used
-  const visionProvider = process.env.GEMINI_API_KEY ? "gemini" : process.env.OPENAI_API_KEY ? "openai" : "none";
-  const visionModel = process.env.GEMINI_API_KEY
-    ? (process.env.GEMINI_VISION_MODEL ?? "gemini-2.0-flash-lite")
-    : (process.env.OPENAI_VISION_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini");
-  const researchProvider = process.env.GEMINI_API_KEY ? "gemini" : process.env.OPENAI_API_KEY ? "openai" : "none";
-  const styleContextPosts = Number(process.env.STYLE_CONTEXT_POSTS) || 2;
-
-  // Calculate cost
-  const MODEL_RATES: Record<string, { input: number; output: number }> = {
-    "gpt-4o-mini": { input: 0.15, output: 0.60 },
-    "gpt-4o": { input: 2.50, output: 10.00 },
-    "gpt-5.2": { input: 1.75, output: 14.00 },
-    "gpt-5.4": { input: 2.50, output: 15.00 },
-  };
-  const rate = MODEL_RATES[mainModel] ?? MODEL_RATES["gpt-4o-mini"];
-  const cost = (totalInput * rate.input + totalOutput * rate.output) / 1_000_000;
-
-  return {
-    titleKo: finalKo.title,
-    contentKo: finalKo.content,
-    hashtagsKo: Array.isArray(finalKo.hashtags) ? finalKo.hashtags : [],
-    titleEn: finalEn.title,
-    contentEn: finalEn.content,
-    hashtagsEn: Array.isArray(finalEn.hashtags) ? finalEn.hashtags : [],
-    usage: {
-      model: mainModel,
-      inputTokens: totalInput,
-      outputTokens: totalOutput,
-    },
-    generationMeta: {
-      mainModel,
-      visionProvider,
-      visionModel,
-      researchProvider,
-      styleContextPosts,
-      inputTokens: totalInput,
-      outputTokens: totalOutput,
-      cost,
-    },
-  };
+  onProgress?.("done", "완료!");
+  return result;
 }

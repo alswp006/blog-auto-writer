@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getDb } from "@/lib/db";
+import { execute } from "@/lib/db";
 import { createSessionToken } from "@/lib/auth";
 import * as platformConnectionModel from "@/lib/models/platformConnection";
 import * as userModel from "@/lib/models/user";
@@ -14,15 +14,14 @@ describe("Platform Connections (packet-0012)", () => {
     userId = user.id;
   });
 
-  afterEach(() => {
-    const db = getDb();
-    db.prepare("DELETE FROM platform_connections WHERE user_id = ?").run(userId);
-    db.prepare("DELETE FROM sessions WHERE userId = ?").run(userId);
-    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  afterEach(async () => {
+    await execute("DELETE FROM platform_connections WHERE user_id = ?", userId);
+    await execute("DELETE FROM sessions WHERE userId = ?", userId);
+    await execute("DELETE FROM users WHERE id = ?", userId);
   });
 
-  it("should create a tistory connection via upsert", () => {
-    const conn = platformConnectionModel.upsert(userId, "tistory", {
+  it("should create a tistory connection via upsert", async () => {
+    const conn = await platformConnectionModel.upsert(userId, "tistory", {
       accessToken: "test_token_123",
       blogName: "myblog",
     });
@@ -33,8 +32,8 @@ describe("Platform Connections (packet-0012)", () => {
     expect(conn.userId).toBe(userId);
   });
 
-  it("should create a medium connection via upsert", () => {
-    const conn = platformConnectionModel.upsert(userId, "medium", {
+  it("should create a medium connection via upsert", async () => {
+    const conn = await platformConnectionModel.upsert(userId, "medium", {
       accessToken: "medium_token_456",
       platformUserId: "user-123",
       platformUsername: "testuser",
@@ -46,13 +45,13 @@ describe("Platform Connections (packet-0012)", () => {
     expect(conn.platformUsername).toBe("testuser");
   });
 
-  it("should update existing connection on second upsert", () => {
-    platformConnectionModel.upsert(userId, "tistory", {
+  it("should update existing connection on second upsert", async () => {
+    await platformConnectionModel.upsert(userId, "tistory", {
       accessToken: "old_token",
       blogName: "oldblog",
     });
 
-    const updated = platformConnectionModel.upsert(userId, "tistory", {
+    const updated = await platformConnectionModel.upsert(userId, "tistory", {
       accessToken: "new_token",
       blogName: "newblog",
     });
@@ -61,58 +60,58 @@ describe("Platform Connections (packet-0012)", () => {
     expect(updated.blogName).toBe("newblog");
 
     // Should still be only one connection
-    const all = platformConnectionModel.listByUser(userId);
+    const all = await platformConnectionModel.listByUser(userId);
     const tistoryConns = all.filter((c) => c.platform === "tistory");
     expect(tistoryConns.length).toBe(1);
   });
 
-  it("should get by user and platform", () => {
-    platformConnectionModel.upsert(userId, "tistory", {
+  it("should get by user and platform", async () => {
+    await platformConnectionModel.upsert(userId, "tistory", {
       accessToken: "t1",
       blogName: "blog1",
     });
-    platformConnectionModel.upsert(userId, "medium", {
+    await platformConnectionModel.upsert(userId, "medium", {
       accessToken: "m1",
       platformUsername: "user1",
     });
 
-    const tistory = platformConnectionModel.getByUserAndPlatform(userId, "tistory");
+    const tistory = await platformConnectionModel.getByUserAndPlatform(userId, "tistory");
     expect(tistory).not.toBeNull();
     expect(tistory!.blogName).toBe("blog1");
 
-    const medium = platformConnectionModel.getByUserAndPlatform(userId, "medium");
+    const medium = await platformConnectionModel.getByUserAndPlatform(userId, "medium");
     expect(medium).not.toBeNull();
     expect(medium!.platformUsername).toBe("user1");
   });
 
-  it("should list all connections for user", () => {
-    platformConnectionModel.upsert(userId, "tistory", { accessToken: "t1", blogName: "b1" });
-    platformConnectionModel.upsert(userId, "medium", { accessToken: "m1" });
+  it("should list all connections for user", async () => {
+    await platformConnectionModel.upsert(userId, "tistory", { accessToken: "t1", blogName: "b1" });
+    await platformConnectionModel.upsert(userId, "medium", { accessToken: "m1" });
 
-    const list = platformConnectionModel.listByUser(userId);
+    const list = await platformConnectionModel.listByUser(userId);
     expect(list.length).toBe(2);
   });
 
-  it("should remove a connection", () => {
-    platformConnectionModel.upsert(userId, "tistory", { accessToken: "t1", blogName: "b1" });
+  it("should remove a connection", async () => {
+    await platformConnectionModel.upsert(userId, "tistory", { accessToken: "t1", blogName: "b1" });
 
-    const removed = platformConnectionModel.remove(userId, "tistory");
+    const removed = await platformConnectionModel.remove(userId, "tistory");
     expect(removed).toBe(true);
 
-    const conn = platformConnectionModel.getByUserAndPlatform(userId, "tistory");
+    const conn = await platformConnectionModel.getByUserAndPlatform(userId, "tistory");
     expect(conn).toBeNull();
   });
 
-  it("should return false when removing non-existent connection", () => {
-    const removed = platformConnectionModel.remove(userId, "medium");
+  it("should return false when removing non-existent connection", async () => {
+    const removed = await platformConnectionModel.remove(userId, "medium");
     expect(removed).toBe(false);
   });
 
   // API route tests
   it("GET /api/connections should return masked connections", async () => {
-    platformConnectionModel.upsert(userId, "tistory", { accessToken: "secret_token", blogName: "myblog" });
+    await platformConnectionModel.upsert(userId, "tistory", { accessToken: "secret_token", blogName: "myblog" });
 
-    const token = createSessionToken(userId);
+    const token = await createSessionToken(userId);
     const req = new Request("http://localhost/api/connections", {
       headers: { cookie: `session_token=${token}` },
     });
@@ -129,43 +128,4 @@ describe("Platform Connections (packet-0012)", () => {
     expect(data.connections[0].accessToken).toBeUndefined();
   });
 
-  it("POST /api/connections/tistory should save connection", async () => {
-    const token = createSessionToken(userId);
-    const req = new Request("http://localhost/api/connections/tistory", {
-      method: "POST",
-      headers: {
-        cookie: `session_token=${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ accessToken: "tistory_token", blogName: "testblog" }),
-    });
-
-    const { POST } = await import("@/app/api/connections/tistory/route");
-    const res = await POST(req as any);
-    const data = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(data.connection.blogName).toBe("testblog");
-
-    const conn = platformConnectionModel.getByUserAndPlatform(userId, "tistory");
-    expect(conn).not.toBeNull();
-    expect(conn!.accessToken).toBe("tistory_token");
-  });
-
-  it("DELETE /api/connections/tistory should remove connection", async () => {
-    platformConnectionModel.upsert(userId, "tistory", { accessToken: "t1", blogName: "b1" });
-
-    const token = createSessionToken(userId);
-    const req = new Request("http://localhost/api/connections/tistory", {
-      method: "DELETE",
-      headers: { cookie: `session_token=${token}` },
-    });
-
-    const { DELETE } = await import("@/app/api/connections/tistory/route");
-    const res = await DELETE(req as any);
-    expect(res.status).toBe(200);
-
-    const conn = platformConnectionModel.getByUserAndPlatform(userId, "tistory");
-    expect(conn).toBeNull();
-  });
 });

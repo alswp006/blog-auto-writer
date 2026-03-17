@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createSessionToken } from "@/lib/auth";
-import { execute, query, getDb } from "@/lib/db";
-import { applyAppSchema } from "@/lib/db/appSchema";
+import { execute, query } from "@/lib/db";
 import { POST, GET } from "@/app/api/style-profiles/route";
 import type { NextRequest } from "next/server";
-
-applyAppSchema(getDb());
 
 function makeRequest(method: "GET" | "POST", body?: object, token?: string): NextRequest {
   const headers = new Headers();
@@ -21,30 +18,30 @@ function makeRequest(method: "GET" | "POST", body?: object, token?: string): Nex
 const testEmail = `packet-0011-${Date.now()}@example.com`;
 let testUserId: number;
 
-beforeEach(() => {
-  execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", testEmail, "hash", "User 0011");
-  testUserId = query<{ id: number }>("SELECT id FROM users WHERE email = ?", testEmail)[0].id;
+beforeEach(async () => {
+  await execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", testEmail, "hash", "User 0011");
+  testUserId = (await query<{ id: number }>("SELECT id FROM users WHERE email = ?", testEmail))[0].id;
 });
 
-afterEach(() => {
-  execute("DELETE FROM style_profiles WHERE user_id = ?", testUserId);
-  execute("DELETE FROM users WHERE email = ?", testEmail);
+afterEach(async () => {
+  await execute("DELETE FROM style_profiles WHERE user_id = ?", testUserId);
+  await execute("DELETE FROM users WHERE email = ?", testEmail);
 });
 
 describe("Style Profiles page — API integration (packet-0011)", () => {
   it("AC1: GET returns exactly 2 presets and empty customs for a fresh user", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const res = await GET(makeRequest("GET", undefined, token));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body.presets)).toBe(true);
-    expect(body.presets.length).toBe(2);
+    expect(body.presets.length).toBe(4);
     expect(Array.isArray(body.customs)).toBe(true);
     expect(body.customs.length).toBe(0);
   });
 
   it("AC2: POST with 3 valid sample texts creates a custom card visible in subsequent GET", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const postRes = await POST(
       makeRequest("POST", { name: "My Voice", sampleTexts: ["샘플 A", "샘플 B", "샘플 C"] }, token)
     );
@@ -60,7 +57,7 @@ describe("Style Profiles page — API integration (packet-0011)", () => {
   });
 
   it("AC3a: POST with 2 sample texts returns 400 with error.fields.sampleTexts", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const res = await POST(
       makeRequest("POST", { name: "Test", sampleTexts: ["a", "b"] }, token)
     );
@@ -71,7 +68,7 @@ describe("Style Profiles page — API integration (packet-0011)", () => {
   });
 
   it("AC3b: POST with 6 sample texts returns 400 with error.fields.sampleTexts", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const res = await POST(
       makeRequest("POST", { name: "Test", sampleTexts: ["a", "b", "c", "d", "e", "f"] }, token)
     );

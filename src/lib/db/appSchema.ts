@@ -4,15 +4,13 @@ export async function applyAppSchema(client: Client): Promise<void> {
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS places (
       id INTEGER PRIMARY KEY,
-      user_id INTEGER NULL,
       name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 80),
       category TEXT NOT NULL CHECK(category IN ('restaurant','cafe','accommodation','attraction')),
       address TEXT NULL CHECK(address IS NULL OR length(address) <= 200),
       rating REAL NULL CHECK(rating IS NULL OR (rating >= 1 AND rating <= 5)),
       memo TEXT NULL CHECK(memo IS NULL OR length(memo) <= 1000),
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      updated_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS menu_items (
@@ -102,20 +100,6 @@ export async function applyAppSchema(client: Client): Promise<void> {
       FOREIGN KEY(style_profile_id) REFERENCES style_profiles(id) ON DELETE RESTRICT
     );
 
-    CREATE TABLE IF NOT EXISTS post_variants (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      post_id INTEGER NOT NULL,
-      platform TEXT NOT NULL CHECK(platform IN ('naver','tistory','medium')),
-      lang TEXT NOT NULL CHECK(lang IN ('ko','en')),
-      title TEXT NOT NULL,
-      content TEXT NOT NULL,
-      hashtags_json TEXT NOT NULL DEFAULT '[]',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE,
-      UNIQUE(post_id, platform, lang)
-    );
-
     CREATE TABLE IF NOT EXISTS publish_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_id INTEGER NOT NULL,
@@ -152,24 +136,25 @@ export async function applyAppSchema(client: Client): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id);
     CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at);
 
-    CREATE TABLE IF NOT EXISTS allowed_emails (
+    CREATE TABLE IF NOT EXISTS post_versions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT NOT NULL UNIQUE,
-      memo TEXT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      post_id INTEGER NOT NULL,
+      title_ko TEXT NULL,
+      content_ko TEXT NULL,
+      hashtags_ko_json TEXT NOT NULL DEFAULT '[]',
+      title_en TEXT NULL,
+      content_en TEXT NULL,
+      hashtags_en_json TEXT NOT NULL DEFAULT '[]',
+      change_reason TEXT NOT NULL DEFAULT 'manual_edit',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
+    CREATE INDEX IF NOT EXISTS idx_post_versions_post_id ON post_versions(post_id);
   `);
 
-  // Add user_id column to places if missing (for existing DBs)
+  // Add alt_text column to photos (for existing DBs)
   try {
-    await client.execute("ALTER TABLE places ADD COLUMN user_id INTEGER NULL REFERENCES users(id) ON DELETE CASCADE");
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add generation_meta column to posts if missing (for existing DBs)
-  try {
-    await client.execute("ALTER TABLE posts ADD COLUMN generation_meta TEXT NULL");
+    await client.execute("ALTER TABLE photos ADD COLUMN alt_text TEXT NULL");
   } catch {
     // Column already exists — ignore
   }

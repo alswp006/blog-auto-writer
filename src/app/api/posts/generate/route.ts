@@ -23,13 +23,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { placeId, styleProfileId, memo, isRevisit, suggestedMenus, orderedMenus } = body as {
+  const { placeId, styleProfileId, memo, isRevisit } = body as {
     placeId?: number;
     styleProfileId?: number;
     memo?: string;
     isRevisit?: boolean;
-    suggestedMenus?: { name: string; price: number }[];
-    orderedMenus?: { name: string; price: number }[];
   };
 
   if (!placeId || !styleProfileId) {
@@ -39,7 +37,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const place = await placeModel.getById(placeId, auth.userId);
+  const place = await placeModel.getById(placeId);
   if (!place) {
     return NextResponse.json({ error: "Place not found" }, { status: 404 });
   }
@@ -48,6 +46,9 @@ export async function POST(request: NextRequest) {
   if (!style) {
     return NextResponse.json({ error: "Style profile not found" }, { status: 404 });
   }
+
+  // Clean up stale drafts (failed generations older than 24h)
+  await postModel.cleanupStaleDrafts(auth.userId);
 
   // Create draft post
   const post = await postModel.create({
@@ -63,8 +64,18 @@ export async function POST(request: NextRequest) {
     const userProfile = await userProfileModel.getByUserId(auth.userId);
     const userMemo = typeof memo === "string" ? memo : (place.memo ?? "");
 
-    // generateBlogPost handles quality-based retry internally
-    const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, auth.userId, suggestedMenus ?? [], orderedMenus ?? []);
+    // Dynamic user examples: fetch past generated posts of same category
+    const pastPosts = await postModel.listRecentGenerated(auth.userId, place.category, post.id, 2);
+    let pastExcerpts: string | undefined;
+    if (pastPosts.length > 0) {
+      const excerpts = pastPosts.map((pp, i) => {
+        const excerpt = (pp.contentKo ?? "").replace(/\[PHOTO:\d+\]/g, "").slice(0, 400);
+        return `예시 ${i + 1} (${pp.titleKo ?? "이전 글"}):\n"${excerpt}..."`;
+      });
+      pastExcerpts = excerpts.join("\n\n");
+    }
+
+    const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, pastExcerpts);
 
     // Record API usage
     if (generated.usage) {
@@ -72,10 +83,7 @@ export async function POST(request: NextRequest) {
       await apiUsageModel.recordUsage(auth.userId, generated.usage.model, generated.usage.inputTokens, generated.usage.outputTokens, cost);
     }
 
-    const updated = await postModel.updateGenerated(post.id, {
-      ...generated,
-      generationMeta: generated.generationMeta,
-    });
+    const updated = await postModel.updateGenerated(post.id, generated);
     return NextResponse.json({ post: updated }, { status: 201 });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Generation failed";

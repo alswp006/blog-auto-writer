@@ -1,12 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createSessionToken, getSessionUserId } from "@/lib/auth";
-import { execute, query, getDb } from "@/lib/db";
-import { applyAppSchema } from "@/lib/db/appSchema";
+import { createSessionToken } from "@/lib/auth";
+import { execute, query } from "@/lib/db";
 import { POST, GET } from "@/app/api/style-profiles/route";
 import type { NextRequest } from "next/server";
-
-applyAppSchema(getDb());
-getSessionUserId("__init__");
 
 function makeRequest(
   method: "GET" | "POST",
@@ -31,15 +27,15 @@ function makeRequest(
 const testEmail = `packet-0008-${Date.now()}@example.com`;
 let testUserId: number;
 
-beforeEach(() => {
-  execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", testEmail, "hash", "User 0008");
-  testUserId = query<{ id: number }>("SELECT id FROM users WHERE email = ?", testEmail)[0].id;
+beforeEach(async () => {
+  await execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", testEmail, "hash", "User 0008");
+  testUserId = (await query<{ id: number }>("SELECT id FROM users WHERE email = ?", testEmail))[0].id;
 });
 
-afterEach(() => {
-  execute("DELETE FROM style_profiles WHERE user_id = ?", testUserId);
-  execute("DELETE FROM sessions WHERE userId = ?", testUserId);
-  execute("DELETE FROM users WHERE email = ?", testEmail);
+afterEach(async () => {
+  await execute("DELETE FROM style_profiles WHERE user_id = ?", testUserId);
+  await execute("DELETE FROM sessions WHERE userId = ?", testUserId);
+  await execute("DELETE FROM users WHERE email = ?", testEmail);
 });
 
 describe("POST /api/style-profiles", () => {
@@ -51,7 +47,7 @@ describe("POST /api/style-profiles", () => {
   });
 
   it("creates custom profile and returns 201 with sampleTexts length 3", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const sampleTexts = ["첫 번째 샘플입니다", "두 번째 샘플입니다", "세 번째 샘플입니다"];
     const res = await POST(
       makeRequest("POST", { name: "My Style", sampleTexts }, token)
@@ -66,7 +62,7 @@ describe("POST /api/style-profiles", () => {
   });
 
   it("includes analyzedTone as non-null object in response", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const sampleTexts = ["첫 번째", "두 번째", "세 번째"];
     const res = await POST(
       makeRequest("POST", { name: "Test Style", sampleTexts }, token)
@@ -80,7 +76,7 @@ describe("POST /api/style-profiles", () => {
   });
 
   it("returns 400 with VALIDATION_ERROR when sampleTexts length is 2", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const res = await POST(
       makeRequest("POST", { name: "Test", sampleTexts: ["a", "b"] }, token)
     );
@@ -92,7 +88,7 @@ describe("POST /api/style-profiles", () => {
   });
 
   it("returns 400 with VALIDATION_ERROR when sampleTexts length is 6", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const sampleTexts = ["a", "b", "c", "d", "e", "f"];
     const res = await POST(
       makeRequest("POST", { name: "Test", sampleTexts }, token)
@@ -105,7 +101,7 @@ describe("POST /api/style-profiles", () => {
   });
 
   it("returns 400 when sampleTexts contains empty strings", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const res = await POST(
       makeRequest("POST", { name: "Test", sampleTexts: ["a", "", "c"] }, token)
     );
@@ -116,7 +112,7 @@ describe("POST /api/style-profiles", () => {
   });
 
   it("persists profile in DB and appears in subsequent GET for same user", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const sampleTexts = ["Sample 1", "Sample 2", "Sample 3"];
     const postRes = await POST(
       makeRequest("POST", { name: "Saved Style", sampleTexts }, token)
@@ -132,7 +128,7 @@ describe("POST /api/style-profiles", () => {
   });
 
   it("created profile is only visible to owning user", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const sampleTexts = ["Sample 1", "Sample 2", "Sample 3"];
     await POST(
       makeRequest("POST", { name: "Private Style", sampleTexts }, token)
@@ -140,9 +136,9 @@ describe("POST /api/style-profiles", () => {
 
     // Create another user
     const otherEmail = `packet-0008-other-${Date.now()}@example.com`;
-    execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", otherEmail, "hash", "Other User");
-    const otherUserId = query<{ id: number }>("SELECT id FROM users WHERE email = ?", otherEmail)[0].id;
-    const otherToken = createSessionToken(otherUserId);
+    await execute("INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)", otherEmail, "hash", "Other User");
+    const otherUserId = (await query<{ id: number }>("SELECT id FROM users WHERE email = ?", otherEmail))[0].id;
+    const otherToken = await createSessionToken(otherUserId);
 
     // Verify other user doesn't see the profile
     const otherRes = await GET(makeRequest("GET", undefined, otherToken));
@@ -150,6 +146,6 @@ describe("POST /api/style-profiles", () => {
     expect(otherBody.customs.length).toBe(0);
 
     // Cleanup
-    execute("DELETE FROM users WHERE email = ?", otherEmail);
+    await execute("DELETE FROM users WHERE email = ?", otherEmail);
   });
 });

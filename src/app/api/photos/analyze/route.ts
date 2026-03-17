@@ -79,14 +79,21 @@ export async function POST(request: NextRequest) {
           content: [
             {
               type: "text",
-              text: `아래 ${imageEntries.length}장의 사진을 분석해서 각각 블로그용 캡션을 한국어로 작성해주세요.
-규칙:
+              text: `아래 ${imageEntries.length}장의 사진을 분석해서 각각 블로그용 캡션과 SEO용 alt-text를 작성해주세요.
+
+## 캡션 규칙
 - 각 캡션은 15~40자 이내
 - 음식이면 색감, 플레이팅, 재료 묘사
 - 인테리어/외관이면 분위기와 특징 묘사
 - 풍경이면 계절감, 색감 묘사
 - 자연스러운 구어체 (예: "노릇하게 구워진 삼겹살", "따뜻한 조명의 아늑한 내부")
-JSON으로 응답: { "captions": ["캡션1", "캡션2", ...] }
+
+## alt-text 규칙
+- SEO 최적화용 이미지 설명 (한국어)
+- 10~25자, 핵심 키워드 포함
+- 예: "을지로 골목식당 갈비탕", "강남 카페 시그니처 라떼"
+
+JSON으로 응답: { "captions": ["캡션1", ...], "altTexts": ["alt1", ...] }
 사진 순서대로 작성하세요.`,
             },
             ...imageEntries.map((ie) => ie.content),
@@ -114,24 +121,33 @@ JSON으로 응답: { "captions": ["캡션1", "캡션2", ...] }
 
     const content = data.choices?.[0]?.message?.content ?? "{}";
     let captions: string[] = [];
+    let altTexts: string[] = [];
     try {
-      const parsed = JSON.parse(content) as { captions: string[] };
+      const parsed = JSON.parse(content) as { captions: string[]; altTexts?: string[] };
       captions = parsed.captions ?? [];
+      altTexts = parsed.altTexts ?? [];
     } catch {
       return NextResponse.json({ error: "AI 응답 파싱 실패" }, { status: 502 });
     }
 
     // Update DB for uploaded photos
-    const results: { index: number; photoId?: number; caption: string }[] = [];
+    const results: { index: number; photoId?: number; caption: string; altText: string }[] = [];
     for (let i = 0; i < imageEntries.length; i++) {
       const caption = captions[i] ?? "";
-      if (photoIdMap[i] && caption) {
-        await execute("UPDATE photos SET caption = ? WHERE id = ?", caption, photoIdMap[i]);
+      const altText = altTexts[i] ?? "";
+      if (photoIdMap[i] && (caption || altText)) {
+        await execute(
+          "UPDATE photos SET caption = COALESCE(?, caption), alt_text = COALESCE(?, alt_text) WHERE id = ?",
+          caption || null,
+          altText || null,
+          photoIdMap[i],
+        );
       }
       results.push({
         index: i,
         ...(photoIdMap[i] ? { photoId: photoIdMap[i] } : {}),
         caption,
+        altText,
       });
     }
 

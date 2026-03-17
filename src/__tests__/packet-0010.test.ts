@@ -1,25 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getDb } from "@/lib/db";
-import type Database from "better-sqlite3";
+import { execute, query, queryOne } from "@/lib/db";
 import { createSessionToken } from "@/lib/auth";
 
-let db: Database.Database;
 let userId: number;
 let sessionToken: string;
 
-beforeEach(() => {
-  db = getDb();
+beforeEach(async () => {
   const email = `test-onboarding-${Date.now()}-${Math.random()}@example.com`;
-  const result = db
-    .prepare(`INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)`)
-    .run(email, "test_hash", new Date().toISOString());
-  userId = result.lastInsertRowid as number;
-  sessionToken = createSessionToken(userId);
+  const result = await execute(
+    `INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)`,
+    email, "test_hash", new Date().toISOString()
+  );
+  userId = result.lastInsertRowid;
+  sessionToken = await createSessionToken(userId);
 });
 
-afterEach(() => {
-  db.prepare("DELETE FROM user_profiles WHERE user_id = ?").run(userId);
-  db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+afterEach(async () => {
+  await execute("DELETE FROM user_profiles WHERE user_id = ?", userId);
+  await execute("DELETE FROM users WHERE id = ?", userId);
 });
 
 function profileRequest(method: string, body?: Record<string, unknown>, token?: string) {
@@ -42,10 +40,11 @@ describe("Onboarding profile page — API integration", () => {
   });
 
   it("GET returns existing profile data so the form can be prefilled", async () => {
-    db.prepare(
+    await execute(
       `INSERT INTO user_profiles (user_id, nickname, age_group, preferred_tone, primary_platform, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(userId, "Alice", "30s", "detailed", "medium", new Date().toISOString(), new Date().toISOString());
+      userId, "Alice", "30s", "detailed", "medium", new Date().toISOString(), new Date().toISOString()
+    );
 
     const { GET } = await import("@/app/api/profile/route");
     const res = await GET(profileRequest("GET", undefined, sessionToken) as any);

@@ -1,15 +1,29 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { PhotoUploader, type LocalPhoto } from "@/components/post/photo-uploader";
-import { compressImage } from "@/lib/client/compress-image";
+import dynamic from "next/dynamic";
+import type { DropResult } from "@hello-pangea/dnd";
+
+const DragDropContext = dynamic(
+  () => import("@hello-pangea/dnd").then((mod) => mod.DragDropContext),
+  { ssr: false },
+);
+const Droppable = dynamic(
+  () => import("@hello-pangea/dnd").then((mod) => mod.Droppable),
+  { ssr: false },
+);
+const Draggable = dynamic(
+  () => import("@hello-pangea/dnd").then((mod) => mod.Draggable),
+  { ssr: false },
+);
 
 type SearchResult = {
   title: string;
@@ -20,20 +34,19 @@ type SearchResult = {
 
 type PlaceCategory = "restaurant" | "cafe" | "accommodation" | "attraction";
 
-type ExistingPlace = {
-  id: number;
-  name: string;
-  category: string;
-  address: string | null;
-  photoCount: number;
-  menuItemCount: number;
-};
-
 type StyleProfile = {
   id: number;
   name: string;
   isSystemPreset: boolean;
   analyzedTone: Record<string, string>;
+};
+
+type LocalPhoto = {
+  id: number;
+  filePath: string;
+  caption: string | null;
+  orderIndex: number;
+  _file: File;
 };
 
 const CATEGORY_OPTIONS: { value: PlaceCategory; label: string }[] = [
@@ -46,8 +59,12 @@ const CATEGORY_OPTIONS: { value: PlaceCategory; label: string }[] = [
 const selectClass =
   "w-full h-10 rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition-colors";
 
+const MAX_PHOTOS = 20;
+
 export default function DashboardNewPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Place fields
   const [placeName, setPlaceName] = useState("");
@@ -56,11 +73,10 @@ export default function DashboardNewPage() {
   const [rating, setRating] = useState("");
   const [memo, setMemo] = useState("");
 
-  // Menu items — unified list (popular menus auto-loaded, user can add more)
-  // If a menu has photos attached, it's treated as "what I ate"
-  const [menuItems, setMenuItems] = useState<{ name: string; price: string; photos: File[]; photoPreviews: string[] }[]>([]);
+  // Menu items (for restaurants/cafes)
+  const [menuItems, setMenuItems] = useState<{ name: string; price: string }[]>([]);
 
-  // Photos (place photos: interior, exterior, parking, etc.)
+  // Photos
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [dragging, setDragging] = useState(false);
   const [thumbnailIdx, setThumbnailIdx] = useState(0); // index of selected thumbnail photo
@@ -76,102 +92,14 @@ export default function DashboardNewPage() {
 
   // Revisit
   const [isRevisit, setIsRevisit] = useState(false);
-  const [existingPlaces, setExistingPlaces] = useState<ExistingPlace[]>([]);
+  const [existingPlaces, setExistingPlaces] = useState<{ id: number; name: string; category: string; photoCount: number; menuItemCount: number }[]>([]);
   const [selectedExistingPlaceId, setSelectedExistingPlaceId] = useState<number | null>(null);
-  const [placeSearchQuery, setPlaceSearchQuery] = useState("");
-  const [showPlaceDropdown, setShowPlaceDropdown] = useState(false);
-  const placeSearchRef = useRef<HTMLDivElement>(null);
-
-  // Menu autocomplete
-  const [menuSuggestions, setMenuSuggestions] = useState<{ name: string; priceKrw: number }[]>([]);
-  const [activeMenuIdx, setActiveMenuIdx] = useState<number | null>(null);
-  const [showMenuSuggestions, setShowMenuSuggestions] = useState(false);
-  const menuSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Loading state for popular menu fetch
-  const [menuSuggestLoading, setMenuSuggestLoading] = useState(false);
 
   // Generation
   const [generating, setGenerating] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
-
-  // Toast
-  const [toast, setToast] = useState<string | null>(null);
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  };
-
-  // ── Auto-save draft to localStorage ──
-  const DRAFT_KEY = "blog-new-post-draft";
-  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftRestored = useRef(false);
-
-  // Restore draft on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      if (saved) {
-        const draft = JSON.parse(saved);
-        if (draft.placeName) setPlaceName(draft.placeName);
-        if (draft.category) setCategory(draft.category);
-        if (draft.address) setAddress(draft.address);
-        if (draft.rating) setRating(draft.rating);
-        if (draft.memo) setMemo(draft.memo);
-        if (draft.menuItems?.length > 0) {
-          setMenuItems(draft.menuItems.map((m: { name: string; price: string }) => ({
-            name: m.name, price: m.price, photos: [], photoPreviews: [],
-          })));
-        }
-        if (draft.selectedStyleId != null) setSelectedStyleId(draft.selectedStyleId);
-        if (draft.isRevisit != null) setIsRevisit(draft.isRevisit);
-        if (draft.selectedExistingPlaceId != null) setSelectedExistingPlaceId(draft.selectedExistingPlaceId);
-        if (draft.placeSearchQuery) setPlaceSearchQuery(draft.placeSearchQuery);
-        draftRestored.current = true;
-        showToast("임시저장된 글이 복원되었습니다");
-      }
-    } catch { /* ignore corrupt data */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Save draft on field changes (debounced 1s)
-  useEffect(() => {
-    // Skip saving during generation or before first render settles
-    if (generating) return;
-    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
-    draftSaveTimer.current = setTimeout(() => {
-      // Only save if there's actual content
-      const hasContent = placeName.trim() || memo.trim() || menuItems.some((m) => m.name.trim());
-      if (!hasContent) return;
-      try {
-        const draft = {
-          placeName, category, address, rating, memo,
-          menuItems: menuItems.map((m) => ({ name: m.name, price: m.price })),
-          selectedStyleId, isRevisit, selectedExistingPlaceId, placeSearchQuery,
-          savedAt: new Date().toISOString(),
-        };
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      } catch { /* storage full — ignore */ }
-    }, 1000);
-    return () => { if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current); };
-  }, [placeName, category, address, rating, memo, menuItems, selectedStyleId, isRevisit, selectedExistingPlaceId, placeSearchQuery, generating]);
-
-  const saveDraftNow = () => {
-    try {
-      const draft = {
-        placeName, category, address, rating, memo,
-        menuItems: menuItems.map((m) => ({ name: m.name, price: m.price })),
-        selectedStyleId, isRevisit, selectedExistingPlaceId, placeSearchQuery,
-        savedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    } catch { /* storage full — ignore */ }
-  };
-
-  const clearDraft = () => {
-    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
-  };
+  const [sseRecoveryPostId, setSseRecoveryPostId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/style-profiles")
@@ -179,8 +107,7 @@ export default function DashboardNewPage() {
       .then((data) => {
         const all = [...(data.presets ?? []), ...(data.customs ?? [])];
         setStyles(all);
-        // Only set default style if no draft restored a selection
-        if (all.length > 0 && !draftRestored.current) setSelectedStyleId(all[0].id);
+        if (all.length > 0) setSelectedStyleId(all[0].id);
       })
       .catch(() => {});
 
@@ -216,129 +143,109 @@ export default function DashboardNewPage() {
     setAddress(item.roadAddress || item.address);
     // Map naver category to our categories
     const cat = item.category.toLowerCase();
-    let detectedCategory: PlaceCategory = category;
     if (cat.includes("카페") || cat.includes("coffee") || cat.includes("디저트")) {
-      detectedCategory = "cafe";
+      setCategory("cafe");
     } else if (cat.includes("음식") || cat.includes("맛집") || cat.includes("한식") || cat.includes("중식") || cat.includes("일식") || cat.includes("양식")) {
-      detectedCategory = "restaurant";
+      setCategory("restaurant");
     } else if (cat.includes("숙박") || cat.includes("호텔") || cat.includes("펜션") || cat.includes("모텔")) {
-      detectedCategory = "accommodation";
+      setCategory("accommodation");
     } else if (cat.includes("관광") || cat.includes("여행") || cat.includes("명소")) {
-      detectedCategory = "attraction";
+      setCategory("attraction");
     }
-    setCategory(detectedCategory);
     setShowResults(false);
     setSearchResults([]);
-
-    // 맛집/카페면 대표 메뉴 참고 정보 불러오기
-    if (detectedCategory === "restaurant" || detectedCategory === "cafe") {
-      fetchPopularMenus(item.title, item.roadAddress || item.address);
-    }
-  };
-
-  const fetchPopularMenus = async (name: string, addr: string) => {
-    setMenuSuggestLoading(true);
-    try {
-      const res = await fetch(
-        `/api/places/menu-suggest?name=${encodeURIComponent(name)}&address=${encodeURIComponent(addr)}`,
-      );
-      if (!res.ok) return;
-      const data = await res.json();
-      const menus: { name: string; price: number }[] = data.menus ?? [];
-      if (menus.length > 0) {
-        setMenuItems(menus.map((m) => ({
-          name: m.name,
-          price: m.price > 0 ? m.price.toString() : "",
-          photos: [],
-          photoPreviews: [],
-        })));
-      }
-    } catch { /* ignore */ }
-    finally { setMenuSuggestLoading(false); }
-  };
-
-  // ── Existing place search (local filter) ──
-  const filteredPlaces = placeSearchQuery.trim().length === 0
-    ? existingPlaces
-    : existingPlaces.filter((p) => {
-        const q = placeSearchQuery.toLowerCase();
-        return p.name.toLowerCase().includes(q) || (p.address ?? "").toLowerCase().includes(q);
-      });
-
-  const selectExistingPlace = (place: ExistingPlace) => {
-    setSelectedExistingPlaceId(place.id);
-    setPlaceSearchQuery(`${place.name}${place.address ? ` - ${place.address}` : ""}`);
-    setShowPlaceDropdown(false);
   };
 
   // ── Menu helpers ──
-  const addMenuItem = () => setMenuItems((prev) => [...prev, { name: "", price: "", photos: [], photoPreviews: [] }]);
+  const addMenuItem = () => setMenuItems((prev) => [...prev, { name: "", price: "" }]);
   const updateMenuItem = (i: number, field: "name" | "price", value: string) =>
     setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)));
-  const removeMenuItem = (i: number) => {
-    setMenuItems((prev) => {
-      const item = prev[i];
-      item?.photoPreviews.forEach((p) => URL.revokeObjectURL(p));
+  const removeMenuItem = (i: number) => setMenuItems((prev) => prev.filter((_, idx) => idx !== i));
+
+  // ── Photo helpers ──
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      const fileArr = Array.from(files);
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+
+      setPhotos((prev) => {
+        const remaining = MAX_PHOTOS - prev.length;
+        const toAdd = fileArr.filter((f) => allowed.includes(f.type)).slice(0, remaining);
+        return [
+          ...prev,
+          ...toAdd.map((file, i) => ({
+            id: -(prev.length + i + 1),
+            filePath: URL.createObjectURL(file),
+            caption: null,
+            orderIndex: prev.length + i + 1,
+            _file: file,
+          })),
+        ];
+      });
+    },
+    [],
+  );
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addFiles(e.target.files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragging(false);
+      if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
+    },
+    [addFiles],
+  );
+
+  const updateCaption = (i: number, caption: string) =>
+    setPhotos((prev) => prev.map((p, idx) => (idx === i ? { ...p, caption: caption || null } : p)));
+
+  const removePhoto = (i: number) => {
+    setPhotos((prev) => {
+      const removed = prev[i];
+      if (removed.filePath.startsWith("blob:")) URL.revokeObjectURL(removed.filePath);
       return prev.filter((_, idx) => idx !== i);
     });
-  };
-  const addMenuPhoto = (i: number, files: FileList | File[]) => {
-    const fileArr = Array.from(files);
-    setMenuItems((prev) => prev.map((item, idx) => {
-      if (idx !== i) return item;
-      const newPhotos = [...item.photos, ...fileArr];
-      const newPreviews = [...item.photoPreviews, ...fileArr.map((f) => URL.createObjectURL(f))];
-      return { ...item, photos: newPhotos, photoPreviews: newPreviews };
-    }));
-  };
-  const removeMenuPhoto = (menuIdx: number, photoIdx: number) => {
-    setMenuItems((prev) => prev.map((item, idx) => {
-      if (idx !== menuIdx) return item;
-      URL.revokeObjectURL(item.photoPreviews[photoIdx]);
-      return {
-        ...item,
-        photos: item.photos.filter((_, pi) => pi !== photoIdx),
-        photoPreviews: item.photoPreviews.filter((_, pi) => pi !== photoIdx),
-      };
-    }));
+    setThumbnailIdx((prev) => {
+      if (i < prev) return prev - 1;
+      if (i === prev) return 0;
+      return prev;
+    });
   };
 
-  const handleMenuNameChange = (i: number, value: string) => {
-    updateMenuItem(i, "name", value);
-    setActiveMenuIdx(i);
-    if (menuSearchTimerRef.current) clearTimeout(menuSearchTimerRef.current);
-    if (value.trim().length === 0) {
-      setMenuSuggestions([]);
-      setShowMenuSuggestions(false);
-      return;
-    }
-    menuSearchTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/menu-items/suggestions?q=${encodeURIComponent(value.trim())}`);
-        if (res.ok) {
-          const data = await res.json();
-          setMenuSuggestions(data.suggestions ?? []);
-          setShowMenuSuggestions((data.suggestions ?? []).length > 0);
-        }
-      } catch { /* ignore */ }
-    }, 200);
-  };
-
-  const selectMenuSuggestion = (suggestion: { name: string; priceKrw: number }) => {
-    if (activeMenuIdx !== null) {
-      setMenuItems((prev) =>
-        prev.map((item, idx) =>
-          idx === activeMenuIdx ? { ...item, name: suggestion.name, price: suggestion.priceKrw > 0 ? suggestion.priceKrw.toString() : item.price } : item,
-        ),
-      );
-    }
-    setShowMenuSuggestions(false);
-    setMenuSuggestions([]);
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const from = result.source.index;
+    const to = result.destination.index;
+    if (from === to) return;
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next.map((p, i) => ({ ...p, orderIndex: i + 1 }));
+    });
   };
 
   // ── Submit ──
   const handleGenerate = async () => {
     setError("");
+    setSseRecoveryPostId(null);
 
     if (isRevisit && !selectedExistingPlaceId) { setError("재방문할 장소를 선택해주세요."); return; }
     if (!isRevisit && !placeName.trim()) { setError("장소 이름을 입력해주세요."); return; }
@@ -373,64 +280,24 @@ export default function DashboardNewPage() {
         placeId = placeData.place.id;
       }
 
-      // 2. Upload menu food photos first, then place photos
-      // orderIndex is auto-assigned by server to avoid UNIQUE conflicts
-      const menusWithPhotos = menuItems.filter((m) => m.photos.length > 0 && m.name.trim());
-      const totalMenuPhotos = menusWithPhotos.reduce((sum, m) => sum + m.photos.length, 0);
-      let menuPhotoUploaded = 0;
-      for (const item of menusWithPhotos) {
-        for (let pi = 0; pi < item.photos.length; pi++) {
-          menuPhotoUploaded++;
-          setUploadProgress(`메뉴 사진 압축/업로드 중... (${menuPhotoUploaded}/${totalMenuPhotos})`);
-          const compressed = await compressImage(item.photos[pi]);
-          const formData = new FormData();
-          formData.append("file", compressed);
-          formData.append("placeId", placeId.toString());
-          formData.append("caption", `[음식] ${item.name.trim()}${item.photos.length > 1 ? ` (${pi + 1})` : ""}`);
-          let photoRes: Response;
-          try {
-            photoRes = await fetch("/api/photos", { method: "POST", body: formData });
-          } catch (fetchErr) {
-            throw new Error(`메뉴 사진 네트워크 오류: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`);
-          }
-          if (!photoRes.ok) {
-            const text = await photoRes.text().catch(() => "");
-            let errMsg: string;
-            try { errMsg = JSON.parse(text).error; } catch { errMsg = text || `HTTP ${photoRes.status}`; }
-            throw new Error(`메뉴 사진 실패: ${errMsg}`);
-          }
-        }
-      }
-
-      // Upload place photos (interior, exterior, parking, etc.)
+      // 2. Upload photos (thumbnail first at order 1)
       const orderedPhotos = [...photos];
       if (thumbnailIdx > 0 && thumbnailIdx < orderedPhotos.length) {
         const [thumb] = orderedPhotos.splice(thumbnailIdx, 1);
         orderedPhotos.unshift(thumb);
       }
       for (let i = 0; i < orderedPhotos.length; i++) {
-        setUploadProgress(`장소 사진 압축/업로드 중... (${i + 1}/${orderedPhotos.length})`);
+        setUploadProgress(`사진 업로드 중... (${i + 1}/${orderedPhotos.length})`);
         const photo = orderedPhotos[i];
-        const compressed = await compressImage(photo._file);
         const formData = new FormData();
-        formData.append("file", compressed);
+        formData.append("file", photo._file);
         formData.append("placeId", placeId.toString());
+        formData.append("orderIndex", (i + 1).toString());
         if (photo.caption) formData.append("caption", photo.caption);
-        let photoRes: Response;
-        try {
-          photoRes = await fetch("/api/photos", { method: "POST", body: formData });
-        } catch (fetchErr) {
-          throw new Error(`사진 ${i + 1} 네트워크 오류: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`);
-        }
-        if (!photoRes.ok) {
-          const text = await photoRes.text().catch(() => "");
-          let errMsg: string;
-          try { errMsg = JSON.parse(text).error; } catch { errMsg = text || `HTTP ${photoRes.status}`; }
-          throw new Error(`사진 ${i + 1} 실패: ${errMsg}`);
-        }
+        await fetch("/api/photos", { method: "POST", body: formData });
       }
 
-      // 3. Create menu items (all of them — both eaten and reference)
+      // 3. Create menu items
       const validMenus = menuItems.filter((m) => m.name.trim());
       if (validMenus.length > 0) {
         setUploadProgress("메뉴 저장 중...");
@@ -443,30 +310,66 @@ export default function DashboardNewPage() {
         }
       }
 
-      // 4. Generate post via AI
-      // Menus with photos = what I ate, menus without photos = popular reference
-      const orderedMenus = validMenus.filter((m) => m.photos.length > 0).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
-      const popularMenus = validMenus.filter((m) => m.photos.length === 0).map((m) => ({ name: m.name.trim(), price: parseInt(m.price, 10) || 0 }));
-
-      setUploadProgress("AI 글 생성 중... (30초~1분 소요)");
-      const genRes = await fetch("/api/posts/generate", {
+      // 4. Generate post via AI (SSE streaming)
+      setUploadProgress("AI 글 생성 준비 중...");
+      const genRes = await fetch("/api/posts/generate-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ placeId, styleProfileId: selectedStyleId, memo: memo.trim(), isRevisit, suggestedMenus: popularMenus, orderedMenus }),
+        body: JSON.stringify({ placeId, styleProfileId: selectedStyleId, memo: memo.trim(), isRevisit }),
       });
-      let genData;
-      try {
-        genData = await genRes.json();
-      } catch {
-        throw new Error("AI 생성 요청 시간이 초과되었습니다. 다시 시도해주세요.");
-      }
-      if (!genRes.ok) throw new Error(genData.error ?? "글 생성 실패");
 
-      // 5. Clear draft and navigate to edit page
-      clearDraft();
-      router.push(`/dashboard/${genData.post.id}/edit`);
+      if (!genRes.ok || !genRes.body) {
+        const text = await genRes.text().catch(() => "");
+        throw new Error(text || "AI 생성 요청 실패");
+      }
+
+      const reader = genRes.body.getReader();
+      const decoder = new TextDecoder();
+      let resultPostId: number | null = null;
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7);
+          } else if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6);
+            try {
+              const data = JSON.parse(dataStr);
+              if (currentEvent === "progress") {
+                setUploadProgress(data.message ?? "처리 중...");
+                if (data.postId) { resultPostId = data.postId; setSseRecoveryPostId(data.postId); }
+              } else if (currentEvent === "complete") {
+                resultPostId = data.post?.id ?? resultPostId;
+              } else if (currentEvent === "error") {
+                throw new Error(data.message ?? "글 생성 실패");
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message !== "글 생성 실패") {
+                // JSON parse error — ignore partial data
+              } else {
+                throw e;
+              }
+            }
+          }
+        }
+      }
+
+      if (!resultPostId) throw new Error("글 생성 결과를 받지 못했습니다.");
+
+      // 5. Navigate to edit page
+      router.push(`/dashboard/${resultPostId}/edit`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+      const errMsg = err instanceof Error ? err.message : "오류가 발생했습니다.";
+      setError(errMsg);
     } finally {
       setGenerating(false);
       setUploadProgress("");
@@ -479,54 +382,26 @@ export default function DashboardNewPage() {
     <section className="w-full py-12">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto space-y-6">
-          {/* Toast */}
-          {toast && (
-            <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
-              {toast}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">새 글 작성</h1>
-              <p className="text-sm text-[var(--text-muted)] mt-1">
-                장소 정보와 사진을 입력하면 AI가 한영 블로그 글을 자동 생성합니다.
-              </p>
-            </div>
-            {(placeName.trim() || memo.trim() || menuItems.some((m) => m.name.trim())) && (
-              <div className="flex gap-2 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    saveDraftNow();
-                    showToast("임시저장 완료!");
-                  }}
-                  className="text-xs"
-                >
-                  임시저장
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    clearDraft();
-                    setPlaceName(""); setCategory("restaurant"); setAddress(""); setRating(""); setMemo("");
-                    setMenuItems([]); setPhotos([]); setThumbnailIdx(0);
-                    setIsRevisit(false); setSelectedExistingPlaceId(null); setPlaceSearchQuery("");
-                    showToast("초기화 완료");
-                  }}
-                  className="text-xs text-[var(--text-muted)]"
-                >
-                  초기화
-                </Button>
-              </div>
-            )}
+          <div>
+            <h1 className="text-2xl font-bold">새 글 작성</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">
+              장소 정보와 사진을 입력하면 AI가 한영 블로그 글을 자동 생성합니다.
+            </p>
           </div>
 
           {error && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-              {error}
+              <p>{error}</p>
+              {sseRecoveryPostId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 text-xs"
+                  onClick={() => router.push(`/dashboard/${sseRecoveryPostId}/edit`)}
+                >
+                  생성된 글 확인하기
+                </Button>
+              )}
             </div>
           )}
 
@@ -542,10 +417,7 @@ export default function DashboardNewPage() {
                   <button
                     onClick={() => {
                       setIsRevisit(!isRevisit);
-                      if (!isRevisit) {
-                        setSelectedExistingPlaceId(null);
-                        setPlaceSearchQuery("");
-                      }
+                      if (!isRevisit) setSelectedExistingPlaceId(null);
                     }}
                     className={cn(
                       "relative w-11 h-6 rounded-full transition-colors",
@@ -562,55 +434,19 @@ export default function DashboardNewPage() {
                 </div>
                 {isRevisit && (
                   <div className="mt-3 space-y-2">
-                    <Label>기존 장소 검색</Label>
-                    <div className="relative" ref={placeSearchRef}>
-                      <Input
-                        value={placeSearchQuery}
-                        onChange={(e) => {
-                          setPlaceSearchQuery(e.target.value);
-                          setShowPlaceDropdown(true);
-                          if (selectedExistingPlaceId) setSelectedExistingPlaceId(null);
-                        }}
-                        onFocus={() => setShowPlaceDropdown(true)}
-                        onBlur={() => setTimeout(() => setShowPlaceDropdown(false), 200)}
-                        placeholder="장소명 또는 주소로 검색..."
-                        autoComplete="off"
-                      />
-                      {showPlaceDropdown && filteredPlaces.length > 0 && (
-                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                          {filteredPlaces.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => selectExistingPlace(p)}
-                              className={cn(
-                                "w-full text-left px-3 py-2.5 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border)] last:border-0",
-                                selectedExistingPlaceId === p.id && "bg-[var(--accent-soft)]",
-                              )}
-                            >
-                              <div className="text-sm font-medium text-[var(--text)]">
-                                {p.name}
-                                <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">
-                                  {CATEGORY_OPTIONS.find((c) => c.value === p.category)?.label ?? p.category}
-                                </span>
-                              </div>
-                              {p.address && (
-                                <div className="text-xs text-[var(--text-muted)] mt-0.5">{p.address}</div>
-                              )}
-                              <div className="text-xs text-[var(--text-muted)] mt-0.5">
-                                사진 {p.photoCount}장 · 메뉴 {p.menuItemCount}개
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {showPlaceDropdown && filteredPlaces.length === 0 && placeSearchQuery.trim().length > 0 && (
-                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg px-3 py-3">
-                          <p className="text-sm text-[var(--text-muted)] text-center">일치하는 장소가 없습니다</p>
-                        </div>
-                      )}
-                    </div>
+                    <Label>기존 장소 선택</Label>
+                    <select
+                      value={selectedExistingPlaceId ?? ""}
+                      onChange={(e) => setSelectedExistingPlaceId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                      className={selectClass}
+                    >
+                      <option value="">장소를 선택하세요</option>
+                      {existingPlaces.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({CATEGORY_OPTIONS.find((c) => c.value === p.category)?.label ?? p.category}) — 사진 {p.photoCount}장
+                        </option>
+                      ))}
+                    </select>
                     {selectedExistingPlaceId && (
                       <p className="text-xs text-[var(--text-muted)]">
                         기존 장소 정보를 사용합니다. 새 사진을 추가하고 메모를 작성해주세요.
@@ -715,131 +551,41 @@ export default function DashboardNewPage() {
           </Card>
           )}
 
-          {/* ── 2. 메뉴 ── */}
+          {/* ── 2. 메뉴/가격 ── */}
           {!isRevisit && showMenuSection && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">메뉴</CardTitle>
+                  <CardTitle className="text-lg">메뉴 / 가격</CardTitle>
                   <Button variant="outline" size="sm" onClick={addMenuItem}>
                     + 메뉴 추가
                   </Button>
                 </div>
-                <p className="text-xs text-[var(--text-muted)]">
-                  사진을 추가한 메뉴 = 내가 먹은 메뉴 / 사진 없는 메뉴 = 대표 메뉴 참고
-                </p>
               </CardHeader>
               <CardContent className="space-y-3">
-                {menuSuggestLoading && (
-                  <div className="text-sm text-[var(--accent)] text-center py-2 animate-pulse">
-                    블로그에서 대표 메뉴 검색 중...
-                  </div>
-                )}
-                {menuItems.length === 0 && !menuSuggestLoading && (
+                {menuItems.length === 0 && (
                   <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                    장소를 검색하면 대표 메뉴가 자동으로 불러와집니다
+                    메뉴를 추가하면 글에 자동 포함됩니다
                   </p>
                 )}
                 {menuItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "rounded-lg border p-3 space-y-2 transition-colors",
-                      item.photos.length > 0
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                        : "border-[var(--border)] bg-[var(--bg-card)]",
-                    )}
-                  >
-                    {/* Row 1: menu name + delete */}
-                    <div className="flex gap-2 items-center relative">
-                      {item.photos.length > 0 && (
-                        <span className="text-xs font-medium text-[var(--accent)] shrink-0">먹음</span>
-                      )}
-                      <div className="flex-1 relative">
-                        <Input
-                          value={item.name}
-                          onChange={(e) => handleMenuNameChange(i, e.target.value)}
-                          onFocus={() => {
-                            setActiveMenuIdx(i);
-                            if (item.name.trim().length > 0 && menuSuggestions.length > 0) setShowMenuSuggestions(true);
-                          }}
-                          onBlur={() => setTimeout(() => setShowMenuSuggestions(false), 200)}
-                          placeholder="메뉴명"
-                          autoComplete="off"
-                        />
-                        {showMenuSuggestions && activeMenuIdx === i && menuSuggestions.length > 0 && (
-                          <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                            {menuSuggestions.map((s, si) => (
-                              <button
-                                key={si}
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => selectMenuSuggestion(s)}
-                                className="w-full text-left px-3 py-2 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border)] last:border-0"
-                              >
-                                <span className="text-sm text-[var(--text)]">{s.name}</span>
-                                {s.priceKrw > 0 && (
-                                  <span className="text-xs text-[var(--text-muted)] ml-2">{s.priceKrw.toLocaleString()}원</span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {/* Price: hidden on mobile, shown on desktop in same row */}
-                      <Input
-                        value={item.price}
-                        onChange={(e) => updateMenuItem(i, "price", e.target.value)}
-                        placeholder="가격(원)"
-                        type="number"
-                        className="hidden md:block w-28"
-                      />
-                      <Button variant="ghost" size="sm" onClick={() => removeMenuItem(i)} className="text-red-400 hover:text-red-300 shrink-0">
-                        삭제
-                      </Button>
-                    </div>
-                    {/* Row 2: price (mobile) + photos */}
-                    <div className="space-y-2">
-                      {/* Price: shown on mobile only */}
-                      <Input
-                        value={item.price}
-                        onChange={(e) => updateMenuItem(i, "price", e.target.value)}
-                        placeholder="가격(원)"
-                        type="number"
-                        className="md:hidden w-full"
-                      />
-                      {/* Photo thumbnails */}
-                      {item.photoPreviews.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {item.photoPreviews.map((preview, pi) => (
-                            <div key={pi} className="relative group/photo">
-                              <img src={preview} alt={`${item.name} ${pi + 1}`} className="w-16 h-16 rounded-md object-cover" />
-                              <button
-                                onClick={() => removeMenuPhoto(i, pi)}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity"
-                              >
-                                X
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {/* Add photo button */}
-                      <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors border border-dashed border-[var(--border)]">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                        {item.photos.length > 0 ? "사진 더 추가" : "사진 추가 (먹은 메뉴)"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files.length > 0) addMenuPhoto(i, e.target.files);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                    </div>
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      value={item.name}
+                      onChange={(e) => updateMenuItem(i, "name", e.target.value)}
+                      placeholder="메뉴명"
+                      className="flex-1"
+                    />
+                    <Input
+                      value={item.price}
+                      onChange={(e) => updateMenuItem(i, "price", e.target.value)}
+                      placeholder="가격(원)"
+                      type="number"
+                      className="w-28"
+                    />
+                    <Button variant="ghost" size="sm" onClick={() => removeMenuItem(i)} className="text-red-400 hover:text-red-300 shrink-0">
+                      삭제
+                    </Button>
                   </div>
                 ))}
               </CardContent>
@@ -847,14 +593,109 @@ export default function DashboardNewPage() {
           )}
 
           {/* ── 3. 사진 업로드 ── */}
-          <PhotoUploader
-            photos={photos}
-            thumbnailIdx={thumbnailIdx}
-            dragging={dragging}
-            onPhotosChange={setPhotos}
-            onThumbnailChange={setThumbnailIdx}
-            onDraggingChange={setDragging}
-          />
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">사진 *</CardTitle>
+                <Badge variant="secondary">{photos.length}/{MAX_PHOTOS}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {photos.length < MAX_PHOTOS && (
+                <div
+                  ref={dropZoneRef}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+                    dragging
+                      ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                      : "border-[var(--border)] hover:border-[var(--border-hover)]",
+                  )}
+                >
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {dragging ? "여기에 놓으세요!" : "클릭 또는 드래그앤드롭으로 사진 추가"}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">JPEG, PNG, WebP, HEIC / 최대 10MB</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </div>
+              )}
+
+              {photos.length > 0 && (
+                <DragDropContext onDragEnd={handleDragEnd}>
+                  <Droppable droppableId="photos" direction="horizontal">
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className="grid grid-cols-2 md:grid-cols-3 gap-3"
+                      >
+                        {photos.map((photo, i) => (
+                          <Draggable key={`photo-${i}`} draggableId={`photo-${i}`} index={i}>
+                            {(dragProvided, snapshot) => (
+                              <div
+                                ref={dragProvided.innerRef}
+                                {...dragProvided.draggableProps}
+                                className={cn("relative group", snapshot.isDragging && "opacity-80 shadow-lg z-10")}
+                              >
+                                <div
+                                  {...dragProvided.dragHandleProps}
+                                  className="absolute top-1 left-1 z-10 flex items-center gap-1"
+                                >
+                                  <span className="bg-black/60 text-white text-[10px] rounded px-1.5 py-0.5 cursor-grab active:cursor-grabbing flex items-center gap-0.5">
+                                    ⠿ {i + 1}
+                                  </span>
+                                </div>
+                                <img
+                                  src={photo.filePath}
+                                  alt={photo.caption ?? `사진 ${i + 1}`}
+                                  className="w-full h-32 object-cover rounded-lg"
+                                />
+                                <button
+                                  onClick={() => setThumbnailIdx(i)}
+                                  className={cn(
+                                    "absolute bottom-10 left-1 w-6 h-6 rounded-full text-xs flex items-center justify-center transition-all",
+                                    thumbnailIdx === i
+                                      ? "bg-yellow-400 text-black"
+                                      : "bg-black/40 text-white/60 opacity-0 group-hover:opacity-100",
+                                  )}
+                                  title="대표 사진 지정"
+                                >
+                                  ★
+                                </button>
+                                <button
+                                  onClick={() => removePhoto(i)}
+                                  className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  X
+                                </button>
+                                <Input
+                                  value={photo.caption ?? ""}
+                                  onChange={(e) => updateCaption(i, e.target.value)}
+                                  placeholder="사진 설명..."
+                                  className="mt-1 text-xs h-7"
+                                />
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
+              )}
+            </CardContent>
+          </Card>
 
           {/* ── 4. 문체 프로필 선택 ── */}
           <Card>
@@ -894,7 +735,7 @@ export default function DashboardNewPage() {
           {/* ── 5. 생성 버튼 ── */}
           <Button
             onClick={handleGenerate}
-            disabled={generating || (!isRevisit && !placeName.trim()) || (isRevisit && !selectedExistingPlaceId) || photos.length === 0 || !selectedStyleId}
+            disabled={generating || !placeName.trim() || photos.length === 0 || !selectedStyleId}
             className="w-full min-h-[48px] text-base"
           >
             {generating ? uploadProgress || "처리 중..." : "글 생성하기"}

@@ -16,18 +16,18 @@ function makeRequest(token?: string): NextRequest {
 const testEmail = `packet-0000-${Date.now()}@example.com`;
 let testUserId: number;
 
-beforeEach(() => {
-  execute(
+beforeEach(async () => {
+  await execute(
     "INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)",
     testEmail, "hash", "Test User 0000",
   );
-  const users = query<{ id: number }>("SELECT id FROM users WHERE email = ?", testEmail);
+  const users = await query<{ id: number }>("SELECT id FROM users WHERE email = ?", testEmail);
   testUserId = users[0].id;
 });
 
-afterEach(() => {
-  execute("DELETE FROM sessions WHERE userId = ?", testUserId);
-  execute("DELETE FROM users WHERE email = ?", testEmail);
+afterEach(async () => {
+  await execute("DELETE FROM sessions WHERE userId = ?", testUserId);
+  await execute("DELETE FROM users WHERE email = ?", testEmail);
 });
 
 describe("jsonError", () => {
@@ -50,7 +50,7 @@ describe("jsonError", () => {
 describe("requireAuthUser", () => {
   it("returns 401 with non-empty error.code when unauthenticated", async () => {
     const req = makeRequest();
-    const result = requireAuthUser(req);
+    const result = await requireAuthUser(req);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(401);
@@ -60,10 +60,10 @@ describe("requireAuthUser", () => {
     }
   });
 
-  it("returns userId for valid session", () => {
-    const token = createSessionToken(testUserId);
+  it("returns userId for valid session", async () => {
+    const token = await createSessionToken(testUserId);
     const req = makeRequest(token);
-    const result = requireAuthUser(req);
+    const result = await requireAuthUser(req);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.userId).toBe(testUserId);
@@ -82,7 +82,7 @@ describe("GET /api/_health-auth", () => {
   });
 
   it("returns 200 with {ok:true} when logged in", async () => {
-    const token = createSessionToken(testUserId);
+    const token = await createSessionToken(testUserId);
     const req = makeRequest(token);
     const res = await GET(req);
     expect(res.status).toBe(200);

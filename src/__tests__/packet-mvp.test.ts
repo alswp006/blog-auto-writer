@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getDb, execute, queryOne } from "@/lib/db";
-import { applyAppSchema } from "@/lib/db/appSchema";
+import { execute } from "@/lib/db";
 import { hashPassword, createSessionToken } from "@/lib/auth";
 import * as placeModel from "@/lib/models/place";
 import * as menuItemModel from "@/lib/models/menuItem";
@@ -8,38 +7,36 @@ import * as photoModel from "@/lib/models/photo";
 import * as postModel from "@/lib/models/post";
 import * as styleProfileModel from "@/lib/models/styleProfile";
 
-applyAppSchema(getDb());
-
 const TEST_EMAIL = `test-mvp-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
 let testUserId: number;
 let sessionToken: string;
 
 beforeEach(async () => {
   const hash = await hashPassword("password123");
-  const result = execute(
+  const result = await execute(
     "INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)",
     TEST_EMAIL + Math.random(),
     hash,
     "Test User",
   );
   testUserId = Number(result.lastInsertRowid);
-  sessionToken = createSessionToken(testUserId);
+  sessionToken = await createSessionToken(testUserId);
 });
 
-afterEach(() => {
+afterEach(async () => {
   // Clean up in FK order
-  execute("DELETE FROM posts WHERE user_id = ?", testUserId);
-  execute("DELETE FROM photos WHERE place_id IN (SELECT id FROM places)");
-  execute("DELETE FROM menu_items WHERE place_id IN (SELECT id FROM places)");
-  execute("DELETE FROM style_profiles WHERE user_id = ?", testUserId);
-  execute("DELETE FROM user_profiles WHERE user_id = ?", testUserId);
-  execute("DELETE FROM sessions WHERE userId = ?", testUserId);
-  execute("DELETE FROM users WHERE id = ?", testUserId);
+  await execute("DELETE FROM posts WHERE user_id = ?", testUserId);
+  await execute("DELETE FROM photos WHERE place_id IN (SELECT id FROM places)");
+  await execute("DELETE FROM menu_items WHERE place_id IN (SELECT id FROM places)");
+  await execute("DELETE FROM style_profiles WHERE user_id = ?", testUserId);
+  await execute("DELETE FROM user_profiles WHERE user_id = ?", testUserId);
+  await execute("DELETE FROM sessions WHERE userId = ?", testUserId);
+  await execute("DELETE FROM users WHERE id = ?", testUserId);
 });
 
 describe("Place model", () => {
-  it("creates and retrieves a place", () => {
-    const place = placeModel.create({
+  it("creates and retrieves a place", async () => {
+    const place = await placeModel.create({
       name: "Test Restaurant",
       category: "restaurant",
       address: "Seoul",
@@ -51,26 +48,26 @@ describe("Place model", () => {
     expect(place.name).toBe("Test Restaurant");
     expect(place.category).toBe("restaurant");
 
-    const found = placeModel.getById(place.id);
+    const found = await placeModel.getById(place.id);
     expect(found).not.toBeNull();
     expect(found!.name).toBe("Test Restaurant");
 
     // Cleanup
-    placeModel.remove(place.id);
+    await placeModel.remove(place.id);
   });
 });
 
 describe("Post model", () => {
-  it("creates a draft post and updates with generated content", () => {
-    const place = placeModel.create({
+  it("creates a draft post and updates with generated content", async () => {
+    const place = await placeModel.create({
       name: "Test Place",
       category: "cafe",
     });
 
-    const presets = styleProfileModel.getSystemPresets();
+    const presets = await styleProfileModel.getSystemPresets();
     expect(presets.length).toBeGreaterThan(0);
 
-    const post = postModel.create({
+    const post = await postModel.create({
       userId: testUserId,
       placeId: place.id,
       styleProfileId: presets[0].id,
@@ -79,7 +76,7 @@ describe("Post model", () => {
     expect(post.status).toBe("draft");
     expect(post.titleKo).toBeNull();
 
-    const updated = postModel.updateGenerated(post.id, {
+    const updated = await postModel.updateGenerated(post.id, {
       titleKo: "카페 리뷰",
       contentKo: "맛있는 커피",
       hashtagsKo: ["#카페", "#커피"],
@@ -94,23 +91,23 @@ describe("Post model", () => {
     expect(updated!.titleEn).toBe("Cafe Review");
 
     // Cleanup
-    postModel.remove(post.id);
-    placeModel.remove(place.id);
+    await postModel.remove(post.id);
+    await placeModel.remove(place.id);
   });
 
-  it("lists posts by user", () => {
-    const place = placeModel.create({ name: "Place", category: "restaurant" });
-    const presets = styleProfileModel.getSystemPresets();
+  it("lists posts by user", async () => {
+    const place = await placeModel.create({ name: "Place", category: "restaurant" });
+    const presets = await styleProfileModel.getSystemPresets();
 
-    const post1 = postModel.create({ userId: testUserId, placeId: place.id, styleProfileId: presets[0].id });
-    const post2 = postModel.create({ userId: testUserId, placeId: place.id, styleProfileId: presets[0].id });
+    const post1 = await postModel.create({ userId: testUserId, placeId: place.id, styleProfileId: presets[0].id });
+    const post2 = await postModel.create({ userId: testUserId, placeId: place.id, styleProfileId: presets[0].id });
 
-    const posts = postModel.listByUser(testUserId);
+    const posts = await postModel.listByUser(testUserId);
     expect(posts.length).toBeGreaterThanOrEqual(2);
 
-    postModel.remove(post1.id);
-    postModel.remove(post2.id);
-    placeModel.remove(place.id);
+    await postModel.remove(post1.id);
+    await postModel.remove(post2.id);
+    await placeModel.remove(place.id);
   });
 });
 
@@ -137,7 +134,7 @@ describe("API: POST /api/places", () => {
     expect(data.place.name).toBe("API Test Place");
 
     // Cleanup
-    placeModel.remove(data.place.id);
+    await placeModel.remove(data.place.id);
   });
 
   it("rejects without auth", async () => {
@@ -160,12 +157,12 @@ describe("API: POST /api/posts/generate", () => {
     delete process.env.OPENAI_API_KEY;
     const { POST } = await import("@/app/api/posts/generate/route");
 
-    const place = placeModel.create({
+    const place = await placeModel.create({
       name: "Fallback Test",
       category: "restaurant",
       rating: 4.5,
     });
-    const presets = styleProfileModel.getSystemPresets();
+    const presets = await styleProfileModel.getSystemPresets();
 
     const req = new Request("http://localhost/api/posts/generate", {
       method: "POST",
@@ -190,8 +187,8 @@ describe("API: POST /api/posts/generate", () => {
     expect(data.post.contentEn).toBeTruthy();
 
     // Cleanup
-    postModel.remove(data.post.id);
-    placeModel.remove(place.id);
+    await postModel.remove(data.post.id);
+    await placeModel.remove(place.id);
     if (savedKey !== undefined) process.env.OPENAI_API_KEY = savedKey;
   });
 });
@@ -200,14 +197,14 @@ describe("API: PATCH /api/posts/[id]", () => {
   it("updates post content", async () => {
     const { PATCH } = await import("@/app/api/posts/[id]/route");
 
-    const place = placeModel.create({ name: "Edit Test", category: "cafe" });
-    const presets = styleProfileModel.getSystemPresets();
-    const post = postModel.create({
+    const place = await placeModel.create({ name: "Edit Test", category: "cafe" });
+    const presets = await styleProfileModel.getSystemPresets();
+    const post = await postModel.create({
       userId: testUserId,
       placeId: place.id,
       styleProfileId: presets[0].id,
     });
-    postModel.updateGenerated(post.id, {
+    await postModel.updateGenerated(post.id, {
       titleKo: "Original",
       contentKo: "Original content",
       hashtagsKo: ["#original"],
@@ -235,7 +232,7 @@ describe("API: PATCH /api/posts/[id]", () => {
     expect(data.post.titleEn).toBe("Original EN"); // unchanged
 
     // Cleanup
-    postModel.remove(post.id);
-    placeModel.remove(place.id);
+    await postModel.remove(post.id);
+    await placeModel.remove(place.id);
   });
 });

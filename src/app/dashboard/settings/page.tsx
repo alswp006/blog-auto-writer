@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 
 type ConnectionInfo = {
   id: number;
-  platform: "tistory" | "medium";
+  platform: "medium";
   blogName: string | null;
   platformUsername: string | null;
   connectedAt: string;
@@ -30,12 +30,6 @@ export default function SettingsPage() {
   const [connections, setConnections] = useState<ConnectionInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Tistory state
-  const [tistoryToken, setTistoryToken] = useState("");
-  const [tistoryBlogName, setTistoryBlogName] = useState("");
-  const [tistorySaving, setTistorySaving] = useState(false);
-  const [tistoryDisconnecting, setTistoryDisconnecting] = useState(false);
-
   // Medium state
   const [mediumToken, setMediumToken] = useState("");
   const [mediumSaving, setMediumSaving] = useState(false);
@@ -46,7 +40,6 @@ export default function SettingsPage() {
   const [watermarkPosition, setWatermarkPosition] = useState("bottom-right");
   const [watermarkSaving, setWatermarkSaving] = useState(false);
 
-  const tistoryConnection = connections.find((c) => c.platform === "tistory");
   const mediumConnection = connections.find((c) => c.platform === "medium");
 
   // Fetch existing connections
@@ -82,41 +75,6 @@ export default function SettingsPage() {
     fetchConnections();
     fetchProfile();
   }, [fetchConnections, fetchProfile]);
-
-  // ── Tistory direct token save ──
-  const handleTistorySave = async () => {
-    if (!tistoryToken.trim() || !tistoryBlogName.trim()) return;
-    setTistorySaving(true);
-    try {
-      const res = await fetch("/api/connections/tistory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: tistoryToken.trim(), blogName: tistoryBlogName.trim() }),
-      });
-      if (!res.ok) throw new Error("저장 실패");
-      showToast("티스토리 연동 완료!");
-      setTistoryToken("");
-      setTistoryBlogName("");
-      fetchConnections();
-    } catch {
-      showToast("티스토리 연동 저장 실패");
-    } finally {
-      setTistorySaving(false);
-    }
-  };
-
-  const handleTistoryDisconnect = async () => {
-    setTistoryDisconnecting(true);
-    try {
-      await fetch("/api/connections/tistory", { method: "DELETE" });
-      showToast("티스토리 연동 해제됨");
-      fetchConnections();
-    } catch {
-      showToast("연동 해제 실패");
-    } finally {
-      setTistoryDisconnecting(false);
-    }
-  };
 
   // ── Medium ──
   const handleMediumSave = async () => {
@@ -200,82 +158,6 @@ export default function SettingsPage() {
         </div>
       ) : (
         <>
-          {/* Tistory Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">티스토리 연동</CardTitle>
-                  <CardDescription>티스토리 Open API를 통해 자동 발행합니다</CardDescription>
-                </div>
-                {tistoryConnection && (
-                  <Badge variant="default" className="text-xs">연동됨</Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {tistoryConnection ? (
-                <>
-                  <div className="rounded-lg bg-[var(--bg-elevated)] p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-[var(--text-secondary)]">블로그</span>
-                      <span className="text-sm font-medium">{tistoryConnection.blogName}.tistory.com</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-[var(--text-secondary)]">연동일</span>
-                      <span className="text-sm">{new Date(tistoryConnection.connectedAt).toLocaleDateString("ko-KR")}</span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleTistoryDisconnect}
-                    disabled={tistoryDisconnecting}
-                  >
-                    {tistoryDisconnecting ? "해제 중..." : "연동 해제"}
-                  </Button>
-                </>
-              ) : (
-                <div className="space-y-4">
-                  <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
-                    <p className="text-xs text-yellow-400">
-                      티스토리 Open API는 2023년에 신규 앱 등록이 중단되었습니다.
-                      기존에 발급받은 Access Token이 있는 경우에만 연동할 수 있습니다.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tistory-token">Access Token</Label>
-                    <Input
-                      id="tistory-token"
-                      type="password"
-                      value={tistoryToken}
-                      onChange={(e) => setTistoryToken(e.target.value)}
-                      placeholder="기존에 발급받은 Access Token"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tistory-blog">블로그 이름</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="tistory-blog"
-                        value={tistoryBlogName}
-                        onChange={(e) => setTistoryBlogName(e.target.value)}
-                        placeholder="myblog"
-                      />
-                      <span className="text-sm text-[var(--text-muted)] whitespace-nowrap shrink-0">.tistory.com</span>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={handleTistorySave}
-                    disabled={tistorySaving || !tistoryToken.trim() || !tistoryBlogName.trim()}
-                  >
-                    {tistorySaving ? "연동 중..." : "티스토리 연동하기"}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Medium Section */}
           <Card>
             <CardHeader>
@@ -403,10 +285,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="rounded-lg bg-[var(--bg-elevated)] p-4 font-mono text-xs space-y-1 text-[var(--text-muted)]">
-                <p># 티스토리</p>
-                <p>TISTORY_ACCESS_TOKEN=your_token</p>
-                <p>TISTORY_BLOG_NAME=your_blog</p>
-                <p className="pt-2"># Medium</p>
+                <p># Medium</p>
                 <p>MEDIUM_INTEGRATION_TOKEN=your_token</p>
                 <p className="pt-2"># WordPress</p>
                 <p>WORDPRESS_URL=https://your-site.com</p>

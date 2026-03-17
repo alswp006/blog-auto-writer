@@ -4,7 +4,6 @@ import * as postModel from "@/lib/models/post";
 import * as photoModel from "@/lib/models/photo";
 import * as postVariantModel from "@/lib/models/postVariant";
 import { recordPublish } from "@/lib/models/publishHistory";
-import { getTistoryConfig, publishToTistory } from "@/lib/publish/tistory";
 import { getMediumConfig, publishToMedium } from "@/lib/publish/medium";
 import { getWordPressConfig, publishToWordPress } from "@/lib/publish/wordpress";
 import { loadPhotoBuffers } from "@/lib/publish/photo-embed";
@@ -26,10 +25,9 @@ export async function POST(request: NextRequest) {
     const platform = post.scheduledPlatform;
     const lang = (post.scheduledLang ?? "ko") as "ko" | "en";
 
-    // Check for platform variant (wordpress falls back to tistory variant)
-    const variantPlatform = platform === "wordpress" ? "tistory" : platform;
-    const variant = (variantPlatform === "tistory" || variantPlatform === "medium" || variantPlatform === "naver")
-      ? await postVariantModel.getByPostAndPlatform(post.id, variantPlatform, lang)
+    // Check for platform variant
+    const variant = (platform === "medium" || platform === "naver")
+      ? await postVariantModel.getByPostAndPlatform(post.id, platform, lang)
       : null;
 
     const title = variant ? variant.title : (lang === "ko" ? post.titleKo : post.titleEn);
@@ -50,12 +48,7 @@ export async function POST(request: NextRequest) {
     try {
       let url: string | undefined;
 
-      if (platform === "tistory") {
-        const config = getTistoryConfig();
-        if (!config) throw new Error("Tistory not configured");
-        const result = await publishToTistory(config, title, content, tags, photoBuffers);
-        url = result.url;
-      } else if (platform === "medium") {
+      if (platform === "medium") {
         const config = getMediumConfig();
         if (!config) throw new Error("Medium not configured");
         const result = await publishToMedium(config, title, content, tags, photoBuffers);
@@ -65,17 +58,17 @@ export async function POST(request: NextRequest) {
         if (!config) throw new Error("WordPress not configured");
         const result = await publishToWordPress(config, title, content, tags, photoBuffers);
         url = result.url;
-      } else if (platform === "naver") {
-        // Naver doesn't have API publish — skip
+      } else if (platform === "naver" || platform === "tistory") {
+        // Naver/Tistory don't have API publish — copy-paste only
         await postModel.unschedule(post.id);
-        results.push({ postId: post.id, platform, success: false, error: "Naver does not support API publishing" });
+        results.push({ postId: post.id, platform, success: false, error: `${platform} does not support API publishing` });
         continue;
       }
 
       // Record success
       await recordPublish(
         post.id,
-        platform as "tistory" | "medium" | "wordpress" | "naver",
+        platform as "medium" | "wordpress" | "naver",
         lang,
         url,
       );
@@ -85,7 +78,7 @@ export async function POST(request: NextRequest) {
       const errorMsg = err instanceof Error ? err.message : "Unknown error";
       await recordPublish(
         post.id,
-        platform as "tistory" | "medium" | "wordpress" | "naver",
+        platform as "medium" | "wordpress" | "naver",
         lang,
         undefined,
         errorMsg,
