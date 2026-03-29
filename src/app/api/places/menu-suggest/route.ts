@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
       .join("\n\n---\n\n")
       .slice(0, 6000);
 
-    // Phase 4: AI로 메뉴명+가격 추출
+    // Phase 4: AI로 메뉴명+가격 추출 (OpenAI 사용 — 텍스트 작업)
     const menus = await extractMenusWithAI(placeName, combinedText);
     return NextResponse.json({ menus });
   } catch {
@@ -152,11 +152,14 @@ async function fetchNaverBlogItems(
   }
 }
 
-// ── AI extraction ──
+// ── AI extraction (OpenAI only — 텍스트 분석에 Vision 모델 불필요) ──
 
 type MenuSuggestion = { name: string; price: number };
 
 async function extractMenusWithAI(placeName: string, blogText: string): Promise<MenuSuggestion[]> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return [];
+
   const prompt = `아래는 "${placeName}"에 대한 블로그 리뷰와 검색 결과입니다:
 
 ${blogText}
@@ -173,19 +176,25 @@ ${blogText}
 
 JSON 형식: { "menus": [{ "name": "메뉴명", "price": 12000 }] }`;
 
-  // Gemini 우선
-  if (process.env.GEMINI_API_KEY) {
-    const result = await callGemini(prompt);
-    if (result) return result;
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_completion_tokens: 500,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content ?? "";
+    return parseMenuResponse(text);
+  } catch {
+    return [];
   }
-
-  // OpenAI 폴백
-  if (process.env.OPENAI_API_KEY) {
-    const result = await callOpenAI(prompt);
-    if (result) return result;
-  }
-
-  return [];
 }
 
 /** Category/generic names that should never be returned as menu items */
@@ -205,57 +214,5 @@ function parseMenuResponse(content: string): MenuSuggestion[] {
       .slice(0, 5);
   } catch {
     return [];
-  }
-}
-
-async function callGemini(prompt: string): Promise<MenuSuggestion[] | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const model = process.env.GEMINI_VISION_MODEL ?? "gemini-2.0-flash-lite";
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json", maxOutputTokens: 500 },
-        }),
-        signal: AbortSignal.timeout(10000),
-      },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    return parseMenuResponse(text);
-  } catch {
-    return null;
-  }
-}
-
-async function callOpenAI(prompt: string): Promise<MenuSuggestion[] | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        max_completion_tokens: 500,
-        response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content ?? "";
-    return parseMenuResponse(text);
-  } catch {
-    return null;
   }
 }

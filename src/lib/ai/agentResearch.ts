@@ -189,51 +189,10 @@ JSON으로 응답:
   }
 }
 
-// ── AI 호출 유틸리티 (Gemini 우선, OpenAI 폴백) ──
+// ── AI 호출 유틸리티 (OpenAI 사용 — 텍스트 작업에 Vision 모델 불필요) ──
 
-async function callAI(prompt: string, apiKey: string): Promise<string | null> {
-  // Gemini 사용 가능하면 Gemini 우선 (더 빠르고 저렴)
-  if (process.env.GEMINI_API_KEY) {
-    const geminiResult = await callGemini(prompt);
-    if (geminiResult) return geminiResult;
-  }
-
-  // OpenAI 폴백
-  if (process.env.OPENAI_API_KEY) {
-    return callOpenAI(prompt);
-  }
-
-  return null;
-}
-
-async function callGemini(prompt: string): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
-  const model = process.env.GEMINI_VISION_MODEL ?? "gemini-2.0-flash-lite";
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            maxOutputTokens: 1000,
-          },
-        }),
-        signal: AbortSignal.timeout(10000),
-      },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
-  } catch {
-    return null;
-  }
+async function callAI(prompt: string, _apiKey: string): Promise<string | null> {
+  return callOpenAI(prompt);
 }
 
 async function callOpenAI(prompt: string): Promise<string | null> {
@@ -248,7 +207,7 @@ async function callOpenAI(prompt: string): Promise<string | null> {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
         max_completion_tokens: 1000,
         response_format: { type: "json_object" },

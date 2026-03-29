@@ -86,13 +86,13 @@ function parseVisionResponse(content: string): { descriptions: string[]; photoTy
   }
 }
 
-// ── Gemini Flash-Lite Vision ──
+// ── Gemini Vision (gemini-2.0-flash — lite보다 Vision 품질 우수) ──
 
 async function describeWithGemini(entries: ImageEntry[]): Promise<{ descriptions: string[]; photoTypes: string[] } | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
-  const model = process.env.GEMINI_VISION_MODEL ?? "gemini-2.0-flash-lite";
+  const model = process.env.GEMINI_VISION_MODEL ?? "gemini-2.0-flash";
 
   try {
     // Gemini API: parts 배열에 텍스트와 이미지를 함께 전달
