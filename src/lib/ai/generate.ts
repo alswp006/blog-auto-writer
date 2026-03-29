@@ -2,6 +2,11 @@ import type { Place } from "@/lib/models/modelTypes";
 import type { MenuItem } from "@/lib/models/modelTypes";
 import type { Photo } from "@/lib/models/modelTypes";
 import type { StyleProfile, UserProfile } from "@/lib/models/modelTypes";
+import type { EnrichedPlaceInfo } from "@/lib/ai/enrich";
+import type { PlaceInsight } from "@/lib/ai/agentResearch";
+import type { PhotoDescription } from "@/lib/ai/photoDescribe";
+import { validateContent } from "@/lib/ai/qualityGate";
+import { callLLM, getProvider } from "@/lib/ai/providers";
 
 export type GeneratedContent = {
   titleKo: string;
@@ -214,6 +219,9 @@ function buildPrompt(
   userMemo: string,
   isRevisit: boolean = false,
   pastExcerpts?: string,
+  enrichedPlace?: EnrichedPlaceInfo,
+  placeInsight?: PlaceInsight,
+  photoDescriptions?: PhotoDescription[],
 ): string {
   const cat = place.category;
   const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
@@ -249,13 +257,82 @@ function buildPrompt(
     prompt += `아래 사진들을 글의 흐름에 맞는 위치에 자연스럽게 배치하세요.\n`;
     prompt += `사진을 넣을 위치에 [PHOTO:인덱스] 마커를 삽입하세요 (예: [PHOTO:0], [PHOTO:1]).\n`;
     prompt += `모든 사진을 한 곳에 몰아넣지 말고, 글의 맥락에 맞게 분산 배치하세요.\n\n`;
+
+    // Build a lookup of rich descriptions by orderIndex
+    const descMap = new Map<number, PhotoDescription>();
+    if (photoDescriptions) {
+      for (const pd of photoDescriptions) {
+        descMap.set(pd.orderIndex, pd);
+      }
+    }
+
     for (const photo of photos) {
-      prompt += `- [PHOTO:${photo.orderIndex}]: ${photo.caption ?? "(설명 없음)"}\n`;
+      const desc = descMap.get(photo.orderIndex);
+      if (desc && desc.richDescription) {
+        prompt += `- [PHOTO:${photo.orderIndex}] (${desc.photoType}): ${desc.richDescription}\n`;
+      } else {
+        prompt += `- [PHOTO:${photo.orderIndex}]: ${photo.caption ?? "(설명 없음)"}\n`;
+      }
     }
   }
 
   if (userMemo) {
     prompt += `\n## 작성자 메모\n${userMemo}\n`;
+  }
+
+  // ── Enriched place data (from Naver/Google APIs) ──
+  if (enrichedPlace) {
+    const hasData = enrichedPlace.naverCategory || enrichedPlace.roadAddress ||
+      enrichedPlace.blogKeywords.length > 0 || enrichedPlace.blogExcerpts.length > 0;
+    if (hasData) {
+      prompt += `\n## 보강 장소 정보 (참고용 — 그대로 복사하지 말고 자연스럽게 녹여쓰세요)\n`;
+      if (enrichedPlace.naverCategory) {
+        prompt += `- 네이버 카테고리: ${enrichedPlace.naverCategory}\n`;
+      }
+      if (enrichedPlace.roadAddress) {
+        prompt += `- 도로명 주소: ${enrichedPlace.roadAddress}\n`;
+      }
+      if (enrichedPlace.blogKeywords.length > 0) {
+        prompt += `- 블로그에서 자주 언급되는 키워드: ${enrichedPlace.blogKeywords.slice(0, 10).join(", ")}\n`;
+      }
+      if (enrichedPlace.blogExcerpts.length > 0) {
+        prompt += `- 다른 블로거 후기 발췌 (톤 참고용):\n`;
+        for (const excerpt of enrichedPlace.blogExcerpts.slice(0, 3)) {
+          prompt += `  > ${excerpt.slice(0, 200)}\n`;
+        }
+      }
+    }
+  }
+
+  // ── AI Research insights ──
+  if (placeInsight) {
+    const hasInsight = placeInsight.atmosphere || placeInsight.popularMenus.length > 0 ||
+      placeInsight.tips.length > 0 || placeInsight.nearbyLandmarks.length > 0 ||
+      placeInsight.recentTrends || placeInsight.visitorSentiment;
+    if (hasInsight) {
+      prompt += `\n## AI 리서치 결과 (참고용 — 직접 체험한 것처럼 자연스럽게 활용하세요)\n`;
+      if (placeInsight.atmosphere) {
+        prompt += `- 분위기: ${placeInsight.atmosphere}\n`;
+      }
+      if (placeInsight.popularMenus.length > 0) {
+        prompt += `- 인기 메뉴: ${placeInsight.popularMenus.join(", ")}\n`;
+      }
+      if (placeInsight.tips.length > 0) {
+        prompt += `- 방문 팁: ${placeInsight.tips.join(" / ")}\n`;
+      }
+      if (placeInsight.nearbyLandmarks.length > 0) {
+        prompt += `- 근처 교통/랜드마크: ${placeInsight.nearbyLandmarks.join(", ")}\n`;
+      }
+      if (placeInsight.recentTrends) {
+        prompt += `- 최근 변화: ${placeInsight.recentTrends}\n`;
+      }
+      if (placeInsight.visitorSentiment) {
+        prompt += `- 방문자 평가: ${placeInsight.visitorSentiment}\n`;
+      }
+      if (placeInsight.bestPhotoSpots.length > 0) {
+        prompt += `- 사진 포인트: ${placeInsight.bestPhotoSpots.join(", ")}\n`;
+      }
+    }
   }
 
   if (isRevisit) {
@@ -647,6 +724,43 @@ ${content.contentEn}
   }
 }
 
+// ── Provider-agnostic generation call ──
+
+async function callLLMAndParse(
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<GeneratedContent> {
+  const result = await callLLM({
+    systemPrompt,
+    userPrompt,
+    maxTokens: 8192,
+    timeout: 120_000,
+  });
+
+  let parsed: GeneratedContent & { plan?: string };
+  try {
+    parsed = JSON.parse(result.content) as GeneratedContent & { plan?: string };
+  } catch {
+    throw new Error("AI 응답이 잘렸습니다. 다시 시도해주세요.");
+  }
+
+  delete parsed.plan;
+
+  if (!parsed.titleKo || !parsed.contentKo || !parsed.titleEn || !parsed.contentEn) {
+    throw new Error("AI 응답이 불완전합니다");
+  }
+
+  return {
+    titleKo: parsed.titleKo,
+    contentKo: parsed.contentKo,
+    hashtagsKo: Array.isArray(parsed.hashtagsKo) ? parsed.hashtagsKo : [],
+    titleEn: parsed.titleEn,
+    contentEn: parsed.contentEn,
+    hashtagsEn: Array.isArray(parsed.hashtagsEn) ? parsed.hashtagsEn : [],
+    usage: result.usage,
+  };
+}
+
 // ── Main export ──
 
 export type ProgressCallback = (step: string, message: string) => void;
@@ -660,6 +774,9 @@ export async function generateBlogPost(
   userMemo: string,
   isRevisit: boolean = false,
   pastExcerpts?: string,
+  enrichedPlace?: EnrichedPlaceInfo,
+  placeInsight?: PlaceInsight,
+  photoDescriptions?: PhotoDescription[],
   onProgress?: ProgressCallback,
 ): Promise<GeneratedContent> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -668,9 +785,50 @@ export async function generateBlogPost(
     return generateFallback(place, menuItems, photos, style, userProfile, userMemo);
   }
 
+  const provider = getProvider();
+  const useProvider = provider === "anthropic" && process.env.ANTHROPIC_API_KEY;
+
+  const systemPrompt = `당신은 한국에서 가장 인기 있는 블로거입니다. 실제 방문 경험을 생생하게 전달하는 것이 특기입니다.
+
+작성 원칙:
+- 절대 번호 매기기(1. 2. 3.)나 글머리 기호(- •)를 사용하지 마세요
+- 소제목(##, ###)을 사용하지 마세요
+- 모든 정보를 자연스러운 서술형 문단으로 풀어쓰세요
+- 마치 친구에게 이야기하듯 생동감 있게 작성하세요
+- 충분히 길고 상세하게 작성하세요 (한국어 2500자 이상, 영어 1500자 이상)
+- "소개해 드리겠습니다", "알아보겠습니다" 같은 AI스러운 표현 절대 금지
+- 반드시 plan 필드를 먼저 작성한 후 그 계획에 따라 글을 쓰세요`;
+
   onProgress?.("generating", "AI 글 생성 중...");
-  const prompt = buildPrompt(place, menuItems, photos, style, userProfile, userMemo, isRevisit, pastExcerpts);
-  const draft = await callOpenAI(prompt, apiKey);
+  const prompt = buildPrompt(
+    place, menuItems, photos, style, userProfile, userMemo,
+    isRevisit, pastExcerpts, enrichedPlace, placeInsight, photoDescriptions,
+  );
+
+  let draft: GeneratedContent;
+  if (useProvider) {
+    // Use unified provider (OpenAI or Anthropic)
+    draft = await callLLMAndParse(systemPrompt, prompt);
+  } else {
+    draft = await callOpenAI(prompt, apiKey);
+  }
+
+  // ── Quality gate: validate and retry once if needed ──
+  onProgress?.("validating", "품질 검증 중...");
+  const check = validateContent(draft, photos.length, place.name);
+  if (!check.passed && check.feedback) {
+    onProgress?.("generating", "품질 미달 — 재생성 중...");
+    const retryPrompt = prompt + `\n\n## ⚠️ 재생성 피드백\n${check.feedback}`;
+    try {
+      if (useProvider) {
+        draft = await callLLMAndParse(systemPrompt, retryPrompt);
+      } else {
+        draft = await callOpenAI(retryPrompt, apiKey);
+      }
+    } catch {
+      // retry failed — use original draft
+    }
+  }
 
   // Self-refine: polish pass (실패해도 원본 반환)
   onProgress?.("polishing", "글 다듬는 중...");

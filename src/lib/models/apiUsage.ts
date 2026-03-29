@@ -9,6 +9,9 @@ const MODEL_RATES: Record<string, { input: number; output: number }> = {
   "gpt-5": { input: 1.25, output: 10.00 },
   "gpt-5.2": { input: 1.75, output: 14.00 },
   "gpt-5.4": { input: 2.50, output: 15.00 },
+  "claude-opus-4-6": { input: 5.00, output: 25.00 },
+  "claude-sonnet-4-6": { input: 3.00, output: 15.00 },
+  "claude-haiku-4-5": { input: 0.80, output: 4.00 },
 };
 
 /** Calculate cost in USD given model + token counts */
@@ -25,6 +28,7 @@ export async function recordUsage(
   inputTokens: number,
   outputTokens: number,
   cost: number,
+  step?: string,
 ): Promise<void> {
   await execute(
     `INSERT INTO api_usage (user_id, model, input_tokens, output_tokens, cost, created_at)

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Eye, Heart, MessageCircle, TrendingUp, TrendingDown } from "lucide-react";
 
 type DailyRevenue = {
   date: string;
@@ -39,6 +40,7 @@ export default function AnalyticsPage() {
   const [topPosts, setTopPosts] = useState<TopPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [period, setPeriod] = useState<7 | 30 | 90>(30);
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -81,8 +83,14 @@ export default function AnalyticsPage() {
     }
   };
 
-  // Revenue chart helpers
-  const maxEarnings = Math.max(...daily.map((d) => d.earnings), 1);
+  // Filter daily data by period
+  const filteredDaily = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - period);
+    return daily.filter((d) => new Date(d.date) >= cutoff);
+  }, [daily, period]);
+
+  const maxEarnings = Math.max(...filteredDaily.map((d) => d.earnings), 1);
 
   if (loading) {
     return (
@@ -202,32 +210,62 @@ export default function AnalyticsPage() {
               </Card>
             </div>
 
-            {/* Daily chart (CSS-based bar chart) */}
+            {/* Daily chart — SVG bar chart with period filter */}
             {daily.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">일별 수익</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">일별 수익</CardTitle>
+                    <div className="flex gap-1">
+                      {([7, 30, 90] as const).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setPeriod(p)}
+                          className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                            period === p
+                              ? "bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30"
+                              : "text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--border-hover)]"
+                          }`}
+                        >
+                          {p}일
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-end gap-1 h-40">
-                    {daily.map((d) => (
-                      <div
-                        key={d.date}
-                        className="flex-1 flex flex-col items-center gap-1"
-                      >
-                        <span className="text-[9px] text-[var(--text-muted)]">
-                          ${d.earnings.toFixed(2)}
-                        </span>
-                        <div
-                          className="w-full bg-[var(--accent)] rounded-t-sm min-h-[2px] transition-all"
-                          style={{ height: `${(d.earnings / maxEarnings) * 100}%` }}
-                        />
-                        <span className="text-[9px] text-[var(--text-muted)]">
-                          {d.date.slice(8)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  {filteredDaily.length === 0 ? (
+                    <p className="text-sm text-[var(--text-muted)] text-center py-8">해당 기간에 수익 데이터가 없습니다.</p>
+                  ) : (
+                    <svg viewBox={`0 0 ${filteredDaily.length * 32} 160`} className="w-full h-40" preserveAspectRatio="none">
+                      {filteredDaily.map((d, i) => {
+                        const barH = Math.max(2, (d.earnings / maxEarnings) * 130);
+                        const x = i * 32 + 4;
+                        return (
+                          <g key={d.date}>
+                            <rect
+                              x={x}
+                              y={140 - barH}
+                              width={24}
+                              height={barH}
+                              rx={3}
+                              className="fill-[var(--accent)] opacity-80 hover:opacity-100 transition-opacity"
+                            />
+                            <title>{`${d.date}: $${d.earnings.toFixed(2)}`}</title>
+                            <text
+                              x={x + 12}
+                              y={155}
+                              textAnchor="middle"
+                              className="fill-[var(--text-muted)] text-[8px]"
+                              fontSize="8"
+                            >
+                              {d.date.slice(8)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -282,10 +320,10 @@ export default function AnalyticsPage() {
                     <Badge variant="outline" className="text-[10px] shrink-0">
                       {PLATFORM_LABELS[post.platform] ?? post.platform}
                     </Badge>
-                    <div className="flex gap-4 text-xs text-[var(--text-secondary)] shrink-0">
-                      <span title="조회수">👁 {post.views.toLocaleString()}</span>
-                      <span title="좋아요">♡ {post.likes}</span>
-                      <span title="댓글">💬 {post.comments}</span>
+                    <div className="flex gap-3 text-xs text-[var(--text-secondary)] shrink-0">
+                      <span className="flex items-center gap-1" title="조회수"><Eye className="w-3 h-3" /> {post.views.toLocaleString()}</span>
+                      <span className="flex items-center gap-1" title="좋아요"><Heart className="w-3 h-3" /> {post.likes}</span>
+                      <span className="flex items-center gap-1" title="댓글"><MessageCircle className="w-3 h-3" /> {post.comments}</span>
                     </div>
                   </div>
                 </CardContent>

@@ -8,6 +8,9 @@ import * as photoModel from "@/lib/models/photo";
 import * as styleProfileModel from "@/lib/models/styleProfile";
 import * as userProfileModel from "@/lib/models/userProfile";
 import { generateBlogPost } from "@/lib/ai/generate";
+import { enrichPlace } from "@/lib/ai/enrich";
+import { researchPlace } from "@/lib/ai/agentResearch";
+import { describePhotosForGeneration } from "@/lib/ai/photoDescribe";
 import * as apiUsageModel from "@/lib/models/apiUsage";
 
 export const maxDuration = 300; // Vercel 서버리스 함수 타임아웃 (초) — Pro: 300s, Hobby: 60s 자동 제한
@@ -75,7 +78,22 @@ export async function POST(request: NextRequest) {
       pastExcerpts = excerpts.join("\n\n");
     }
 
-    const generated = await generateBlogPost(place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, pastExcerpts);
+    // ── Pipeline enrichment (parallel) ──
+    const [enrichedPlace, placeInsight, photoDescriptions] = await Promise.all([
+      enrichPlace(place.name, place.address).catch(() => ({
+        naverCategory: null, roadAddress: null, blogExcerpts: [], blogFullTexts: [], blogKeywords: [],
+      })),
+      researchPlace(place.name, place.category, place.address).catch(() => ({
+        popularMenus: [], atmosphere: null, tips: [], nearbyLandmarks: [],
+        recentTrends: null, visitorSentiment: null, bestPhotoSpots: [], rawSources: [],
+      })),
+      describePhotosForGeneration(photos).catch(() => []),
+    ]);
+
+    const generated = await generateBlogPost(
+      place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, pastExcerpts,
+      enrichedPlace, placeInsight, photoDescriptions,
+    );
 
     // Record API usage
     if (generated.usage) {

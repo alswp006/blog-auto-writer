@@ -4,6 +4,42 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+function NavLink({ href, label, pathname }: { href: string; label: string; pathname: string }) {
+  const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={cn(
+        isActive && "bg-[var(--accent)]/10 text-[var(--accent)]",
+      )}
+      asChild
+    >
+      <Link href={href} className="no-underline">
+        {label}
+      </Link>
+    </Button>
+  );
+}
+
+function MobileNavLink({ href, label, pathname }: { href: string; label: string; pathname: string }) {
+  const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={cn(
+        "justify-start",
+        isActive && "bg-[var(--accent)]/10 text-[var(--accent)]",
+      )}
+      asChild
+    >
+      <Link href={href} className="no-underline">{label}</Link>
+    </Button>
+  );
+}
 
 export function Nav() {
   const router = useRouter();
@@ -30,6 +66,16 @@ export function Nav() {
     router.push("/");
   };
 
+  const navItems = [
+    { href: "/dashboard", label: "대시보드" },
+    { href: "/dashboard/new", label: "새 글" },
+    { href: "/style-profiles", label: "문체" },
+    { href: "/dashboard/analytics", label: "분석" },
+    { href: "/dashboard/calendar", label: "캘린더" },
+    { href: "/dashboard/settings", label: "설정" },
+    { href: "/about", label: "소개" },
+  ];
+
   return (
     <nav className="border-b border-[var(--border)] bg-[var(--bg-elevated)] relative">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -38,58 +84,23 @@ export function Nav() {
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-1">
           {user ? (
             <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard" className="no-underline">
-                  대시보드
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/new" className="no-underline">
-                  새 글
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/style-profiles" className="no-underline">
-                  문체
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/calendar" className="no-underline">
-                  캘린더
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/settings" className="no-underline">
-                  설정
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/about" className="no-underline">
-                  소개
-                </Link>
-              </Button>
+              {navItems.map((item) => (
+                <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
+              ))}
               {user.isAdmin && (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/admin" className="no-underline">
-                    관리자
-                  </Link>
-                </Button>
+                <NavLink href="/admin" label="관리자" pathname={pathname} />
               )}
-              <span className="text-xs text-[var(--text-muted)]">{user.name || user.email}</span>
+              <span className="text-xs text-[var(--text-muted)] ml-2">{user.name || user.email}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 로그아웃
               </Button>
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/about" className="no-underline">
-                  소개
-                </Link>
-              </Button>
+              <NavLink href="/about" label="소개" pathname={pathname} />
               <Button variant="outline" size="sm" asChild>
                 <Link href="/login" className="no-underline">
                   로그인
@@ -104,11 +115,12 @@ export function Nav() {
           )}
         </div>
 
-        {/* Mobile hamburger button */}
+        {/* Mobile hamburger button — 44×44px touch target (WCAG) */}
         <button
           onClick={() => setMobileOpen((v) => !v)}
-          className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5 shrink-0"
-          aria-label="메뉴 열기"
+          className="md:hidden flex flex-col justify-center items-center w-11 h-11 gap-1.5 shrink-0"
+          aria-label={mobileOpen ? "메뉴 닫기" : "메뉴 열기"}
+          aria-expanded={mobileOpen}
         >
           <span className={`block w-5 h-0.5 bg-[var(--text)] transition-transform ${mobileOpen ? "rotate-45 translate-y-1" : ""}`} />
           <span className={`block w-5 h-0.5 bg-[var(--text)] transition-opacity ${mobileOpen ? "opacity-0" : ""}`} />
@@ -123,28 +135,11 @@ export function Nav() {
             {user ? (
               <>
                 <span className="text-xs text-[var(--text-muted)] px-3 py-1">{user.name || user.email}</span>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
-                  <Link href="/dashboard" className="no-underline">대시보드</Link>
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
-                  <Link href="/dashboard/new" className="no-underline">새 글</Link>
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
-                  <Link href="/style-profiles" className="no-underline">문체</Link>
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
-                  <Link href="/dashboard/calendar" className="no-underline">캘린더</Link>
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
-                  <Link href="/dashboard/settings" className="no-underline">설정</Link>
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
-                  <Link href="/about" className="no-underline">소개</Link>
-                </Button>
+                {navItems.map((item) => (
+                  <MobileNavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
+                ))}
                 {user.isAdmin && (
-                  <Button variant="ghost" size="sm" className="justify-start" asChild>
-                    <Link href="/admin" className="no-underline">관리자</Link>
-                  </Button>
+                  <MobileNavLink href="/admin" label="관리자" pathname={pathname} />
                 )}
                 <div className="border-t border-[var(--border)] mt-1 pt-1">
                   <Button variant="outline" size="sm" onClick={handleLogout} className="w-full">
@@ -154,9 +149,7 @@ export function Nav() {
               </>
             ) : (
               <>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
-                  <Link href="/about" className="no-underline">소개</Link>
-                </Button>
+                <MobileNavLink href="/about" label="소개" pathname={pathname} />
                 <Button variant="outline" size="sm" asChild>
                   <Link href="/login" className="no-underline">로그인</Link>
                 </Button>

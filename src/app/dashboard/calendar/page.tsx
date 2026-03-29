@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Plus } from "lucide-react";
 
 type CalendarPost = {
   id: number;
@@ -43,13 +45,19 @@ const STATUS_COLORS: Record<string, string> = {
   scheduled: "bg-blue-500/15 text-blue-400 border-blue-500/30",
 };
 
+const CATEGORY_LABEL: Record<string, string> = {
+  restaurant: "맛집", cafe: "카페", accommodation: "숙소", attraction: "여행지",
+};
+
 export default function CalendarPage() {
+  const router = useRouter();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [posts, setPosts] = useState<CalendarPost[]>([]);
   const [publishes, setPublishes] = useState<Publish[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -94,8 +102,10 @@ export default function CalendarPage() {
   const getYear = (dateStr: string) => safeDate(dateStr)?.getFullYear() ?? 0;
   const isThisMonth = (dateStr: string) => getYear(dateStr) === year && getMonth(dateStr) === month;
 
+  const filteredPosts = categoryFilter === "all" ? posts : posts.filter((p) => p.placeCategory === categoryFilter);
+
   const postsByDay = new Map<number, CalendarPost[]>();
-  for (const post of posts) {
+  for (const post of filteredPosts) {
     const day = isThisMonth(post.createdAt) ? getDay(post.createdAt) : null;
     const schedDay = post.scheduledAt && isThisMonth(post.scheduledAt) ? getDay(post.scheduledAt) : null;
     if (day) {
@@ -120,8 +130,8 @@ export default function CalendarPage() {
   const todayDay = today.getFullYear() === year && today.getMonth() + 1 === month ? today.getDate() : null;
 
   // Stats
-  const totalPosts = posts.length;
-  const generatedPosts = posts.filter((p) => p.status === "generated").length;
+  const totalPosts = filteredPosts.length;
+  const generatedPosts = filteredPosts.filter((p) => p.status === "generated").length;
   const publishedCount = publishes.filter((p) => p.status === "published" || p.status === "copied").length;
 
   return (
@@ -162,8 +172,65 @@ export default function CalendarPage() {
           </Card>
         </div>
 
-        {/* Calendar */}
-        <Card>
+        {/* Category filter */}
+        <div className="flex gap-2 flex-wrap">
+          {["all", "restaurant", "cafe", "accommodation", "attraction"].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                categoryFilter === cat
+                  ? "bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]"
+                  : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-hover)]"
+              }`}
+            >
+              {cat === "all" ? "전체" : `${CATEGORY_EMOJI[cat] ?? ""} ${CATEGORY_LABEL[cat] ?? cat}`}
+            </button>
+          ))}
+        </div>
+
+        {/* Calendar — desktop grid, mobile list */}
+        {/* Mobile list view */}
+        <div className="md:hidden space-y-2">
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+            const dayPosts = postsByDay.get(day) ?? [];
+            if (dayPosts.length === 0) return null;
+            const isToday = day === todayDay;
+            return (
+              <Card key={day} className={isToday ? "border-[var(--accent)]/30" : ""}>
+                <CardContent className="p-3">
+                  <p className={cn("text-xs font-medium mb-2", isToday && "text-[var(--accent)]")}>
+                    {month}월 {day}일 {DAYS_KO[new Date(year, month - 1, day).getDay()]}요일
+                    {isToday && <Badge variant="secondary" className="ml-2 text-[9px]">오늘</Badge>}
+                  </p>
+                  <div className="space-y-1">
+                    {dayPosts.map((post, j) => (
+                      <Link key={`${post.id}-${j}`} href={`/dashboard/${post.id}/edit`} className="no-underline block">
+                        <div className={cn(
+                          "text-xs px-2 py-1.5 rounded border flex items-center gap-2",
+                          STATUS_COLORS[post.status] ?? STATUS_COLORS.draft,
+                        )}>
+                          <span>{CATEGORY_EMOJI[post.placeCategory ?? ""] ?? ""}</span>
+                          <span className="truncate">{post.placeName ?? "글"}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          }).filter(Boolean)}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).every((day) => (postsByDay.get(day) ?? []).length === 0) && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-sm text-[var(--text-muted)]">이번 달에 작성한 글이 없습니다.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Desktop calendar grid */}
+        <Card className="hidden md:block">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <Button variant="ghost" size="sm" onClick={prevMonth}>&lt;</Button>
@@ -200,10 +267,19 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={i}
+                        onClick={() => {
+                          if (!day) return;
+                          if (dayPosts.length === 1) {
+                            router.push(`/dashboard/${dayPosts[0].id}/edit`);
+                          } else if (dayPosts.length === 0) {
+                            router.push("/dashboard/new");
+                          }
+                        }}
                         className={cn(
-                          "min-h-[90px] p-1.5 bg-[var(--bg)]",
+                          "min-h-[90px] p-1.5 bg-[var(--bg)] transition-colors",
                           !day && "bg-[var(--bg-elevated)]/50",
                           isToday && "bg-[var(--accent-soft)]",
+                          day && "cursor-pointer hover:bg-[var(--bg-elevated)]",
                         )}
                       >
                         {day && (

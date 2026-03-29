@@ -7,6 +7,9 @@ import * as photoModel from "@/lib/models/photo";
 import * as styleProfileModel from "@/lib/models/styleProfile";
 import * as userProfileModel from "@/lib/models/userProfile";
 import { generateBlogPost } from "@/lib/ai/generate";
+import { enrichPlace } from "@/lib/ai/enrich";
+import { researchPlace } from "@/lib/ai/agentResearch";
+import { describePhotosForGeneration } from "@/lib/ai/photoDescribe";
 import * as apiUsageModel from "@/lib/models/apiUsage";
 
 export const maxDuration = 300;
@@ -94,8 +97,23 @@ export async function POST(request: NextRequest) {
           pastExcerpts = excerpts.join("\n\n");
         }
 
+        // ── Pipeline enrichment: enrich + research + photo describe (parallel) ──
+        send("progress", { step: "enriching", message: "장소 정보 보강 및 사진 분석 중..." });
+
+        const [enrichedPlace, placeInsight, photoDescriptions] = await Promise.all([
+          enrichPlace(place.name, place.address).catch(() => ({
+            naverCategory: null, roadAddress: null, blogExcerpts: [], blogFullTexts: [], blogKeywords: [],
+          })),
+          researchPlace(place.name, place.category, place.address).catch(() => ({
+            popularMenus: [], atmosphere: null, tips: [], nearbyLandmarks: [],
+            recentTrends: null, visitorSentiment: null, bestPhotoSpots: [], rawSources: [],
+          })),
+          describePhotosForGeneration(photos).catch(() => []),
+        ]);
+
         const generated = await generateBlogPost(
           place, menuItems, photos, style, userProfile, userMemo, !!isRevisit, pastExcerpts,
+          enrichedPlace, placeInsight, photoDescriptions,
           (step, message) => send("progress", { step, message }),
         );
 

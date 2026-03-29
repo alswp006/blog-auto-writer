@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
+
 interface Feature {
-  icon: string;
+  icon: ReactNode;
   title: string;
   description: string;
 }

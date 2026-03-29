@@ -119,6 +119,23 @@ export async function POST(request: NextRequest) {
       orderIndex,
     });
 
+    // Non-blocking face mosaic: run in background if GOOGLE_CLOUD_API_KEY is set
+    if (process.env.GOOGLE_CLOUD_API_KEY) {
+      (async () => {
+        try {
+          const { detectAndMosaicFaces } = await import("@/lib/ai/faceMosaic");
+          const result = await detectAndMosaicFaces(finalBuffer);
+          if (result.processed && result.faceCount > 0) {
+            const mosaicFilename = `mosaic-${filename}`;
+            await writeFile(`${uploadDir}/${mosaicFilename}`, result.buffer);
+            await photoModel.updateFilePath(photo.id, `/uploads/${mosaicFilename}`);
+          }
+        } catch (err) {
+          console.warn("Face mosaic skipped:", err instanceof Error ? err.message : err);
+        }
+      })();
+    }
+
     return NextResponse.json({ photo }, { status: 201 });
   } catch (error) {
     console.error(`Photo upload error at [${debugStage}]:`, error);

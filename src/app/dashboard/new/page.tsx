@@ -98,8 +98,13 @@ export default function DashboardNewPage() {
   // Generation
   const [generating, setGenerating] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [currentStep, setCurrentStep] = useState("");
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [sseRecoveryPostId, setSseRecoveryPostId] = useState<number | null>(null);
+
+  // Field validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/style-profiles")
@@ -115,7 +120,34 @@ export default function DashboardNewPage() {
       .then((r) => (r.ok ? r.json() : { places: [] }))
       .then((data) => setExistingPlaces(data.places ?? []))
       .catch(() => {});
+
+    // Restore auto-saved form state
+    try {
+      const saved = localStorage.getItem("draft-new-post");
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.placeName) setPlaceName(data.placeName);
+        if (data.category) setCategory(data.category);
+        if (data.address) setAddress(data.address);
+        if (data.rating) setRating(data.rating);
+        if (data.memo) setMemo(data.memo);
+        if (data.menuItems) setMenuItems(data.menuItems);
+        if (data.selectedStyleId) setSelectedStyleId(data.selectedStyleId);
+      }
+    } catch { /* ignore corrupt data */ }
   }, []);
+
+  // Auto-save form state to localStorage (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem("draft-new-post", JSON.stringify({
+          placeName, category, address, rating, memo, menuItems, selectedStyleId,
+        }));
+      } catch { /* storage full or unavailable */ }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [placeName, category, address, rating, memo, menuItems, selectedStyleId]);
 
   // ── Place search ──
   const handlePlaceNameChange = (value: string) => {
@@ -246,13 +278,19 @@ export default function DashboardNewPage() {
   const handleGenerate = async () => {
     setError("");
     setSseRecoveryPostId(null);
+    const errors: Record<string, string> = {};
 
-    if (isRevisit && !selectedExistingPlaceId) { setError("재방문할 장소를 선택해주세요."); return; }
-    if (!isRevisit && !placeName.trim()) { setError("장소 이름을 입력해주세요."); return; }
-    if (photos.length === 0) { setError("사진을 최소 1장 업로드해주세요."); return; }
-    if (!selectedStyleId) { setError("문체 프로필을 선택해주세요."); return; }
+    if (isRevisit && !selectedExistingPlaceId) { errors.place = "재방문할 장소를 선택해주세요."; }
+    if (!isRevisit && !placeName.trim()) { errors.place = "장소 이름을 입력해주세요."; }
+    if (photos.length === 0) { errors.photos = "사진을 최소 1장 업로드해주세요."; }
+    if (!selectedStyleId) { errors.style = "문체 프로필을 선택해주세요."; }
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) { setError("입력 정보를 확인해주세요."); return; }
 
     setGenerating(true);
+    setCurrentStep("");
+    setCompletedSteps([]);
 
     try {
       let placeId: number;
@@ -346,6 +384,14 @@ export default function DashboardNewPage() {
               const data = JSON.parse(dataStr);
               if (currentEvent === "progress") {
                 setUploadProgress(data.message ?? "처리 중...");
+                if (data.step) {
+                  setCurrentStep((prev) => {
+                    if (prev && prev !== data.step) {
+                      setCompletedSteps((cs) => cs.includes(prev) ? cs : [...cs, prev]);
+                    }
+                    return data.step;
+                  });
+                }
                 if (data.postId) { resultPostId = data.postId; setSseRecoveryPostId(data.postId); }
               } else if (currentEvent === "complete") {
                 resultPostId = data.post?.id ?? resultPostId;
@@ -364,6 +410,9 @@ export default function DashboardNewPage() {
       }
 
       if (!resultPostId) throw new Error("글 생성 결과를 받지 못했습니다.");
+
+      // Clear auto-saved draft on success
+      try { localStorage.removeItem("draft-new-post"); } catch { /* ignore */ }
 
       // 5. Navigate to edit page
       router.push(`/dashboard/${resultPostId}/edit`);
@@ -467,15 +516,29 @@ export default function DashboardNewPage() {
             <CardContent className="space-y-4">
               <div className="space-y-1.5 relative">
                 <Label htmlFor="placeName">장소명 *</Label>
-                <Input
-                  id="placeName"
-                  value={placeName}
-                  onChange={(e) => handlePlaceNameChange(e.target.value)}
-                  onFocus={() => { if (searchResults.length > 0) setShowResults(true); }}
-                  onBlur={() => setTimeout(() => setShowResults(false), 200)}
-                  placeholder="예: 을지로 골목식당 (자동검색)"
-                  autoComplete="off"
-                />
+                <div className="relative">
+                  <Input
+                    id="placeName"
+                    value={placeName}
+                    onChange={(e) => { handlePlaceNameChange(e.target.value); setFieldErrors((prev) => { const n = { ...prev }; delete n.place; return n; }); }}
+                    onFocus={() => { if (searchResults.length > 0) setShowResults(true); }}
+                    onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                    placeholder="예: 을지로 골목식당 (자동검색)"
+                    autoComplete="off"
+                    className={fieldErrors.place ? "border-[var(--danger)]" : ""}
+                  />
+                  {placeName && (
+                    <button
+                      type="button"
+                      onClick={() => { setPlaceName(""); setSearchResults([]); setShowResults(false); setAddress(""); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text)] text-xs flex items-center justify-center"
+                      aria-label="장소명 지우기"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {fieldErrors.place && <p className="text-xs text-[var(--danger)]">{fieldErrors.place}</p>}
                 {showResults && searchResults.length > 0 && (
                   <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {searchResults.map((item, i) => (
@@ -732,7 +795,7 @@ export default function DashboardNewPage() {
             </CardContent>
           </Card>
 
-          {/* ── 5. 생성 버튼 ── */}
+          {/* ── 5. 생성 버튼 + 파이프라인 진행 표시 ── */}
           <Button
             onClick={handleGenerate}
             disabled={generating || !placeName.trim() || photos.length === 0 || !selectedStyleId}
@@ -740,6 +803,41 @@ export default function DashboardNewPage() {
           >
             {generating ? uploadProgress || "처리 중..." : "글 생성하기"}
           </Button>
+
+          {generating && currentStep && (
+            <Card className="border-[var(--accent)]/20 bg-[var(--bg-elevated)]">
+              <CardContent className="pt-4 pb-3">
+                <div className="space-y-2">
+                  {[
+                    { key: "preparing", label: "데이터 준비" },
+                    { key: "loading", label: "장소 정보 로딩" },
+                    { key: "enriching", label: "장소 보강 & 사진 분석" },
+                    { key: "generating", label: "AI 글 생성" },
+                    { key: "validating", label: "품질 검증" },
+                    { key: "polishing", label: "글 다듬기" },
+                    { key: "saving", label: "저장" },
+                  ].map(({ key, label }) => {
+                    const isDone = completedSteps.includes(key);
+                    const isCurrent = currentStep === key;
+                    return (
+                      <div key={key} className="flex items-center gap-2 text-sm">
+                        {isDone ? (
+                          <span className="w-5 h-5 rounded-full bg-[var(--success)]/20 text-[var(--success)] flex items-center justify-center text-xs font-bold">✓</span>
+                        ) : isCurrent ? (
+                          <span className="w-5 h-5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+                        ) : (
+                          <span className="w-5 h-5 rounded-full border border-[var(--border)]" />
+                        )}
+                        <span className={isDone ? "text-[var(--text-muted)]" : isCurrent ? "text-[var(--text)] font-medium" : "text-[var(--text-muted)]"}>
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </section>

@@ -764,16 +764,21 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                 </button>
               ))}
             </div>
-            <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
-              {(["ko", "en"] as Lang[]).map((l) => (
-                <button key={l} onClick={() => setLang(l)} className={cn(
-                  "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                  lang === l ? "bg-[var(--bg-card)] text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
-                )}>
-                  {l === "ko" ? "한국어" : "English"}
-                </button>
-              ))}
-            </div>
+            {tab === "preview" && (
+              <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
+                {(["ko", "en"] as Lang[]).map((l) => (
+                  <button key={l} onClick={() => setLang(l)} className={cn(
+                    "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                    lang === l ? "bg-[var(--bg-card)] text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                  )}>
+                    {l === "ko" ? "한국어" : "English"}
+                  </button>
+                ))}
+              </div>
+            )}
+            {tab === "edit" && (
+              <span className="text-xs text-[var(--text-muted)]">한국어 · English 나란히 편집</span>
+            )}
             <Badge variant={post?.status === "generated" ? "default" : "secondary"}>
               {post?.status === "generated" ? "완료" : "초안"}
             </Badge>
@@ -858,46 +863,75 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                 </>
               ) : (
                 <>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label>제목</Label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleGenerateTitles}
-                        disabled={titlesLoading}
-                        className="text-xs h-6 px-2"
-                      >
-                        {titlesLoading ? "생성 중..." : "AI 제목 3개 추천"}
-                      </Button>
+                  {/* Side-by-side editing: KO left, EN right on desktop */}
+                  <div className="flex items-center justify-between mb-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleGenerateTitles}
+                      disabled={titlesLoading}
+                      className="text-xs h-6 px-2"
+                    >
+                      {titlesLoading ? "생성 중..." : "AI 제목 3개 추천"}
+                    </Button>
+                  </div>
+                  {titleCandidates.length > 0 && (
+                    <div className="space-y-1.5 mb-4">
+                      {titleCandidates.map((c, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleSelectTitle(c)}
+                          className="w-full text-left rounded-md border border-[var(--border)] hover:border-[var(--accent)] p-2.5 transition-colors"
+                        >
+                          <p className="text-xs font-medium text-[var(--text)]">{c.titleKo}</p>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{c.titleEn}</p>
+                          <Badge variant="secondary" className="text-[10px] mt-1">{c.style}</Badge>
+                        </button>
+                      ))}
                     </div>
-                    {lang === "ko"
-                      ? <Input value={titleKo} onChange={(e) => setTitleKo(e.target.value)} />
-                      : <Input value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />}
-                    {titleCandidates.length > 0 && (
-                      <div className="space-y-1.5 pt-1">
-                        {titleCandidates.map((c, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleSelectTitle(c)}
-                            className="w-full text-left rounded-md border border-[var(--border)] hover:border-[var(--accent)] p-2.5 transition-colors"
-                          >
-                            <p className="text-xs font-medium text-[var(--text)]">{c.titleKo}</p>
-                            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{c.titleEn}</p>
-                            <Badge variant="secondary" className="text-[10px] mt-1">{c.style}</Badge>
-                          </button>
-                        ))}
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Korean */}
+                    <div className="space-y-3">
+                      <Label className="text-xs text-[var(--accent)]">한국어</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="titleKo" className="text-xs">제목</Label>
+                        <Input id="titleKo" value={titleKo} onChange={(e) => setTitleKo(e.target.value)} />
                       </div>
-                    )}
+                      <div className="space-y-1.5">
+                        <Label htmlFor="contentKo" className="text-xs">본문</Label>
+                        <Textarea id="contentKo" value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="hashtagsKo" className="text-xs">해시태그</Label>
+                        <Input id="hashtagsKo" value={hashtagsKo} onChange={(e) => setHashtagsKo(e.target.value)} placeholder="#해시태그1 #해시태그2" />
+                      </div>
+                    </div>
+                    {/* English */}
+                    <div className="space-y-3">
+                      <Label className="text-xs text-blue-400">English</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="titleEn" className="text-xs">Title</Label>
+                        <Input id="titleEn" value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="contentEn" className="text-xs">Content</Label>
+                        <Textarea id="contentEn" value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="hashtagsEn" className="text-xs">Hashtags</Label>
+                        <Input id="hashtagsEn" value={hashtagsEn} onChange={(e) => setHashtagsEn(e.target.value)} placeholder="#hashtag1 #hashtag2" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>본문</Label>
-                    {lang === "ko"
-                      ? <Textarea value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
-                      : <Textarea value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />}
-                  </div>
+                  {/* Advanced Tools (collapsible) */}
+                  <details className="rounded-lg border border-[var(--border)] overflow-hidden">
+                    <summary className="px-4 py-3 text-sm font-medium text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors">
+                      추가 도구 (부분 재생성, 키워드, 버전 히스토리)
+                    </summary>
+
                   {/* Partial Regeneration */}
-                  <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+                  <div className="border-t border-[var(--border)] p-3 space-y-2">
                     <p className="text-xs font-medium text-[var(--text-secondary)]">문단 부분 재생성</p>
                     <div className="space-y-2">
                       <select
@@ -989,6 +1023,8 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                       </div>
                     )}
                   </div>
+                  </details>
+
                   <div className="flex gap-2">
                     <Button onClick={handleSave} disabled={saving} className="flex-1">
                       {saving ? "저장 중..." : "수정 저장"}

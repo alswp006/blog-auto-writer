@@ -6,15 +6,7 @@ import * as publishHistoryModel from "@/lib/models/publishHistory";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { DeletePostButton } from "./delete-button";
-
-const CATEGORY_LABEL: Record<string, string> = {
-  restaurant: "맛집",
-  cafe: "카페",
-  accommodation: "숙소",
-  attraction: "여행지",
-};
+import { DashboardPostList } from "./dashboard-client";
 
 const MONETIZATION_LINKS = [
   {
@@ -48,6 +40,12 @@ export default async function DashboardPage() {
   const posts = await postModel.listByUserWithMeta(user.id);
   const monthCount = await postModel.countByUserThisMonth(user.id);
   const publishedPlatforms = await publishHistoryModel.getPublishedPlatformsByPostIds(posts.map((p) => p.id));
+
+  // Convert Map to plain object for serialization to client
+  const platformsObj: Record<number, string[]> = {};
+  for (const [postId, platforms] of publishedPlatforms) {
+    platformsObj[postId] = platforms;
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8 py-8 space-y-8">
@@ -91,78 +89,10 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Posts List */}
+      {/* Posts List with Search/Filter/Pagination */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">최근 작성한 글</h2>
-        {posts.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-[var(--text-muted)] mb-4">아직 작성한 글이 없습니다.</p>
-              <Button asChild>
-                <Link href="/dashboard/new" className="no-underline">첫 번째 글 작성하기</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {posts.map((post) => (
-              <Card key={post.id} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="flex">
-                    {/* Thumbnail */}
-                    <Link href={`/dashboard/${post.id}/edit`} className="no-underline shrink-0">
-                      {post.thumbnailPath ? (
-                        <img
-                          src={post.thumbnailPath}
-                          alt=""
-                          className="w-24 h-24 md:w-32 md:h-28 object-cover"
-                        />
-                      ) : (
-                        <div className="w-24 h-24 md:w-32 md:h-28 bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--text-muted)] text-xs">
-                          사진 없음
-                        </div>
-                      )}
-                    </Link>
-
-                    {/* Content */}
-                    <div className="flex-1 p-4 min-w-0 flex flex-col justify-between">
-                      <div>
-                        <Link href={`/dashboard/${post.id}/edit`} className="no-underline block group">
-                          <h3 className="font-semibold text-sm group-hover:text-[var(--accent)] transition-colors truncate">
-                            {post.titleKo ?? "(제목 없음)"}
-                          </h3>
-                        </Link>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-[var(--text-muted)]">{post.placeName}</span>
-                          <Badge variant="secondary" className="text-[10px] py-0">
-                            {CATEGORY_LABEL[post.placeCategory] ?? post.placeCategory}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant={post.status === "generated" ? "default" : "secondary"} className="text-[10px]">
-                            {post.status === "generated" ? "완료" : "초안"}
-                          </Badge>
-                          {(publishedPlatforms.get(post.id) ?? []).map((p) => (
-                            <Badge key={p} variant="outline" className="text-[9px] py-0 px-1.5">
-                              {p === "naver" ? "N" : p === "tistory" ? "T" : p === "medium" ? "M" : "W"}
-                            </Badge>
-                          ))}
-                          <span className="text-[11px] text-[var(--text-muted)]">
-                            {new Date(post.createdAt).toLocaleDateString("ko-KR")}
-                          </span>
-                        </div>
-                        <DeletePostButton postId={post.id} />
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+        <h2 className="text-lg font-semibold mb-4">작성한 글</h2>
+        <DashboardPostList posts={posts} publishedPlatforms={platformsObj} />
       </div>
 
       {/* Monetization Guide */}

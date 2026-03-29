@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@libsql/client": "^0.15.15",
     "@radix-ui/react-slot": "^1.2.4",
