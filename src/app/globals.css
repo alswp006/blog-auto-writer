@@ -42,6 +42,9 @@
   --danger-soft: rgba(248, 113, 113, 0.12);
   --warning: #fbbf24;
   --warning-soft: rgba(251, 191, 36, 0.12);
+  --warm: #f59e0b;
+  --warm-soft: rgba(245, 158, 11, 0.12);
+  --warm-glow: rgba(245, 158, 11, 0.06);
 }
 
 /* ══ CRITICAL: ALL base styles MUST be in @layer base ══
@@ -144,5 +147,45 @@
   /* Glow utilities */
   .glow-accent {
     box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
+  }
+
+  /* Warm gradient text */
+  .gradient-text-warm {
+    background: linear-gradient(135deg, var(--warm) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Fade-in-up animation */
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out both;
+  }
+  .fade-in-up-delay-1 { animation-delay: 0.1s; }
+  .fade-in-up-delay-2 { animation-delay: 0.2s; }
+  .fade-in-up-delay-3 { animation-delay: 0.3s; }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Hover lift effect for cards */
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Gradient button background */
+  .btn-gradient {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--warm) 100%);
+    border: none;
+    color: white;
+  }
+  .btn-gradient:hover {
+    opacity: 0.9;
   }
 }

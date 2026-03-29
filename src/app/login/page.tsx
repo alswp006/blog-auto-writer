@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Zap, Globe, PenTool } from "lucide-react";
 
 export default function LoginPage() {
   return (
@@ -15,6 +16,27 @@ export default function LoginPage() {
     </Suspense>
   );
 }
+
+const features = [
+  {
+    icon: <Zap className="w-5 h-5" />,
+    title: "사진만 올리면 5분 안에 글 완성",
+    bg: "bg-[var(--warm-soft)]",
+    color: "text-[var(--warm)]",
+  },
+  {
+    icon: <Globe className="w-5 h-5" />,
+    title: "한국어·영어 동시에, 번역 아닌 창작",
+    bg: "bg-[var(--accent-soft)]",
+    color: "text-[var(--accent)]",
+  },
+  {
+    icon: <PenTool className="w-5 h-5" />,
+    title: "내 문체를 학습해서 나답게 써줘요",
+    bg: "bg-[var(--success-soft)]",
+    color: "text-[var(--success)]",
+  },
+];
 
 function LoginForm() {
   const router = useRouter();
@@ -58,37 +80,42 @@ function LoginForm() {
     <div className="flex items-center justify-center min-h-[80vh] px-6 py-12">
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
         {/* Left: Branding */}
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-8 fade-in-up">
           <div>
-            <h2 className="text-3xl font-bold text-[var(--text)] leading-tight">Blog Auto Writer</h2>
-            <p className="mt-3 text-[var(--text-secondary)] leading-[1.7]">
-              사진과 메모만 올리면 5분 안에 한영 포스팅이 완성됩니다. 가족이 함께 쓰는 블로그 수익화 도구.
+            <h2 className="text-3xl font-bold leading-tight">
+              <span className="gradient-text-warm">Blog Auto Writer</span>
+              <span className="text-[var(--warm)]"> .</span>
+            </h2>
+            <p className="mt-3 text-[var(--text-secondary)] leading-[1.8]">
+              맛집 사진 한 장이면 블로그 글이 완성돼요.<br />
+              가족이 함께 쓰는 블로그 수익화 도구.
             </p>
           </div>
-          <ul className="space-y-6">
-            {[
-              { icon: "⚡", text: "5분 안에 포스팅 완성" },
-              { icon: "🌐", text: "한영 자동 번역 지원" },
-              { icon: "✍️", text: "나만의 글쓰기 스타일 학습" },
-            ].map((item) => (
-              <li key={item.text} className="flex items-center gap-4 text-sm text-[var(--text-secondary)]">
-                <span className="text-xl shrink-0">{item.icon}</span>
-                <span className="font-medium">{item.text}</span>
-              </li>
+          <div className="space-y-3">
+            {features.map((item) => (
+              <div
+                key={item.title}
+                className="flex items-center gap-4 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover-lift"
+              >
+                <div className={`w-10 h-10 rounded-lg ${item.bg} ${item.color} flex items-center justify-center shrink-0`}>
+                  {item.icon}
+                </div>
+                <span className="text-sm font-medium text-[var(--text-secondary)]">{item.title}</span>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
 
         {/* Right: Form */}
-        <div className="space-y-6">
+        <div className="space-y-6 fade-in-up fade-in-up-delay-1">
           <div className="text-center lg:text-left">
-            <h1 className="text-2xl font-bold">로그인</h1>
-            <p className="text-sm text-[var(--text-muted)] mt-1">다시 오신 것을 환영합니다</p>
+            <h1 className="text-2xl font-bold">다시 와주셨네요!</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">이메일로 로그인하세요</p>
           </div>
 
           <Card>
             <CardContent className="pt-6 px-6 pb-6">
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (
                   <div className="text-xs px-3 py-2 rounded-md bg-[var(--danger-soft)] text-[var(--danger)]">
                     {error}
@@ -127,8 +154,8 @@ function LoginForm() {
           </Card>
 
           <p className="text-center text-xs text-[var(--text-muted)]">
-            계정이 없으신가요?{" "}
-            <Link href="/signup" className="text-[var(--accent)]">회원가입</Link>
+            아직 계정이 없으신가요?{" "}
+            <Link href="/signup" className="text-[var(--accent)] font-medium">회원가입</Link>
           </p>
         </div>
       </div>

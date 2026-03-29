@@ -135,16 +135,24 @@ export function DashboardPostList({ posts, publishedPlatforms }: Props) {
 
       {/* Posts */}
       {paginated.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <FileText className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
-            <p className="text-[var(--text-muted)] mb-4">
+        <Card className="border-dashed">
+          <CardContent className="py-16 text-center">
+            {/* Simple pen + paper illustration */}
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[var(--warm-soft)] flex items-center justify-center">
+              <FileText className="w-7 h-7 text-[var(--warm)]" />
+            </div>
+            <p className="text-[var(--text)] font-medium mb-1">
               {search || categoryFilter !== "all" || statusFilter !== "all"
-                ? "검색 조건에 맞는 글이 없습니다."
-                : "아직 작성한 글이 없습니다."}
+                ? "조건에 맞는 글이 없어요"
+                : "아직 글이 없어요"}
             </p>
-            <Button asChild>
-              <Link href="/dashboard/new" className="no-underline">첫 번째 글 작성하기</Link>
+            <p className="text-sm text-[var(--text-muted)] mb-5">
+              {search || categoryFilter !== "all" || statusFilter !== "all"
+                ? "다른 조건으로 검색해보세요"
+                : "첫 번째 맛집 후기를 써볼까요?"}
+            </p>
+            <Button asChild className="btn-gradient">
+              <Link href="/dashboard/new" className="no-underline">사진 올리고 시작하기</Link>
             </Button>
           </CardContent>
         </Card>

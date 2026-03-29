@@ -11,21 +11,24 @@ interface CtaSectionProps {
 export function CtaSection({
   heading,
   description,
-  ctaText = "Get Started Free",
+  ctaText = "무료로 시작하기",
   ctaHref = "/signup",
 }: CtaSectionProps) {
   return (
-    <section className="w-full py-20">
+    <section className="w-full py-24">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
-        <div className="rounded-2xl bg-gradient-to-r from-[var(--accent)]/10 to-purple-500/10 p-10 md:p-8 text-center space-y-4">
-          <h2 className="text-2xl font-semibold tracking-tight text-[var(--text)]">{heading}</h2>
+        <div className="rounded-3xl bg-gradient-to-br from-[var(--accent)]/12 via-[var(--warm-glow)] to-[var(--warm)]/8 p-12 md:p-16 text-center space-y-5 relative overflow-hidden">
+          {/* Background glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-[var(--warm)]/5 blur-3xl" />
+
+          <h2 className="text-3xl font-bold tracking-tight text-[var(--text)] relative z-10">{heading}</h2>
           {description && (
-            <p className="text-base leading-relaxed text-[var(--text-secondary)] max-w-md mx-auto">
+            <p className="text-base leading-relaxed text-[var(--text-secondary)] max-w-md mx-auto relative z-10">
               {description}
             </p>
           )}
-          <div className="pt-2">
-            <Button asChild size="lg">
+          <div className="pt-3 relative z-10">
+            <Button asChild size="lg" className="btn-gradient text-base px-8">
               <Link href={ctaHref} className="no-underline">
                 {ctaText}
               </Link>

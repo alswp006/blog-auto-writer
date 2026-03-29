@@ -16,53 +16,59 @@ export default function HomePage() {
   return (
     <div className="space-y-0">
       <HeroSection
-        headline="블로그 자동 작성기"
-        subheadline="사진과 메모만 올리면 5분 안에 한영 포스팅이 완성됩니다. 가족이 함께 쓰는 블로그 수익화 도구."
-        ctaText="시작하기"
+        headline="사진 올리면, 글이 완성돼요"
+        subheadline="맛집 사진 찍고 메모 한 줄이면 충분해요. AI가 한국어·영어 블로그 글을 5분 안에 써드립니다."
+        ctaText="무료로 시작하기"
         ctaHref="/signup"
-        secondaryCtaText="로그인"
+        secondaryCtaText="이미 계정이 있으신가요?"
         secondaryCtaHref="/login"
       />
 
       <FeatureGrid
-        heading="주요 기능"
-        subheading="블로그 작성에 필요한 모든 것을 제공합니다."
+        heading="이런 게 가능해요"
+        subheading="귀찮은 건 AI가, 재밌는 건 내가"
         features={[
           {
-            icon: <Zap className="w-5 h-5 text-[var(--accent)]" />,
-            title: "5분 안에 완성",
+            icon: <Zap className="w-5 h-5" />,
+            title: "사진 찍고, 5분만 기다리세요",
             description:
-              "사진과 장소 정보만 입력하면 AI가 한국어/영어 블로그 글을 자동으로 작성합니다.",
+              "장소 이름과 사진만 올리면 AI가 한국어·영어 블로그 글을 동시에 작성해요. 메뉴 정보, 별점, 메모를 추가하면 더 풍부한 글이 나옵니다.",
+            warm: false,
           },
           {
-            icon: <Globe className="w-5 h-5 text-[var(--accent)]" />,
-            title: "한영 동시 생성",
+            icon: <Globe className="w-5 h-5" />,
+            title: "한국어·영어, 한 번에",
             description:
-              "한국어와 영어 블로그 글을 한 번에 생성합니다. 외국인 관점의 자연스러운 영어 글이 특징입니다.",
+              "번역이 아니라, 각 언어에 맞게 따로 써요. 영어 글은 외국인 관점으로.",
+            warm: true,
           },
           {
-            icon: <PenTool className="w-5 h-5 text-[var(--accent)]" />,
-            title: "나만의 문체 학습",
+            icon: <PenTool className="w-5 h-5" />,
+            title: "내 말투 그대로",
             description:
-              "본인이 쓴 글 샘플을 분석하여 나만의 문체를 학습합니다. AI가 내 스타일 그대로 글을 작성합니다.",
+              "내가 쓴 글 샘플을 학습해서 내 스타일로 써줘요. ㅋㅋ부터 존댓말까지.",
+            warm: false,
           },
           {
-            icon: <Search className="w-5 h-5 text-[var(--accent)]" />,
-            title: "자동 장소 리서치",
+            icon: <Search className="w-5 h-5" />,
+            title: "알아서 찾아주는 장소 정보",
             description:
-              "네이버, 구글에서 장소 정보와 다른 블로거 후기를 자동 수집하여 글에 반영합니다.",
+              "네이버·구글에서 후기, 인기 메뉴, 주차 팁까지 자동 수집해서 글에 녹여요.",
+            warm: true,
           },
           {
-            icon: <BarChart3 className="w-5 h-5 text-[var(--accent)]" />,
-            title: "SEO 최적화",
+            icon: <BarChart3 className="w-5 h-5" />,
+            title: "네이버·티스토리·미디엄 맞춤",
             description:
-              "네이버 블로그, 티스토리, 미디엄 등 각 플랫폼에 맞는 SEO 최적화 글을 생성합니다.",
+              "플랫폼마다 다른 SEO 규칙에 맞춰 글을 최적화해드려요.",
+            warm: false,
           },
           {
-            icon: <Shield className="w-5 h-5 text-[var(--accent)]" />,
-            title: "품질 자동 검증",
+            icon: <Shield className="w-5 h-5" />,
+            title: "어색한 문장? 자동으로 잡아줍니다",
             description:
-              "생성된 글의 길이, 자연스러움, 사진 배치를 자동 검증하고, 기준에 미달하면 재생성합니다.",
+              "글 길이, 사진 배치, AI 투 문장을 자동 검사하고, 기준 미달이면 다시 써요.",
+            warm: true,
           },
         ]}
       />
@@ -70,9 +76,9 @@ export default function HomePage() {
       <HowItWorks />
 
       <CtaSection
-        heading="지금 바로 시작해보세요"
-        description="사진과 메모만 올리면 블로그 글이 완성됩니다. 지금 바로 시작해보세요."
-        ctaText="회원가입하기"
+        heading="첫 글은 무료예요"
+        description="회원가입하고 사진 한 장 올려보세요. 5분 후에 블로그 글이 준비됩니다."
+        ctaText="무료로 시작하기"
         ctaHref="/signup"
       />
 
