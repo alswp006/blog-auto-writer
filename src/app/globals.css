@@ -111,6 +111,26 @@
   summary::-webkit-details-marker {
     display: none;
   }
+
+  /* Respect reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Ensure minimum tap target spacing on touch devices */
+  @media (pointer: coarse) {
+    button, a, input, select, textarea, [role="button"] {
+      min-height: 44px;
+    }
+    select {
+      min-height: 44px;
+    }
+  }
 }
 
 /* Scrollbar (pseudo-elements — no Tailwind conflict) */

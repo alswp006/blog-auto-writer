@@ -91,10 +91,10 @@ export function PlatformOptimizeCard({
                 </Button>
                 {variant && (
                   <div className="flex items-center gap-1.5 justify-center">
-                    <Badge variant="outline" className={`text-[10px] ${info.color}`}>
+                    <Badge variant="outline" className={`text-xs ${info.color}`}>
                       완료
                     </Badge>
-                    <span className="text-[10px] text-[var(--text-muted)]">
+                    <span className="text-xs text-[var(--text-muted)]">
                       {new Date(variant.updatedAt).toLocaleDateString("ko-KR", {
                         month: "short",
                         day: "numeric",

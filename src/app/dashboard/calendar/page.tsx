@@ -151,7 +151,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold">{totalPosts}</p>
@@ -178,7 +178,8 @@ export default function CalendarPage() {
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              aria-pressed={categoryFilter === cat}
+              className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
                 categoryFilter === cat
                   ? "bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]"
                   : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-hover)]"
@@ -201,7 +202,7 @@ export default function CalendarPage() {
                 <CardContent className="p-3">
                   <p className={cn("text-xs font-medium mb-2", isToday && "text-[var(--accent)]")}>
                     {month}월 {day}일 {DAYS_KO[new Date(year, month - 1, day).getDay()]}요일
-                    {isToday && <Badge variant="secondary" className="ml-2 text-[9px]">오늘</Badge>}
+                    {isToday && <Badge variant="secondary" className="ml-2 text-xs">오늘</Badge>}
                   </p>
                   <div className="space-y-1">
                     {dayPosts.map((post, j) => (
@@ -267,12 +268,25 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={i}
+                        role="gridcell"
+                        tabIndex={day ? 0 : undefined}
                         onClick={() => {
                           if (!day) return;
                           if (dayPosts.length === 1) {
                             router.push(`/dashboard/${dayPosts[0].id}/edit`);
                           } else if (dayPosts.length === 0) {
                             router.push("/dashboard/new");
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (!day) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            if (dayPosts.length === 1) {
+                              router.push(`/dashboard/${dayPosts[0].id}/edit`);
+                            } else if (dayPosts.length === 0) {
+                              router.push("/dashboard/new");
+                            }
                           }
                         }}
                         className={cn(
@@ -299,7 +313,7 @@ export default function CalendarPage() {
                                   className="block no-underline"
                                 >
                                   <div className={cn(
-                                    "text-[10px] leading-tight px-1 py-0.5 rounded truncate border",
+                                    "text-xs leading-tight px-1 py-0.5 rounded truncate border",
                                     STATUS_COLORS[post.status] ?? STATUS_COLORS.draft,
                                   )}>
                                     {CATEGORY_EMOJI[post.placeCategory ?? ""] ?? ""}
@@ -309,12 +323,12 @@ export default function CalendarPage() {
                                 </Link>
                               ))}
                               {dayPublishes.length > 0 && (
-                                <div className="text-[10px] text-green-400 px-1">
+                                <div className="text-xs text-green-400 px-1">
                                   {dayPublishes.length}건 발행
                                 </div>
                               )}
                               {dayPosts.length > 3 && (
-                                <p className="text-[10px] text-[var(--text-muted)] px-1">
+                                <p className="text-xs text-[var(--text-muted)] px-1">
                                   +{dayPosts.length - 3}
                                 </p>
                               )}

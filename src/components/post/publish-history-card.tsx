@@ -42,24 +42,24 @@ export function PublishHistoryCard({ history }: { history: PublishHistoryItem[] 
           {history.map((h) => (
             <div key={h.id} className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className={cn("text-[10px] border", PLATFORM_COLORS[h.platform] ?? "")}>
+                <Badge variant="outline" className={cn("text-xs border", PLATFORM_COLORS[h.platform] ?? "")}>
                   {PLATFORM_LABELS[h.platform as Platform] ?? h.platform}
                 </Badge>
-                <Badge variant="secondary" className="text-[10px]">
+                <Badge variant="secondary" className="text-xs">
                   {h.lang === "ko" ? "한국어" : "English"}
                 </Badge>
-                {h.status === "published" && <span className="text-[10px] text-green-400">발행됨</span>}
-                {h.status === "copied" && <span className="text-[10px] text-blue-400">복사됨</span>}
-                {h.status === "failed" && <span className="text-[10px] text-red-400">실패</span>}
+                {h.status === "published" && <span className="text-xs text-green-400">발행됨</span>}
+                {h.status === "copied" && <span className="text-xs text-blue-400">복사됨</span>}
+                {h.status === "failed" && <span className="text-xs text-red-400">실패</span>}
               </div>
               <div className="flex items-center gap-2">
                 {h.publishedUrl && (
                   <a href={h.publishedUrl} target="_blank" rel="noopener noreferrer"
-                    className="text-[10px] text-[var(--accent)] hover:underline">
+                    className="text-xs text-[var(--accent)] hover:underline">
                     열기
                   </a>
                 )}
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-xs text-[var(--text-muted)]">
                   {new Date(h.publishedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>

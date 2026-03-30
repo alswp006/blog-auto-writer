@@ -27,7 +27,7 @@ const selectClass =
 
 function LoadingSkeleton() {
   return (
-    <section className="w-full py-20">
+    <section className="w-full py-12 md:py-20">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto animate-pulse space-y-6">
           <div>
@@ -35,7 +35,7 @@ function LoadingSkeleton() {
             <div className="h-4 bg-[var(--bg-elevated)] rounded w-64 mt-2" />
           </div>
           <Card>
-            <CardContent className="p-6 space-y-5">
+            <CardContent className="p-4 md:p-6 space-y-5">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="space-y-2">
                   <div className="h-4 bg-[var(--bg-elevated)] rounded w-24" />
@@ -128,7 +128,7 @@ export default function OnboardingProfilePage() {
   if (loading) return <LoadingSkeleton />;
 
   return (
-    <section className="w-full py-20">
+    <section className="w-full py-12 md:py-20">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto space-y-6">
           <div>
@@ -150,7 +150,7 @@ export default function OnboardingProfilePage() {
           )}
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Nickname */}
                 <div className="space-y-1.5">

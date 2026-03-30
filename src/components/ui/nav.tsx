@@ -33,9 +33,9 @@ function MobileNavLink({ href, label, pathname }: { href: string; label: string;
   return (
     <Button
       variant="ghost"
-      size="sm"
+      size="default"
       className={cn(
-        "justify-start",
+        "justify-start w-full",
         isActive && "bg-[var(--accent)]/10 text-[var(--accent)]",
       )}
       asChild
@@ -134,8 +134,8 @@ export function Nav() {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="md:hidden absolute left-0 right-0 top-full bg-[var(--bg-elevated)] border-b border-[var(--border)] shadow-lg z-50">
-          <div className="flex flex-col px-4 py-3 gap-1">
+        <div className="md:hidden absolute left-0 right-0 top-full bg-[var(--bg-elevated)] border-b border-[var(--border)] shadow-lg z-50" role="menu">
+          <div className="flex flex-col px-4 py-3 gap-1.5">
             {user ? (
               <>
                 <span className="text-xs text-[var(--text-muted)] px-3 py-1">{user.name || user.email}</span>

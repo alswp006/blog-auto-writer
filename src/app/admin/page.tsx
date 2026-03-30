@@ -224,7 +224,7 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Add form */}
-          <div className="flex gap-2 items-start">
+          <div className="flex flex-col sm:flex-row gap-2 items-start">
             <div className="flex-1 space-y-1">
               <Input
                 value={newEmail}
@@ -234,7 +234,7 @@ export default function AdminPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") handleAddEmail(); }}
               />
             </div>
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <Input
                 value={newMemo}
                 onChange={(e) => setNewMemo(e.target.value)}
@@ -247,7 +247,7 @@ export default function AdminPage() {
             </Button>
           </div>
           {emailError && (
-            <p className="text-xs text-red-400">{emailError}</p>
+            <p className="text-xs text-red-400" role="alert">{emailError}</p>
           )}
 
           {/* Email list */}
@@ -288,12 +288,12 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    <th className="text-left py-2 text-[var(--text-muted)] font-medium">월</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">호출 수</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">입력 토큰</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">출력 토큰</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">비용 (USD)</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">비용 (KRW)</th>
+                    <th scope="col" className="text-left py-2 text-[var(--text-muted)] font-medium">월</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">호출 수</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">입력 토큰</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">출력 토큰</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">비용 (USD)</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">비용 (KRW)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,7 +323,7 @@ export default function AdminPage() {
               placeholder="이름 또는 이메일 검색..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-xs"
+              className="w-full sm:max-w-xs"
             />
           </div>
         </CardHeader>
@@ -337,11 +337,11 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
-                    <th className="text-left py-2 text-[var(--text-muted)] font-medium">사용자</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">가입일</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">API 호출</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">토큰 사용량</th>
-                    <th className="text-right py-2 text-[var(--text-muted)] font-medium">비용</th>
+                    <th scope="col" className="text-left py-2 text-[var(--text-muted)] font-medium">사용자</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">가입일</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">API 호출</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">토큰 사용량</th>
+                    <th scope="col" className="text-right py-2 text-[var(--text-muted)] font-medium">비용</th>
                   </tr>
                 </thead>
                 <tbody>

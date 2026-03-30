@@ -135,7 +135,7 @@ export default function SettingsPage() {
     <div className="max-w-3xl mx-auto px-4 md:px-6 lg:px-8 py-8 space-y-8">
       {/* Toast */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+        <div role="alert" aria-live="assertive" className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
           {toast}
         </div>
       )}
@@ -260,6 +260,7 @@ export default function SettingsPage() {
                     <button
                       key={value}
                       onClick={() => setWatermarkPosition(value)}
+                      aria-pressed={watermarkPosition === value}
                       className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
                         watermarkPosition === value
                           ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"

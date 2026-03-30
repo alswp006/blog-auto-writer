@@ -42,7 +42,7 @@ export function HeroSection({
               {subheadline}
             </p>
 
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3 pt-2">
               <Button asChild size="lg" className="btn-gradient text-base px-8">
                 <Link href={ctaHref} className="no-underline">
                   {ctaText}

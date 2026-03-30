@@ -724,7 +724,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
         <div className="max-w-3xl mx-auto space-y-6">
           {/* Toast */}
           {toast && (
-            <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+            <div role="alert" aria-live="assertive" className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
               {toast}
             </div>
           )}
@@ -756,7 +756,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex gap-1 bg-[var(--bg-elevated)] rounded-lg p-1">
               {(["preview", "edit"] as Tab[]).map((t) => (
-                <button key={t} onClick={() => setTab(t)} className={cn(
+                <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn(
                   "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
                   tab === t ? "bg-[var(--accent)] text-white" : "text-[var(--text-muted)] hover:text-[var(--text)]",
                 )}>
@@ -870,7 +870,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                       size="sm"
                       onClick={handleGenerateTitles}
                       disabled={titlesLoading}
-                      className="text-xs h-6 px-2"
+                      className="text-xs h-8 px-3"
                     >
                       {titlesLoading ? "생성 중..." : "AI 제목 3개 추천"}
                     </Button>
@@ -884,8 +884,8 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                           className="w-full text-left rounded-md border border-[var(--border)] hover:border-[var(--accent)] p-2.5 transition-colors"
                         >
                           <p className="text-xs font-medium text-[var(--text)]">{c.titleKo}</p>
-                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{c.titleEn}</p>
-                          <Badge variant="secondary" className="text-[10px] mt-1">{c.style}</Badge>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{c.titleEn}</p>
+                          <Badge variant="secondary" className="text-xs mt-1">{c.style}</Badge>
                         </button>
                       ))}
                     </div>
@@ -970,7 +970,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                           {regenPreview && (
                             <div className="space-y-2">
                               <div className="rounded-md bg-[var(--bg-elevated)] p-3 text-xs leading-relaxed">
-                                <p className="text-[10px] text-[var(--accent)] font-medium mb-1">재생성 결과:</p>
+                                <p className="text-xs text-[var(--accent)] font-medium mb-1">재생성 결과:</p>
                                 {regenPreview}
                               </div>
                               <div className="flex gap-2">
@@ -1001,7 +1001,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                         size="sm"
                         onClick={handleSuggestKeywords}
                         disabled={keywordsLoading}
-                        className="text-xs h-6 px-2"
+                        className="text-xs h-8 px-3"
                       >
                         {keywordsLoading ? "분석 중..." : "AI 키워드 추천"}
                       </Button>
@@ -1048,7 +1048,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                           <div key={v.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--border)] last:border-0">
                             <div className="min-w-0 flex-1">
                               <p className="text-xs text-[var(--text)] truncate">{v.titleKo ?? "(제목 없음)"}</p>
-                              <p className="text-[10px] text-[var(--text-muted)]">
+                              <p className="text-xs text-[var(--text-muted)]">
                                 {new Date(v.createdAt).toLocaleString("ko")} · {v.changeReason === "manual_edit" ? "수동 편집" : v.changeReason === "before_restore" ? "복원 전" : v.changeReason}
                               </p>
                             </div>
@@ -1056,7 +1056,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                               variant="ghost"
                               size="sm"
                               onClick={() => handleRestoreVersion(v.id)}
-                              className="text-[10px] h-6 px-2 shrink-0 text-[var(--accent)]"
+                              className="text-xs h-8 px-3 shrink-0 text-[var(--accent)]"
                             >
                               복원
                             </Button>
@@ -1147,7 +1147,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                           />
                         </div>
                         {item.tips.length > 0 && (
-                          <p className="text-[10px] text-[var(--text-muted)]">{item.tips[0]}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{item.tips[0]}</p>
                         )}
                       </div>
                     ))}
@@ -1189,13 +1189,13 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                   <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
                     네이버 복사 (HTML)
                   </Button>
-                  <p className="text-[10px] text-[var(--text-muted)] text-center">에디터 최적화 포맷</p>
+                  <p className="text-xs text-[var(--text-muted)] text-center">에디터 최적화 포맷</p>
                 </div>
                 <div className="space-y-1">
                   <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full">
                     티스토리 복사 (HTML)
                   </Button>
-                  <p className="text-[10px] text-[var(--text-muted)] text-center">HTML 모드에 붙여넣기</p>
+                  <p className="text-xs text-[var(--text-muted)] text-center">HTML 모드에 붙여넣기</p>
                 </div>
                 <Button variant="outline" onClick={() => handleCopy("medium")} className="w-full">
                   Medium 복사 (MD)
@@ -1219,9 +1219,9 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                     {publishing ? "발행 중..." : "Medium에 발행"}
                   </Button>
                   {hasMediumConnection ? (
-                    <p className="text-[10px] text-green-500 text-center">연동됨</p>
+                    <p className="text-xs text-green-500 text-center">연동됨</p>
                   ) : (
-                    <p className="text-[10px] text-[var(--text-muted)] text-center">
+                    <p className="text-xs text-[var(--text-muted)] text-center">
                       <Link href="/dashboard/settings" className="text-[var(--accent)] hover:underline">설정에서 연동</Link>
                     </p>
                   )}
@@ -1235,7 +1235,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                   >
                     {publishing ? "발행 중..." : "WordPress에 발행"}
                   </Button>
-                  <p className="text-[10px] text-[var(--text-muted)] text-center">환경변수 설정 필요</p>
+                  <p className="text-xs text-[var(--text-muted)] text-center">환경변수 설정 필요</p>
                 </div>
               </div>
               {publishedUrl && (
@@ -1341,30 +1341,30 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                   {publishHistory.map((h) => (
                     <div key={h.id} className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={cn("text-[10px] border", PLATFORM_COLORS[h.platform] ?? "")}>
+                        <Badge variant="outline" className={cn("text-xs border", PLATFORM_COLORS[h.platform] ?? "")}>
                           {PLATFORM_LABELS[h.platform as Platform] ?? h.platform}
                         </Badge>
-                        <Badge variant="secondary" className="text-[10px]">
+                        <Badge variant="secondary" className="text-xs">
                           {h.lang === "ko" ? "한국어" : "English"}
                         </Badge>
                         {h.status === "published" && (
-                          <span className="text-[10px] text-green-400">발행됨</span>
+                          <span className="text-xs text-green-400">발행됨</span>
                         )}
                         {h.status === "copied" && (
-                          <span className="text-[10px] text-blue-400">복사됨</span>
+                          <span className="text-xs text-blue-400">복사됨</span>
                         )}
                         {h.status === "failed" && (
-                          <span className="text-[10px] text-red-400">실패</span>
+                          <span className="text-xs text-red-400">실패</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
                         {h.publishedUrl && (
                           <a href={h.publishedUrl} target="_blank" rel="noopener noreferrer"
-                            className="text-[10px] text-[var(--accent)] hover:underline">
+                            className="text-xs text-[var(--accent)] hover:underline">
                             열기
                           </a>
                         )}
-                        <span className="text-[10px] text-[var(--text-muted)]">
+                        <span className="text-xs text-[var(--text-muted)]">
                           {new Date(h.publishedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
@@ -1413,13 +1413,13 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                   {/* Benchmarks */}
                   <div className="rounded-lg bg-[var(--bg-elevated)] p-3 space-y-1.5">
                     <p className="text-xs font-medium">상위 글 기준</p>
-                    <p className="text-[11px] text-[var(--text-secondary)]">
+                    <p className="text-xs text-[var(--text-secondary)]">
                       평균 글자수: {competitors.benchmarks.avgContentLength} | 평균 사진: {competitors.benchmarks.avgPhotoCount}
                     </p>
                     {competitors.benchmarks.commonElements.length > 0 && (
                       <div className="flex flex-wrap gap-1 pt-1">
                         {competitors.benchmarks.commonElements.map((el, i) => (
-                          <Badge key={i} variant="secondary" className="text-[10px]">{el}</Badge>
+                          <Badge key={i} variant="secondary" className="text-xs">{el}</Badge>
                         ))}
                       </div>
                     )}
@@ -1430,7 +1430,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-green-400">강점</p>
                       {competitors.strengths.map((s, i) => (
-                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-green-500/30">{s}</p>
+                        <p key={i} className="text-xs text-[var(--text-secondary)] pl-2 border-l-2 border-green-500/30">{s}</p>
                       ))}
                     </div>
                   )}
@@ -1440,7 +1440,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-yellow-400">부족한 요소</p>
                       {competitors.missing.map((m, i) => (
-                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-yellow-500/30">{m}</p>
+                        <p key={i} className="text-xs text-[var(--text-secondary)] pl-2 border-l-2 border-yellow-500/30">{m}</p>
                       ))}
                     </div>
                   )}
@@ -1450,7 +1450,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-[var(--accent)]">개선 제안</p>
                       {competitors.improvements.map((imp, i) => (
-                        <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-[var(--accent)]/30">{imp}</p>
+                        <p key={i} className="text-xs text-[var(--text-secondary)] pl-2 border-l-2 border-[var(--accent)]/30">{imp}</p>
                       ))}
                     </div>
                   )}
@@ -1484,7 +1484,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                       <Link href={`/dashboard/${rp.id}/edit`} className="text-xs text-[var(--accent)] hover:underline truncate block">
                         {rp.titleKo ?? rp.placeName}
                       </Link>
-                      <p className="text-[10px] text-[var(--text-muted)]">{rp.placeName}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{rp.placeName}</p>
                     </div>
                     <Button
                       variant="ghost"
@@ -1497,7 +1497,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                         else setContentEn((prev) => prev + linkText);
                         showToast("관련 글 링크가 본문 끝에 추가되었습니다. 저장해주세요.");
                       }}
-                      className="text-[10px] h-6 px-2 shrink-0"
+                      className="text-xs h-8 px-3 shrink-0"
                     >
                       삽입
                     </Button>

@@ -77,8 +77,8 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[80vh] px-6 py-12">
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+    <div className="flex items-center justify-center min-h-[80vh] px-4 sm:px-6 py-12">
+      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
         {/* Left: Branding */}
         <div className="flex flex-col gap-8 fade-in-up">
           <div>
@@ -108,7 +108,7 @@ function LoginForm() {
 
         {/* Right: Form */}
         <div className="space-y-6 fade-in-up fade-in-up-delay-1">
-          <div className="text-center lg:text-left">
+          <div className="text-center md:text-left">
             <h1 className="text-2xl font-bold">다시 와주셨네요!</h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">이메일로 로그인하세요</p>
           </div>
@@ -117,7 +117,7 @@ function LoginForm() {
             <CardContent className="pt-6 px-6 pb-6">
               <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (
-                  <div className="text-xs px-3 py-2 rounded-md bg-[var(--danger-soft)] text-[var(--danger)]">
+                  <div role="alert" aria-live="polite" className="text-sm px-3 py-2 rounded-md bg-[var(--danger-soft)] text-[var(--danger)]">
                     {error}
                   </div>
                 )}

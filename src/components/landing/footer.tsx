@@ -71,7 +71,7 @@ export function Footer({ columns, copyright }: FooterProps) {
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-sm text-[var(--text-muted)] no-underline hover:text-[var(--text)] transition-colors duration-200"
+                      className="text-sm text-[var(--text-muted)] no-underline hover:text-[var(--text)] transition-colors duration-200 py-1 inline-block"
                     >
                       {link.label}
                     </Link>
