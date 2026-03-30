@@ -13,20 +13,99 @@ export type QualityCheckResult = {
 };
 
 const AI_PATTERNS_KO = [
+  // ── 안내형 도입 ──
   "소개해 드리겠습니다",
   "소개해드리겠습니다",
   "알아보겠습니다",
   "알아볼까요",
   "살펴보겠습니다",
   "다루어 보겠습니다",
+  "그럼 지금부터",
+  "자 그러면",
+  "오늘은 여러분께",
+  "여러분에게 소개",
+  "같이 알아볼까요",
+  "함께 살펴보겠습니다",
+
+  // ── 나열형 구조 ──
   "첫째,",
   "둘째,",
   "셋째,",
+
+  // ── 뻔한 마무리 ──
   "마지막으로,",
   "결론적으로",
   "요약하자면",
-  "그럼 지금부터",
-  "자 그러면",
+  "추천드립니다",
+  "강추합니다",
+  "방문해보시길",
+  "후회하지 않으실",
+  "꼭 한번 방문해",
+  "실망하지 않으실",
+
+  // ── AI 수식어 (실제 블로거가 안 쓰는 표현) ──
+  "다양한 메뉴",
+  "다양한 맛",
+  "특별한 경험",
+  "특별한 맛",
+  "완벽한 조화",
+  "완벽한 맛",
+  "독특한 매력",
+  "독특한 분위기",
+  "풍부한 맛",
+  "조화로운",
+  "조화롭게",
+  "어우러진",
+  "어우러져",
+
+  // ── AI 미사여구 ──
+  "분위기를 자아내",
+  "눈길을 사로잡",
+  "입안 가득 퍼지는",
+  "미각을 자극",
+  "맛의 향연",
+  "미식의 여정",
+  "가히 압권",
+  "정성이 느껴지",
+  "정성이 가득",
+  "매력에 빠지",
+  "매력을 느끼",
+  "자랑하는",
+  "감동을 선사",
+  "감탄을 자아내",
+  "한 편의 그림",
+
+  // ── AI 과장 패턴 ──
+  "그야말로",
+  "가히",
+  "이루 말할 수 없",
+  "한마디로 정의",
+  "두말할 나위 없",
+];
+
+const AI_PATTERNS_EN = [
+  "nestled in",
+  "nestled between",
+  "symphony of flavors",
+  "culinary journey",
+  "culinary adventure",
+  "hidden gem",
+  "tantalizing",
+  "delectable",
+  "boasts",
+  "bustling",
+  "mouth-watering",
+  "mouthwatering",
+  "a testament to",
+  "elevate your",
+  "elevates the",
+  "gastronomic",
+  "embark on",
+  "indulge in",
+  "feast for the eyes",
+  "treat your taste buds",
+  "dining experience",
+  "not to be missed",
 ];
 
 /**
@@ -97,7 +176,7 @@ export function validateContent(
     }
   }
 
-  // ── 3. AI pattern detection ──
+  // ── 3. AI pattern detection (Korean) ──
   const koContent = content.contentKo ?? "";
   const detectedPatterns: string[] = [];
   for (const pattern of AI_PATTERNS_KO) {
@@ -108,6 +187,19 @@ export function validateContent(
   if (detectedPatterns.length > 0) {
     issues.push(`AI스러운 표현 감지: "${detectedPatterns.join('", "')}"`);
     score -= detectedPatterns.length * 5;
+  }
+
+  // ── 3b. AI pattern detection (English) ──
+  const enContent = (content.contentEn ?? "").toLowerCase();
+  const detectedPatternsEn: string[] = [];
+  for (const pattern of AI_PATTERNS_EN) {
+    if (enContent.includes(pattern)) {
+      detectedPatternsEn.push(pattern);
+    }
+  }
+  if (detectedPatternsEn.length > 0) {
+    issues.push(`AI-sounding expressions detected: "${detectedPatternsEn.join('", "')}"`);
+    score -= detectedPatternsEn.length * 5;
   }
 
   // Check for numbered lists (1. 2. 3.)

@@ -258,10 +258,14 @@ function buildPrompt(
   const examples = CATEGORY_EXAMPLES[cat] ?? CATEGORY_EXAMPLES.restaurant;
   const sensory = SENSORY_FRAMEWORK[cat] ?? SENSORY_FRAMEWORK.restaurant;
 
-  // Randomly select 2 out of 3 Korean examples
-  const koExamples = [...examples.ko];
-  const removeIdx = Math.floor(Math.random() * koExamples.length);
-  koExamples.splice(removeIdx, 1);
+  // Age-weighted few-shot selection: keep the style matching user's age group,
+  // then randomly pick 1 of the remaining 2 styles
+  const ageGroup = userProfile?.ageGroup ?? "30s";
+  const ageStyleIndex = ageGroup === "20s" ? 0 : ageGroup === "30s" ? 1 : 2;
+  const koExamples: string[] = [examples.ko[ageStyleIndex]]; // always include matching style
+  const otherIndices = [0, 1, 2].filter((i) => i !== ageStyleIndex);
+  const randomOther = otherIndices[Math.floor(Math.random() * otherIndices.length)];
+  koExamples.push(examples.ko[randomOther]);
   const exampleKoText = koExamples.map((ex, i) => `예시 ${i + 1}:\n${ex}`).join("\n\n");
   const exampleEnText = examples.en;
   const ageTone = getAgeToneInstruction(userProfile?.ageGroup ?? "30s");
@@ -681,32 +685,32 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<GeneratedCont
   };
 }
 
-// ── Self-refine: polish pass ──
+// ── Self-refine: 2-step polish pass ──
 
-async function polishContent(
+interface AiExpression {
+  text: string;
+  location: "ko" | "en";
+  reason: string;
+}
+
+/**
+ * Step 1: Ask LLM to find AI-sounding expressions (critique only, no rewriting).
+ * Returns a structured list of problematic expressions.
+ */
+async function findAiExpressions(
   content: GeneratedContent,
   apiKey: string,
-): Promise<GeneratedContent> {
-  // 2-pass self-critique: first find AI-sounding expressions, then rewrite them
-  const prompt = `아래 블로그 글을 읽고 두 가지 작업을 수행하세요.
+): Promise<AiExpression[]> {
+  const prompt = `아래 블로그 글에서 AI가 쓴 것 같은 표현을 **찾기만** 하세요. 고치지 마세요.
 
-## 작업 1: AI 냄새 찾기
-아래 글에서 AI가 쓴 것 같은 표현을 모두 찾으세요:
-- 실제 사람이 안 쓰는 수식어 (다양한, 특별한, 완벽한, 조화로운)
-- 과도한 미사여구 (분위기를 자아내다, 눈길을 사로잡다, 입안 가득 퍼지는)
+## 감지 기준
+- 실제 사람이 안 쓰는 수식어 (다양한, 특별한, 완벽한, 조화로운, 독특한, 풍부한)
+- 과도한 미사여구 (분위기를 자아내다, 눈길을 사로잡다, 입안 가득 퍼지는, 맛의 향연)
 - 안내형 도입 (소개해 드리겠습니다, 알아보겠습니다)
 - 뻔한 마무리 (추천드립니다, 강추합니다, 마지막으로)
-- 같은 표현 반복 (같은 단어가 2회 이상)
+- 같은 표현 반복 (같은 단어/표현이 2회 이상 등장)
 - 부자연스러운 존댓말 혼용
-- 영어: "nestled", "symphony of flavors", "culinary journey", "hidden gem", "tantalizing", "delectable", "boasts", "bustling", "mouth-watering"
-
-## 작업 2: 자연스럽게 고치기
-찾은 부분만 골라서 실제 블로거처럼 자연스럽게 고쳐쓰세요.
-- 글의 전체 구조, 문단 수, 길이는 유지
-- [PHOTO:n] 마커 절대 제거/이동 금지
-- 새로운 정보 추가 금지
-- 해시태그 수정 금지
-- 약한 묘사는 오감 활용한 구체적 표현으로 강화
+- 영어: "nestled", "symphony of flavors", "culinary journey", "hidden gem", "tantalizing", "delectable", "boasts", "bustling", "mouth-watering", "a testament to", "elevate"
 
 ## 한국어 글
 제목: ${content.titleKo}
@@ -718,7 +722,94 @@ ${content.contentKo}
 본문:
 ${content.contentEn}
 
-최종 수정본만 JSON으로 반환:
+JSON으로 반환 (고치지 말고 찾기만):
+{
+  "expressions": [
+    { "text": "발견한 AI 표현 원문", "location": "ko 또는 en", "reason": "왜 AI스러운지 한 줄 설명" }
+  ]
+}
+표현이 없으면 { "expressions": [] }`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "블로그 품질 감수 전문가입니다. AI가 생성한 것 같은 부자연스러운 표현을 정확하게 찾아내는 것이 전문입니다. 수정은 하지 말고 찾기만 하세요.",
+          },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 2048,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) return [];
+
+    const parsed = JSON.parse(text) as { expressions?: AiExpression[] };
+    return parsed.expressions ?? [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Step 2: Given the list of AI expressions found, rewrite only those parts.
+ */
+async function polishContent(
+  content: GeneratedContent,
+  apiKey: string,
+): Promise<GeneratedContent> {
+  // Step 1: Find AI expressions
+  const expressions = await findAiExpressions(content, apiKey);
+  if (expressions.length === 0) return content; // nothing to fix
+
+  // Step 2: Rewrite only the found expressions
+  const expressionList = expressions
+    .map((e, i) => `${i + 1}. [${e.location}] "${e.text}" — ${e.reason}`)
+    .join("\n");
+
+  const prompt = `아래 블로그 글에서 다음 AI스러운 표현들이 발견되었습니다. 이 표현들**만** 자연스럽게 고쳐주세요.
+
+## 발견된 AI 표현 (이것들만 수정)
+${expressionList}
+
+## 수정 규칙
+- 위 목록에 있는 표현만 수정 — 나머지는 원문 그대로 유지
+- 글의 전체 구조, 문단 수, 길이 유지
+- [PHOTO:n] 마커 절대 제거/이동 금지
+- 새로운 정보 추가 금지
+- 해시태그 수정 금지
+- 약한 묘사는 오감 활용한 구체적 표현으로 대체
+
+## 한국어 글
+제목: ${content.titleKo}
+본문:
+${content.contentKo}
+
+## 영어 글
+제목: ${content.titleEn}
+본문:
+${content.contentEn}
+
+수정된 전체 글을 JSON으로 반환:
 {
   "titleKo": "수정된 한국어 제목",
   "contentKo": "수정된 한국어 본문",
@@ -741,7 +832,7 @@ ${content.contentEn}
         messages: [
           {
             role: "system",
-            content: "블로그 편집 전문가입니다. AI가 쓴 것 같은 표현을 찾아 실제 사람이 쓴 것처럼 고치는 것이 전문입니다. 원문의 톤, 길이, 구조를 유지하면서 어색한 표현만 다듬어주세요.",
+            content: "블로그 편집 전문가입니다. 지정된 AI 표현만 골라서 실제 사람이 쓴 것처럼 고치세요. 지정되지 않은 부분은 한 글자도 바꾸지 마세요.",
           },
           { role: "user", content: prompt },
         ],
@@ -751,7 +842,7 @@ ${content.contentEn}
       signal: controller.signal,
     });
 
-    if (!response.ok) return content; // polish 실패 시 원본 반환
+    if (!response.ok) return content;
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content;
@@ -770,9 +861,9 @@ ${content.contentEn}
     const markersIntact = originalMarkers.length === polishedMarkers.length &&
       originalMarkers.every((m, i) => m === polishedMarkers[i]);
 
-    if (!markersIntact) return content; // 마커가 손실되면 원본 반환
+    if (!markersIntact) return content;
 
-    // Calculate polish usage for tracking
+    // Calculate polish usage for tracking (both calls combined)
     const polishUsage = data.usage
       ? {
           model: data.model ?? "unknown",
@@ -784,14 +875,14 @@ ${content.contentEn}
     return {
       titleKo: polished.titleKo || content.titleKo,
       contentKo: polished.contentKo || content.contentKo,
-      hashtagsKo: content.hashtagsKo, // 해시태그는 수정 안 함
+      hashtagsKo: content.hashtagsKo,
       titleEn: polished.titleEn || content.titleEn,
       contentEn: polished.contentEn || content.contentEn,
       hashtagsEn: content.hashtagsEn,
       usage: polishUsage,
     };
   } catch {
-    return content; // 어떤 에러든 원본 반환
+    return content;
   } finally {
     clearTimeout(timeout);
   }
