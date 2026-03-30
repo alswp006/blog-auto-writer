@@ -95,47 +95,47 @@ const CATEGORY_STRUCTURE: Record<string, { ko: string; en: string }> = {
 const CATEGORY_EXAMPLES: Record<string, { ko: string[]; en: string }> = {
   restaurant: {
     ko: [
-      // Casual 20s style
-      `골목 끝에 간판도 제대로 없는 집이길래 솔직히 좀 의심했거든요ㅋㅋ 근데 문 열자마자 고기 굽는 냄새가 확 올라오는데 이건 진짜다 싶었어요. 메뉴가 딱 네 개밖에 없는데 오히려 이런 집이 잘하잖아요. 삼겹살 첫 점 올리자마자 지글지글 소리부터 남달랐고, 한 입 먹으니까 겉은 바삭한데 안은 육즙이 터지는 거예요. 친구랑 둘이서 눈 마주치고 아무 말 안 해도 알겠더라고요. 여기 또 온다.`,
-      // 30s detailed style
-      `회사 동료가 점심 맛집이라고 알려준 곳인데, 외관은 솔직히 기대 이하였어요. 허름한 가정집 같은 느낌. 근데 들어가서 된장찌개 하나 시켰는데 반찬이 일곱 가지가 나오더라고요. 김치가 직접 담근 건지 아삭하면서 깊은 맛이 났고, 된장찌개는 두부가 뜨끈하게 흔들리면서 나왔는데 국물이 짜지 않고 구수했어요. 8천원인데 이 퀄리티면 주변 직장인들한테는 성지 같은 곳이겠다 싶었어요.`,
-      // Sensory/emotional style
-      `비 오는 날이었어요. 우산 쓰고 찾아간 골목 안쪽, 작은 유리문 너머로 김이 모락모락 피어오르는 게 보였어요. 안으로 들어서니 나무 테이블에서 올라오는 따뜻한 온기가 젖은 손끝까지 녹여주는 느낌이었어요. 칼국수 한 그릇이 나왔는데, 첫 숟가락에 멸치 육수의 깊은 감칠맛이 혀 위로 퍼지면서 몸 전체가 풀리는 것 같았어요. 밖에서 후두둑 떨어지는 빗소리를 들으며 먹는 그 국수가, 그날 하루를 완전히 바꿔놨어요.`,
+      // 20s — 짧은 호흡, 직접적 감탄, ~임/~인데/~했는데 위주, 과한 존댓말 X
+      `간판 없는 골목집인데 이게 진짜 미침. 문 여는 순간 고기 냄새 확 올라오는데 아 여기 맞다 싶었음. 메뉴 네 개. 근데 이런 집이 진짜 잘함 ㅋㅋ 삼겹살 올리자마자 지글지글 소리부터 다르고, 한 입 먹었는데 겉바속촉에 육즙 터짐. 친구랑 눈 마주치고 말 안 해도 알았음. 여기 또 옴.`,
+      // 30s — ~했어요 체, 정돈된 문장, 가격/비교 등 실용 정보
+      `회사 동료가 알려준 점심 맛집인데, 외관은 솔직히 좀 허름해요. 가정집 개조한 느낌. 근데 된장찌개 하나 시켰더니 반찬이 일곱 가지 나옴. 김치가 직접 담근 건지 아삭하면서 맛이 깊고, 된장찌개는 두부가 흔들흔들 나왔는데 국물이 짜지 않고 구수해요. 8천원에 이 퀄리티면 주변 직장인들 점심 성지일 듯.`,
+      // 감성 — 장면 중심, 짧은 문장과 긴 문장 교차, 감각 구체적
+      `비 오는 날이었다. 우산 쓰고 골목 안쪽으로 들어가니까 작은 유리문 너머로 김이 피어오르는 게 보였다. 문 열고 들어서니 나무 테이블에서 올라오는 온기가 젖은 손끝까지 데워주는 느낌. 칼국수 한 그릇. 첫 숟가락에 멸치 육수 감칠맛이 혀 위로 퍼지면서 몸이 풀렸다. 밖에서 빗소리 들으면서 먹는 그 국수가, 그날 하루를 바꿔놨다.`,
     ],
-    en: `Tucked away in a narrow alley, this place had me skeptical at first — the sign was tiny and easy to miss. But the moment I stepped inside, the rich aroma of sesame oil hit me and I knew I was in for something good. The menu was refreshingly short, which in my experience is always a promising sign. When the galbitang arrived, the broth had that beautiful clear-yet-deeply-flavored look, and one sip confirmed it — this was the real deal.`,
+    en: `Down a narrow alley, sign barely visible. I almost walked past it. But the sesame oil smell hit me the second I opened the door — okay, this is real. Menu had four items. That's usually a good sign. The galbitang came out and the broth was clear but deep. One sip and I just knew. Sometimes you don't need a long menu to know a place gets it.`,
   },
   cafe: {
     ko: [
-      // Casual 20s style
-      `여기 진짜 찐이에요. 인스타에서 봤을 때는 또 감성카페인가 했는데 들어가니까 분위기부터 다르더라고요. 원두 볶는 냄새가 코끝을 찌르는데 이건 직접 로스팅하는 집이구나 바로 느껴졌어요. 아아 시켰는데 한 모금 마시니까 산미가 딱 제 취향이었고요. 창가 자리에 앉아서 멍때리기 최고였어요ㅋㅋ`,
-      // 30s detailed style
-      `지인 추천으로 찾아간 동네 카페인데, 위치가 주택가 안쪽이라 네비 없으면 못 찾아요. 근데 찾아가면 보상받는 느낌이에요. 인테리어가 과하지 않게 우드톤으로 정리되어 있고, 스피커에서 재즈가 적당한 볼륨으로 나와요. 드립커피를 시켰는데 에티오피아 원두로 내린 거라 과일향이 은은하게 올라왔어요. 크로플도 겉바속촉 그 자체. 와이파이 빠르고 콘센트도 있어서 노트북 작업하기에 최적이었어요.`,
-      // Sensory/emotional style
-      `오래된 빌라 1층을 개조한 카페인데, 문을 열면 나무 바닥이 삐걱거려요. 근데 그 소리가 싫지 않고 오히려 정겨웠어요. 바 앞에 서니까 핸드드립 내리는 소리가 똑똑 들리고, 추출되면서 올라오는 향이 달콤하면서도 고소했어요. 창밖으로 뒤뜰 나무가 보이는데 오후 햇살이 잎사귀 사이로 흔들리는 게 참 좋더라고요. 커피 한 잔 들고 그냥 한참을 앉아 있었어요.`,
+      // 20s
+      `여기 찐임. 인스타에서 보고 또 감성카페인가 했는데 들어가니까 다름. 원두 볶는 냄새 바로 느껴지고 아 여기 직접 로스팅하는 집이구나 함. 아아 시켰는데 산미가 딱 내 취향. 창가 자리 앉아서 멍때리기 ㄹㅇ 최고 ㅋㅋㅋ 다음에 노트북 들고 와야지.`,
+      // 30s
+      `주택가 안쪽이라 네비 없으면 못 찾아요. 근데 찾아가면 그만한 보상이 있는 곳. 우드톤 인테리어가 과하지 않게 정리되어 있고 재즈가 적당한 볼륨으로 나와요. 에티오피아 원두 드립커피 시켰는데 과일향이 은은하게 올라옴. 크로플은 겉바속촉. 와이파이 빠르고 콘센트 있어서 작업하기 좋아요.`,
+      // 감성
+      `오래된 빌라 1층 개조한 카페. 문 열면 나무 바닥이 삐걱거린다. 근데 그 소리가 싫지 않다. 바 앞에 서면 핸드드립 내리는 소리가 똑, 똑 들리고, 올라오는 향이 달콤하면서 고소하다. 창밖에 뒤뜰 나무가 보이는데 오후 햇살이 잎사귀 사이로 흔들린다. 커피 한 잔 들고 한참을 그냥 앉아 있었다.`,
     ],
-    en: `I stumbled upon this cafe through Instagram and it honestly looked even better in person. Sitting by the second-floor window, I had a perfect view of ginkgo trees with golden leaves catching the afternoon sunlight. Their signature latte surprised me — what I expected to be vanilla had this subtle hazelnut undertone. Power outlets at every seat made it perfect for working remotely too.`,
+    en: `Found this place through Instagram but it's way better in person. Second-floor window seat, ginkgo trees outside going full golden in the afternoon light. Ordered their signature latte — expected vanilla but got this subtle hazelnut thing going on. Power outlets everywhere too, so I ended up staying three hours.`,
   },
   accommodation: {
     ko: [
-      // Casual 20s style
-      `체크인하는데 프론트 언니가 웰컴 드링크 주면서 루프탑 바 시간까지 알려주더라고요. 방 들어가자마자 침대에 다이빙했는데 이불이 진짜 뽀송해서 바로 못 일어났어요ㅋㅋ 창밖에 야경 살짝 보이는 것도 기분 좋았고, 욕실 어메니티가 이솝이라 씻고 나니까 몸에서 좋은 향이 났어요. 가격 대비 이 정도면 완전 이득이에요.`,
-      // 30s detailed style
-      `로비 들어서자마자 은은한 디퓨저 향이 나는데 고급스럽되 과하지 않았어요. 체크인 5분도 안 걸렸고, 직원분이 조식 뷔페 시간이랑 주변 맛집 리스트를 프린트해서 주셨어요. 방은 20평 정도 되는데 킹베드 기준으로 넉넉했고, 침구가 400수 코튼인지 감촉이 확실히 달랐어요. 방음도 괜찮은 편이라 복도 소리가 거의 안 들렸어요. 조식은 한식 뷔페인데 갓 지은 밥이랑 된장국이 투숙객 전용치고는 꽤 수준급이었어요.`,
-      // Sensory/emotional style
-      `엘리베이터 문이 열리고 복도를 걸어가는데, 발밑 카펫이 두꺼워서 발소리가 하나도 안 나더라고요. 방문을 열자마자 넓은 창으로 들어오는 저녁 노을빛이 방 전체를 주황색으로 물들이고 있었어요. 침대에 천천히 눕자 몸이 스르르 가라앉는 느낌. 베개에서 은은한 라벤더 향이 나면서 여행의 피로가 녹아내리는 것 같았어요. 밤에 불 끄고 누우니까 창밖으로 도시 불빛이 별처럼 보였어요.`,
+      // 20s
+      `체크인할 때 웰컴 드링크 주면서 루프탑 바 시간까지 알려줌. 방 들어가자마자 침대 다이빙함. 이불 뽀송한 거 실화..? 바로 못 일어남 ㅋㅋ 야경도 살짝 보이고 어메니티 이솝이라 씻고 나니까 나한테서 좋은 냄새남. 이 가격에 이 정도면 완전 이득임.`,
+      // 30s
+      `로비 들어서면 디퓨저 향이 은은한데 과하지 않아요. 체크인 5분 컷. 직원분이 조식 시간이랑 주변 맛집 리스트까지 프린트해서 줌. 방은 20평 정도에 킹베드 기준 넉넉하고, 침구 감촉이 확실히 다른 게 400수 코튼인 것 같아요. 방음도 괜찮아서 복도 소리 거의 안 들리고, 조식 한식 뷔페는 갓 지은 밥이랑 된장국이 투숙객 전용치고 꽤 괜찮은 수준.`,
+      // 감성
+      `엘리베이터 문 열리고 복도를 걸어가는데 카펫이 두꺼워서 발소리가 안 난다. 방문 열자마자 넓은 창으로 저녁 노을이 들어와서 방 전체가 주황빛이다. 침대에 천천히 눕자 몸이 스르르 가라앉는다. 베개에서 라벤더 향. 밤에 불 끄고 누우니까 창밖 도시 불빛이 별 같았다.`,
     ],
-    en: `Check-in was smooth — the front desk handed me a welcome drink and walked me through breakfast hours and rooftop bar schedule. The king-size bed had that distinctly plush hotel bedding feel. Through the window I caught a partial view of Namsan Tower, which was a nice bonus. The Aesop bathroom amenities were a pleasant surprise.`,
+    en: `Front desk handed me a welcome drink and went through breakfast hours and rooftop bar schedule. The king bed had that real hotel-quality feel — you sink in and don't want to get up. Caught a partial Namsan Tower view from the window, which was a nice bonus. Aesop toiletries in the bathroom. For the price, I'd come back.`,
   },
   attraction: {
     ko: [
-      // Casual 20s style
-      `안국역 1번 출구에서 걸어갔는데 5분도 안 걸렸어요. 평일이라 사람 별로 없어서 사진 찍기 완전 좋았고요. 돌담길이 진짜 예뻐서 걸으면서 계속 찍었어요ㅋㅋ 소나무 사이로 보이는 전각이 진짜 멋있었는데 특히 향원정 연못 앞에서 한참 서 있었어요. 여기는 봄에 다시 와야겠다.`,
-      // 30s detailed style
-      `주차는 근처 공영주차장에 했고 10분당 300원이에요. 입장료가 3천원인데 외국인은 한복 입으면 무료라 같이 간 외국인 친구가 좋아하더라고요. 전체 관람 코스는 1시간 반 정도면 충분하고, 경회루 쪽에서 보는 전경이 가장 좋았어요. 화장실은 입구 근처에 하나, 안쪽에 하나 있는데 안쪽이 덜 붐벼요. 출구 나오면 바로 삼청동 카페거리라 코스로 묶기 좋아요.`,
-      // Sensory/emotional style
-      `아침 일찍 갔더니 안개가 낮게 깔려 있었어요. 돌담 위에 이슬이 맺혀 있고, 발밑에 자갈 밟히는 소리가 고요한 공기 속에 또각또각 울리더라고요. 전각 처마 끝에서 아침 햇살이 비스듬하게 내려와 마당에 긴 그림자를 만들고 있었어요. 소나무 사이를 지나는 바람에서 살짝 흙냄새가 섞여 올라왔고, 그 순간만큼은 도심 한가운데라는 게 믿기지 않았어요.`,
+      // 20s
+      `안국역 1번 출구에서 걸어가면 5분도 안 걸림. 평일이라 사람 없어서 사진 찍기 개좋았고 돌담길 진짜 예뻐서 걸으면서 계속 찍음 ㅋㅋ 소나무 사이로 보이는 전각 미쳤고 향원정 연못 앞에서 한참 서 있었음. 여기 봄에 다시 올 거임.`,
+      // 30s
+      `근처 공영주차장 이용했고 10분당 300원이에요. 입장료 3천원인데 한복 입으면 무료라서 같이 간 외국인 친구가 좋아함. 전체 관람은 1시간 반이면 충분하고, 경회루 쪽 전경이 제일 나아요. 화장실은 입구랑 안쪽 두 군데 있는데 안쪽이 덜 붐빔. 출구 나오면 바로 삼청동 카페거리라 코스로 엮기 좋아요.`,
+      // 감성
+      `아침 일찍 갔더니 안개가 낮게 깔려 있었다. 돌담 위에 이슬, 발밑 자갈 밟히는 소리가 고요한 공기 속에서 또각또각 울린다. 전각 처마 끝에서 아침 햇살이 비스듬히 내려와 마당에 긴 그림자를 만들고 있었다. 소나무 사이 바람에서 흙냄새가 살짝 섞여 올라왔고, 그 순간만큼은 여기가 도심 한가운데라는 게 안 믿겼다.`,
     ],
-    en: `From Anguk Station Exit 1, it was just a five-minute walk to the entrance. Going on a weekday morning meant barely any crowds, so I could wander freely. Walking along the stone walls with a cool breeze, I understood why this draws millions yearly. The deeper I went, the more stunning it got — traditional pavilions framed by pine trees, like something straight out of a painting.`,
+    en: `Five minutes from Anguk Station Exit 1. Went on a weekday morning so barely anyone around. Walking along the stone walls with a cool breeze, I got why this place draws millions every year. The deeper I went, the better it got — traditional pavilions framed by old pine trees. Felt like walking into a painting, honestly.`,
   },
 };
 
@@ -220,19 +220,35 @@ function getAgeToneInstruction(ageGroup: string): { ko: string; en: string } {
   switch (ageGroup) {
     case "20s":
       return {
-        ko: "20대 어투: 이모지 자연스럽게 섞기, ㅋㅋ/ㅎㅎ 가끔 사용, '진짜' '대박' '미쳤다' 같은 감탄사, 짧은 문장 위주, 솔직한 리액션",
-        en: "Write like a 20-something traveler: use casual exclamations, short punchy sentences, genuine excitement",
+        ko: `20대 어투 규칙:
+- 문장을 짧게 끊어라. 한 문장에 정보 하나만.
+- '~거든요', '~더라고요' 같은 아줌마 말투 절대 금지. 대신 '~임', '~인데', '~했는데', '~함', '~좋았음' 사용.
+- 'ㅋㅋ', 'ㄹㅇ', '찐', '미침', '실화' 같은 표현 자연스럽게 섞기.
+- '~해요/~했어요' 존댓말 최소화. 반말+약간의 존댓말 믹스.
+- 감탄은 직접적으로: '이거 진짜 미침', '무조건 가야 됨', '나만 알고 싶은 곳'
+- 이모지는 안 써도 됨. 쓰더라도 1~2개만.`,
+        en: "Write like a real 20-something: short sentences, direct reactions ('this was insane', 'absolutely worth it'), skip formal transitions, sound like you're texting a friend about a great find",
       };
     case "30s":
       return {
-        ko: "30대 어투: 친근하지만 정돈된 말투, '~했어요' 체, 구체적인 비교('다른 곳보다 ~'), 실용적 정보 강조, 이모지 최소",
-        en: "Write like a 30-something professional: friendly but organized, practical details, comparisons to alternatives",
+        ko: `30대 어투 규칙:
+- '~해요/~했어요' 체 기본이되, 가끔 '~함', '~임'으로 끊어서 리듬감 주기.
+- 실용 정보 자연스럽게 녹이기: 가격, 주차, 위치, 다른 곳과 비교.
+- 과한 감탄 대신 담백한 평가: '괜찮은 수준', '이 가격에 이 정도면', '나쁘지 않아요'.
+- 이모지 쓰지 않기. ㅋㅋ도 안 쓰거나 아주 가끔만.
+- 문장은 중간 길이. 너무 짧지도 너무 길지도 않게.`,
+        en: "Write like a 30-something with a blog: friendly but organized, include practical details (price, parking, comparison to alternatives), no excessive enthusiasm, dry wit is okay",
       };
     case "40plus":
     default:
       return {
-        ko: "40대+ 어투: 차분하고 신뢰감 있는 톤, '~합니다/했습니다' 체도 자연스럽게 혼용, 디테일한 관찰, 가격 대비 가치 분석, 이모지 사용 자제",
-        en: "Write like a seasoned reviewer: calm, authoritative tone, detailed observations, value analysis",
+        ko: `40대+ 어투 규칙:
+- '~합니다/~했습니다' 체와 '~해요' 체 자연스럽게 혼용.
+- 관찰이 디테일하고 차분함. 서두르지 않는 문장.
+- 가격 대비 가치, 서비스 수준, 재방문 의향 등 판단 근거를 명확히.
+- 감탄사나 유행어 사용 자제. 이모지 사용 안 함.
+- 경험에서 우러나오는 비교: '여기저기 다녀봤지만', '이 동네에서는 ~'.`,
+        en: "Write like an experienced reviewer: calm authoritative tone, detailed observations, value-for-money analysis, no slang or exclamations, measured praise backed by specifics",
       };
   }
 }
