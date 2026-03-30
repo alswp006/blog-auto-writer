@@ -55,7 +55,7 @@ const FEATURES = [
 
 export default function AboutPage() {
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-12 space-y-16">
+    <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-8 md:py-12 space-y-16">
       {/* Hero */}
       <div className="text-center space-y-4">
         <h1 className="text-3xl md:text-4xl font-bold">
@@ -88,7 +88,7 @@ export default function AboutPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-sm">{s.title}</h3>
-                    <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">{s.desc}</p>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1.5 leading-relaxed">{s.desc}</p>
                   </div>
                 </div>
               </CardContent>
@@ -105,7 +105,7 @@ export default function AboutPage() {
             <Card key={f.title} className="h-full">
               <CardContent className="p-5 space-y-2">
                 <h3 className="font-semibold text-sm">{f.title}</h3>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{f.desc}</p>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{f.desc}</p>
               </CardContent>
             </Card>
           ))}
@@ -146,7 +146,7 @@ export default function AboutPage() {
             <Card key={item.q}>
               <CardContent className="p-4">
                 <h3 className="text-sm font-semibold">{item.q}</h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">{item.a}</p>
+                <p className="text-sm text-[var(--text-secondary)] mt-1.5 leading-relaxed">{item.a}</p>
               </CardContent>
             </Card>
           ))}

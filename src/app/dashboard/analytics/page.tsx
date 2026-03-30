@@ -108,7 +108,7 @@ export default function AnalyticsPage() {
     <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-8 space-y-8">
       {/* Toast */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+        <div role="alert" aria-live="assertive" className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-elevated)] border border-[var(--border)] text-sm px-5 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
           {toast}
         </div>
       )}
@@ -156,7 +156,7 @@ export default function AnalyticsPage() {
                   </li>
                 </ol>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {[
                   { title: "네이버 애드포스트", href: "https://adpost.naver.com/" },
                   { title: "구글 애드센스", href: "https://www.google.com/adsense/start/" },
@@ -183,7 +183,7 @@ export default function AnalyticsPage() {
         ) : (
           <div className="space-y-4">
             {/* Month total */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="p-5">
                   <p className="text-xs text-[var(--text-muted)] mb-1">이번 달 총 수익</p>
@@ -221,7 +221,7 @@ export default function AnalyticsPage() {
                         <button
                           key={p}
                           onClick={() => setPeriod(p)}
-                          className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                          className={`px-3 py-2 text-xs rounded-md transition-colors ${
                             period === p
                               ? "bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30"
                               : "text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--border-hover)]"
@@ -237,7 +237,7 @@ export default function AnalyticsPage() {
                   {filteredDaily.length === 0 ? (
                     <p className="text-sm text-[var(--text-muted)] text-center py-8">해당 기간에 수익 데이터가 없습니다.</p>
                   ) : (
-                    <svg viewBox={`0 0 ${filteredDaily.length * 32} 160`} className="w-full h-40" preserveAspectRatio="none">
+                    <svg viewBox={`0 0 ${filteredDaily.length * 32} 160`} className="w-full h-40" preserveAspectRatio="none" role="img" aria-label="일별 수익 차트">
                       {filteredDaily.map((d, i) => {
                         const barH = Math.max(2, (d.earnings / maxEarnings) * 130);
                         const x = i * 32 + 4;
@@ -257,7 +257,7 @@ export default function AnalyticsPage() {
                               y={155}
                               textAnchor="middle"
                               className="fill-[var(--text-muted)] text-[8px]"
-                              fontSize="8"
+                              fontSize="10"
                             >
                               {d.date.slice(8)}
                             </text>
@@ -317,7 +317,7 @@ export default function AnalyticsPage() {
                       </Link>
                       <p className="text-xs text-[var(--text-muted)]">{post.placeName}</p>
                     </div>
-                    <Badge variant="outline" className="text-[10px] shrink-0">
+                    <Badge variant="outline" className="text-xs shrink-0">
                       {PLATFORM_LABELS[post.platform] ?? post.platform}
                     </Badge>
                     <div className="flex gap-3 text-xs text-[var(--text-secondary)] shrink-0">

@@ -98,7 +98,7 @@ export function SeoScoreCard({
                   />
                 </div>
                 {item.tips.length > 0 && (
-                  <p className="text-[10px] text-[var(--text-muted)]">{item.tips[0]}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{item.tips[0]}</p>
                 )}
               </div>
             ))}

@@ -268,7 +268,7 @@ function CreateForm({ onCreated }: CreateFormProps) {
           </div>
 
           {generalError && (
-            <p className="text-sm text-red-500">{generalError}</p>
+            <p role="alert" className="text-sm text-red-500">{generalError}</p>
           )}
 
           {success && (
@@ -320,7 +320,7 @@ export default function StyleProfilesPage() {
   }, [fetchProfiles]);
 
   return (
-    <section className="w-full py-20">
+    <section className="w-full py-12 md:py-20">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8 space-y-10">
         {/* Header */}
         <div>
@@ -335,7 +335,7 @@ export default function StyleProfilesPage() {
           <div className="space-y-4">
             <CreateForm onCreated={fetchProfiles} />
             {error && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
+              <div role="alert" className="flex items-center justify-between gap-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
                 <p className="text-sm text-red-400">{error}</p>
                 <Button
                   variant="outline"

@@ -62,7 +62,7 @@ export default async function DashboardPage() {
             {profile.nickname}<span className="text-[var(--text-muted)] font-normal">님의 블로그</span>
           </h1>
         </div>
-        <Button asChild className="btn-gradient px-6 shrink-0">
+        <Button asChild className="btn-gradient px-6 shrink-0 w-full sm:w-auto">
           <Link href="/dashboard/new" className="no-underline">
             + 새 글 쓰기
           </Link>
@@ -70,12 +70,12 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats — hero stat + secondary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {/* Hero stat: month count, larger */}
-        <Card className="md:col-span-1 bg-gradient-to-br from-[var(--accent)]/8 to-[var(--warm-glow)] border-[var(--accent)]/20">
+        <Card className="md:col-span-1 border-[var(--accent)]/20">
           <CardContent className="p-6">
             <p className="text-xs text-[var(--accent)] font-medium mb-2">이번 달 작성</p>
-            <p className="text-5xl font-black gradient-text-warm">{monthCount}</p>
+            <p className="text-5xl font-black text-[var(--accent)] tabular-nums">{monthCount}</p>
             <p className="text-xs text-[var(--text-muted)] mt-1">편의 글을 쓰셨어요</p>
           </CardContent>
         </Card>
@@ -105,7 +105,7 @@ export default async function DashboardPage() {
       {/* Monetization Guide */}
       <div>
         <h2 className="text-lg font-semibold mb-4">수익화 가이드</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {MONETIZATION_LINKS.map((link) => (
             <a
               key={link.href}

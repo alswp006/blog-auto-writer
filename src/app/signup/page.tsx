@@ -74,14 +74,14 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[80vh] px-6 py-12">
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+    <div className="flex items-center justify-center min-h-[80vh] px-4 sm:px-6 py-12">
+      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
         {/* Left: Branding */}
         <div className="flex flex-col gap-8 fade-in-up">
           <div>
             <h2 className="text-3xl font-bold leading-tight">
-              <span className="gradient-text-warm">Blog Auto Writer</span>
-              <span className="text-[var(--warm)]"> .</span>
+              Blog Auto Writer
+              <span className="text-[var(--accent)]"> .</span>
             </h2>
             <p className="mt-3 text-[var(--text-secondary)] leading-[1.8]">
               맛집 사진 한 장이면 블로그 글이 완성돼요.<br />
@@ -105,7 +105,7 @@ export default function SignupPage() {
 
         {/* Right: Form */}
         <div className="space-y-6 fade-in-up fade-in-up-delay-1">
-          <div className="text-center lg:text-left">
+          <div className="text-center md:text-left">
             <h1 className="text-2xl font-bold">1분이면 시작할 수 있어요</h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">간단한 정보만 입력하세요</p>
           </div>
@@ -114,7 +114,7 @@ export default function SignupPage() {
             <CardContent className="pt-6 px-6 pb-6">
               <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (
-                  <div className="text-xs px-3 py-2 rounded-md bg-[var(--danger-soft)] text-[var(--danger)]">
+                  <div role="alert" aria-live="polite" className="text-sm px-3 py-2 rounded-md bg-[var(--danger-soft)] text-[var(--danger)]">
                     {error}
                   </div>
                 )}

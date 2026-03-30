@@ -77,13 +77,13 @@ export function CompetitorAnalysisCard({
 
           <div className="rounded-lg bg-[var(--bg-elevated)] p-3 space-y-1.5">
             <p className="text-xs font-medium">상위 글 기준</p>
-            <p className="text-[11px] text-[var(--text-secondary)]">
+            <p className="text-xs text-[var(--text-secondary)]">
               평균 글자수: {competitors.benchmarks.avgContentLength} | 평균 사진: {competitors.benchmarks.avgPhotoCount}
             </p>
             {competitors.benchmarks.commonElements.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-1">
                 {competitors.benchmarks.commonElements.map((el, i) => (
-                  <Badge key={i} variant="secondary" className="text-[10px]">{el}</Badge>
+                  <Badge key={i} variant="secondary" className="text-xs">{el}</Badge>
                 ))}
               </div>
             )}
@@ -93,7 +93,7 @@ export function CompetitorAnalysisCard({
             <div className="space-y-1">
               <p className="text-xs font-medium text-green-400">강점</p>
               {competitors.strengths.map((s, i) => (
-                <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-green-500/30">{s}</p>
+                <p key={i} className="text-xs text-[var(--text-secondary)] pl-2 border-l-2 border-green-500/30">{s}</p>
               ))}
             </div>
           )}
@@ -102,7 +102,7 @@ export function CompetitorAnalysisCard({
             <div className="space-y-1">
               <p className="text-xs font-medium text-yellow-400">부족한 요소</p>
               {competitors.missing.map((m, i) => (
-                <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-yellow-500/30">{m}</p>
+                <p key={i} className="text-xs text-[var(--text-secondary)] pl-2 border-l-2 border-yellow-500/30">{m}</p>
               ))}
             </div>
           )}
@@ -111,7 +111,7 @@ export function CompetitorAnalysisCard({
             <div className="space-y-1">
               <p className="text-xs font-medium text-[var(--accent)]">개선 제안</p>
               {competitors.improvements.map((imp, i) => (
-                <p key={i} className="text-[11px] text-[var(--text-secondary)] pl-2 border-l-2 border-[var(--accent)]/30">{imp}</p>
+                <p key={i} className="text-xs text-[var(--text-secondary)] pl-2 border-l-2 border-[var(--accent)]/30">{imp}</p>
               ))}
             </div>
           )}

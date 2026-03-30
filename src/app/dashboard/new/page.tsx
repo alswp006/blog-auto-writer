@@ -57,7 +57,7 @@ const CATEGORY_OPTIONS: { value: PlaceCategory; label: string }[] = [
 ];
 
 const selectClass =
-  "w-full h-10 rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition-colors";
+  "w-full h-11 rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition-colors";
 
 const MAX_PHOTOS = 20;
 
@@ -439,7 +439,7 @@ export default function DashboardNewPage() {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div role="alert" aria-live="polite" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
               <p>{error}</p>
               {sseRecoveryPostId && (
                 <Button
@@ -469,14 +469,14 @@ export default function DashboardNewPage() {
                       if (!isRevisit) setSelectedExistingPlaceId(null);
                     }}
                     className={cn(
-                      "relative w-11 h-6 rounded-full transition-colors",
+                      "relative w-12 h-7 rounded-full transition-colors",
                       isRevisit ? "bg-[var(--accent)]" : "bg-[var(--bg-elevated)] border border-[var(--border)]",
                     )}
                   >
                     <span
                       className={cn(
-                        "absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform shadow-sm",
-                        isRevisit ? "translate-x-5" : "translate-x-0.5",
+                        "absolute top-0.5 w-6 h-6 rounded-full bg-white transition-transform shadow-sm",
+                        isRevisit ? "translate-x-5.5" : "translate-x-0.5",
                       )}
                     />
                   </button>
@@ -700,7 +700,7 @@ export default function DashboardNewPage() {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className="grid grid-cols-2 md:grid-cols-3 gap-3"
+                        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"
                       >
                         {photos.map((photo, i) => (
                           <Draggable key={`photo-${i}`} draggableId={`photo-${i}`} index={i}>
@@ -729,7 +729,7 @@ export default function DashboardNewPage() {
                                     "absolute bottom-10 left-1 w-6 h-6 rounded-full text-xs flex items-center justify-center transition-all",
                                     thumbnailIdx === i
                                       ? "bg-yellow-400 text-black"
-                                      : "bg-black/40 text-white/60 opacity-0 group-hover:opacity-100",
+                                      : "bg-black/40 text-white/60 opacity-100 md:opacity-0 md:group-hover:opacity-100",
                                   )}
                                   title="대표 사진 지정"
                                 >
@@ -737,7 +737,7 @@ export default function DashboardNewPage() {
                                 </button>
                                 <button
                                   onClick={() => removePhoto(i)}
-                                  className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                  className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full text-white text-xs flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                                 >
                                   X
                                 </button>
@@ -745,7 +745,7 @@ export default function DashboardNewPage() {
                                   value={photo.caption ?? ""}
                                   onChange={(e) => updateCaption(i, e.target.value)}
                                   placeholder="사진 설명..."
-                                  className="mt-1 text-xs h-7"
+                                  className="mt-1 text-xs h-9"
                                 />
                               </div>
                             )}
