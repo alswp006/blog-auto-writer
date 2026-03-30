@@ -9,7 +9,7 @@
   --color-popover: var(--bg-elevated);
   --color-popover-foreground: var(--text);
   --color-primary: var(--accent);
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: #fef8f5;
   --color-secondary: var(--bg-elevated);
   --color-secondary-foreground: var(--text);
   --color-muted: var(--bg-elevated);
@@ -17,40 +17,51 @@
   --color-accent-color: var(--accent-soft);
   --color-accent-foreground: var(--text);
   --color-destructive: var(--danger);
-  --color-destructive-foreground: #ffffff;
+  --color-destructive-foreground: #fef8f5;
   --color-border-color: var(--border);
   --color-input: var(--bg-input);
   --color-ring: var(--accent);
   --radius: 0.75rem;
+  --font-sans: var(--font-geist-sans), "Noto Sans KR", system-ui, sans-serif;
 }
 
 :root {
-  --bg: #0a0a0f;
-  --bg-elevated: #12121a;
-  --bg-card: #16161f;
-  --bg-input: #1a1a25;
-  --border: #23232f;
-  --border-hover: #33334a;
-  --text: #e8e8f0;
-  --text-secondary: #a8a8b8;
-  --text-muted: #666680;
-  --accent: #6366f1;
-  --accent-soft: rgba(99, 102, 241, 0.12);
-  --success: #34d399;
-  --success-soft: rgba(52, 211, 153, 0.12);
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.12);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.12);
-  --warm: #f59e0b;
-  --warm-soft: rgba(245, 158, 11, 0.12);
-  --warm-glow: rgba(245, 158, 11, 0.06);
+  /* Warm-tinted dark palette — no pure grays, subtle warmth throughout */
+  --bg: #0e0d0b;
+  --bg-elevated: #171613;
+  --bg-card: #1c1a17;
+  --bg-input: #222019;
+  --border: #2e2b25;
+  --border-hover: #46413a;
+  --text: #ede8e0;
+  --text-secondary: #b3ab9e;
+  --text-muted: #736c62;
+
+  /* Coral accent — warm, distinctive, intentional */
+  --accent: #d4644a;
+  --accent-soft: rgba(212, 100, 74, 0.10);
+
+  /* Semantic states */
+  --success: #5cb378;
+  --success-soft: rgba(92, 179, 120, 0.10);
+  --danger: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.10);
+  --warning: #e6a441;
+  --warning-soft: rgba(230, 164, 65, 0.10);
+
+  /* Secondary warm accent */
+  --warm: #dba054;
+  --warm-soft: rgba(219, 160, 84, 0.10);
+  --warm-glow: rgba(219, 160, 84, 0.04);
+
+  /* Easing — natural deceleration, never bounce/elastic */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ══ CRITICAL: ALL base styles MUST be in @layer base ══
    Tailwind v4 puts utilities in @layer utilities.
-   CSS outside @layer has HIGHER specificity and overrides utilities.
-   Without @layer base, even `* { padding: 0 }` kills pt-16, px-4, gap-6, etc. */
+   CSS outside @layer has HIGHER specificity and overrides utilities. */
 @layer base {
   *,
   *::before,
@@ -67,7 +78,7 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Roboto, sans-serif;
+    font-family: var(--font-geist-sans), "Noto Sans KR", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.7;
@@ -78,7 +89,7 @@
   }
 
   ::selection {
-    background: rgba(99, 102, 241, 0.3);
+    background: rgba(212, 100, 74, 0.3);
     color: var(--text);
   }
 
@@ -97,11 +108,11 @@
     border-radius: 4px;
   }
 
-  /* Smooth transitions for interactive elements */
+  /* Interactive transitions — ease-out-quart for natural feel */
   button, a, input, textarea, select, [role="button"] {
-    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
     transition-duration: 200ms;
-    transition-timing-function: ease;
+    transition-timing-function: var(--ease-out-quart);
   }
 
   /* details/summary styling */
@@ -150,62 +161,66 @@
 }
 
 @layer components {
-  /* Hero grid background */
-  .hero-grid-bg {
-    background-image: radial-gradient(circle at 1px 1px, rgba(99, 102, 241, 0.07) 1px, transparent 0);
-    background-size: 36px 36px;
-  }
-
-  /* Gradient text utility */
-  .gradient-text {
-    background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.55) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  /* Glow utilities */
-  .glow-accent {
-    box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
-  }
-
-  /* Warm gradient text */
-  .gradient-text-warm {
-    background: linear-gradient(135deg, var(--warm) 0%, var(--accent) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  /* Fade-in-up animation */
+  /* ─── Entrance animation: smooth staggered reveal ─── */
   .fade-in-up {
-    animation: fadeInUp 0.6s ease-out both;
+    animation: fadeInUp 0.5s var(--ease-out-expo) both;
   }
-  .fade-in-up-delay-1 { animation-delay: 0.1s; }
-  .fade-in-up-delay-2 { animation-delay: 0.2s; }
-  .fade-in-up-delay-3 { animation-delay: 0.3s; }
+  .fade-in-up-delay-1 { animation-delay: 0.08s; }
+  .fade-in-up-delay-2 { animation-delay: 0.16s; }
+  .fade-in-up-delay-3 { animation-delay: 0.24s; }
 
   @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(16px); }
+    from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
-  /* Hover lift effect for cards */
-  .hover-lift {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  .hover-lift:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  /* ─── Text emphasis: solid colors, NOT gradients ─── */
+  .gradient-text {
+    color: var(--text);
   }
 
-  /* Gradient button background */
+  .gradient-text-warm {
+    color: var(--accent);
+  }
+
+  /* ─── Card hover: subtle border shift, no translate ─── */
+  .hover-lift {
+    transition: border-color 0.2s var(--ease-out-quart), box-shadow 0.2s var(--ease-out-quart);
+  }
+  .hover-lift:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  /* ─── Primary action button: solid, confident ─── */
   .btn-gradient {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--warm) 100%);
+    background: var(--accent);
     border: none;
-    color: white;
+    color: #fef8f5;
   }
   .btn-gradient:hover {
-    opacity: 0.9;
+    background: color-mix(in oklch, var(--accent) 85%, white);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(212, 100, 74, 0.25);
+  }
+  .btn-gradient:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+
+  /* ─── Subtle shadow utility ─── */
+  .glow-accent {
+    box-shadow: 0 2px 20px rgba(212, 100, 74, 0.12);
+  }
+
+  /* ─── Background texture: subtle dot grid ─── */
+  .hero-grid-bg {
+    background-image: radial-gradient(circle at 1px 1px, rgba(212, 100, 74, 0.05) 1px, transparent 0);
+    background-size: 32px 32px;
+  }
+
+  /* ─── Active press effect for buttons ─── */
+  .press-effect:active {
+    transform: translateY(1px);
   }
 }

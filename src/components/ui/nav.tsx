@@ -84,7 +84,7 @@ export function Nav() {
     <nav className="border-b border-[var(--border)] bg-[var(--bg-elevated)] relative">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href={user ? "/dashboard" : "/"} className="text-sm font-bold no-underline hover:no-underline text-[var(--text)] whitespace-nowrap shrink-0">
-          블로그 자동 작성기<span className="text-[var(--warm)]"> .</span>
+          블로그 자동 작성기<span className="text-[var(--accent)]"> .</span>
         </Link>
 
         {/* Desktop nav */}

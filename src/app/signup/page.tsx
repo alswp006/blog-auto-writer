@@ -80,8 +80,8 @@ export default function SignupPage() {
         <div className="flex flex-col gap-8 fade-in-up">
           <div>
             <h2 className="text-3xl font-bold leading-tight">
-              <span className="gradient-text-warm">Blog Auto Writer</span>
-              <span className="text-[var(--warm)]"> .</span>
+              Blog Auto Writer
+              <span className="text-[var(--accent)]"> .</span>
             </h2>
             <p className="mt-3 text-[var(--text-secondary)] leading-[1.8]">
               맛집 사진 한 장이면 블로그 글이 완성돼요.<br />

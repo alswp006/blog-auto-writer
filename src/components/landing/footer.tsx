@@ -50,11 +50,11 @@ export function Footer({ columns, copyright }: FooterProps) {
   return (
     <footer className="w-full border-t border-[var(--border)] py-16">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1 space-y-3">
             <span className="text-sm font-bold text-[var(--text)]">
-              {siteName} <span className="text-[var(--warm)]">.</span>
+              {siteName} <span className="text-[var(--accent)]">.</span>
             </span>
             <p className="text-xs text-[var(--text-muted)] leading-relaxed">
               사진과 메모로 만드는<br />나만의 블로그 글

@@ -1,4 +1,5 @@
 import "./globals.css";
+import { GeistSans } from "geist/font/sans";
 import { Nav } from "@/components/ui/nav";
 import { AdProvider } from "@/components/ad-provider";
 import { AnalyticsProvider } from "@/components/analytics-provider";
@@ -14,7 +15,7 @@ export const viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className="dark">
+    <html lang="ko" className={`dark ${GeistSans.variable}`}>
       <body className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
         <StructuredData />
         <AdProvider>
