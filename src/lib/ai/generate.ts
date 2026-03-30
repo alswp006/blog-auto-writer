@@ -7,6 +7,7 @@ import type { PlaceInsight } from "@/lib/ai/agentResearch";
 import type { PhotoDescription } from "@/lib/ai/photoDescribe";
 import { validateContent } from "@/lib/ai/qualityGate";
 import { callLLM, getProvider } from "@/lib/ai/providers";
+import { getUserEditPatterns } from "@/lib/ai/editLearning";
 
 export type GeneratedContent = {
   titleKo: string;
@@ -89,23 +90,51 @@ const CATEGORY_STRUCTURE: Record<string, { ko: string; en: string }> = {
   },
 };
 
-// ── Few-shot style examples (one per category) ──
+// ── Few-shot style examples (three per category for Korean, one for English) ──
 
-const CATEGORY_EXAMPLE: Record<string, { ko: string; en: string }> = {
+const CATEGORY_EXAMPLES: Record<string, { ko: string[]; en: string }> = {
   restaurant: {
-    ko: `골목 안쪽에 자리 잡은 작은 간판을 보고 반신반의하며 들어갔는데, 문을 여는 순간 고소한 참기름 향이 확 퍼지더라고요. 2인 테이블에 앉아서 메뉴판을 펼쳤는데 생각보다 가짓수가 많지 않아서 오히려 마음이 놓였어요. 이런 집이 진짜 맛집이거든요. 갈비탕이 나오자마자 국물 색깔부터 달랐어요. 맑은데 깊은 그 느낌, 한 숟가락 떠서 호호 불어 먹으니까 입안에서 사르르 녹는 것 같았어요.`,
+    ko: [
+      // Casual 20s style
+      `골목 끝에 간판도 제대로 없는 집이길래 솔직히 좀 의심했거든요ㅋㅋ 근데 문 열자마자 고기 굽는 냄새가 확 올라오는데 이건 진짜다 싶었어요. 메뉴가 딱 네 개밖에 없는데 오히려 이런 집이 잘하잖아요. 삼겹살 첫 점 올리자마자 지글지글 소리부터 남달랐고, 한 입 먹으니까 겉은 바삭한데 안은 육즙이 터지는 거예요. 친구랑 둘이서 눈 마주치고 아무 말 안 해도 알겠더라고요. 여기 또 온다.`,
+      // 30s detailed style
+      `회사 동료가 점심 맛집이라고 알려준 곳인데, 외관은 솔직히 기대 이하였어요. 허름한 가정집 같은 느낌. 근데 들어가서 된장찌개 하나 시켰는데 반찬이 일곱 가지가 나오더라고요. 김치가 직접 담근 건지 아삭하면서 깊은 맛이 났고, 된장찌개는 두부가 뜨끈하게 흔들리면서 나왔는데 국물이 짜지 않고 구수했어요. 8천원인데 이 퀄리티면 주변 직장인들한테는 성지 같은 곳이겠다 싶었어요.`,
+      // Sensory/emotional style
+      `비 오는 날이었어요. 우산 쓰고 찾아간 골목 안쪽, 작은 유리문 너머로 김이 모락모락 피어오르는 게 보였어요. 안으로 들어서니 나무 테이블에서 올라오는 따뜻한 온기가 젖은 손끝까지 녹여주는 느낌이었어요. 칼국수 한 그릇이 나왔는데, 첫 숟가락에 멸치 육수의 깊은 감칠맛이 혀 위로 퍼지면서 몸 전체가 풀리는 것 같았어요. 밖에서 후두둑 떨어지는 빗소리를 들으며 먹는 그 국수가, 그날 하루를 완전히 바꿔놨어요.`,
+    ],
     en: `Tucked away in a narrow alley, this place had me skeptical at first — the sign was tiny and easy to miss. But the moment I stepped inside, the rich aroma of sesame oil hit me and I knew I was in for something good. The menu was refreshingly short, which in my experience is always a promising sign. When the galbitang arrived, the broth had that beautiful clear-yet-deeply-flavored look, and one sip confirmed it — this was the real deal.`,
   },
   cafe: {
-    ko: `인스타에서 우연히 보고 찾아간 곳인데 실물이 사진보다 훨씬 분위기 있었어요. 2층 창가 자리에 앉으니까 바깥으로 은행나무가 보이는데 노란 잎이 햇빛에 반짝거리더라고요. 시그니처 라떼를 시켰는데 한 모금 마시니까 바닐라인 줄 알았는데 은은하게 헤이즐넛이 숨어 있는 맛이었어요. 콘센트도 자리마다 있어서 작업하기에도 딱이었어요.`,
+    ko: [
+      // Casual 20s style
+      `여기 진짜 찐이에요. 인스타에서 봤을 때는 또 감성카페인가 했는데 들어가니까 분위기부터 다르더라고요. 원두 볶는 냄새가 코끝을 찌르는데 이건 직접 로스팅하는 집이구나 바로 느껴졌어요. 아아 시켰는데 한 모금 마시니까 산미가 딱 제 취향이었고요. 창가 자리에 앉아서 멍때리기 최고였어요ㅋㅋ`,
+      // 30s detailed style
+      `지인 추천으로 찾아간 동네 카페인데, 위치가 주택가 안쪽이라 네비 없으면 못 찾아요. 근데 찾아가면 보상받는 느낌이에요. 인테리어가 과하지 않게 우드톤으로 정리되어 있고, 스피커에서 재즈가 적당한 볼륨으로 나와요. 드립커피를 시켰는데 에티오피아 원두로 내린 거라 과일향이 은은하게 올라왔어요. 크로플도 겉바속촉 그 자체. 와이파이 빠르고 콘센트도 있어서 노트북 작업하기에 최적이었어요.`,
+      // Sensory/emotional style
+      `오래된 빌라 1층을 개조한 카페인데, 문을 열면 나무 바닥이 삐걱거려요. 근데 그 소리가 싫지 않고 오히려 정겨웠어요. 바 앞에 서니까 핸드드립 내리는 소리가 똑똑 들리고, 추출되면서 올라오는 향이 달콤하면서도 고소했어요. 창밖으로 뒤뜰 나무가 보이는데 오후 햇살이 잎사귀 사이로 흔들리는 게 참 좋더라고요. 커피 한 잔 들고 그냥 한참을 앉아 있었어요.`,
+    ],
     en: `I stumbled upon this cafe through Instagram and it honestly looked even better in person. Sitting by the second-floor window, I had a perfect view of ginkgo trees with golden leaves catching the afternoon sunlight. Their signature latte surprised me — what I expected to be vanilla had this subtle hazelnut undertone. Power outlets at every seat made it perfect for working remotely too.`,
   },
   accommodation: {
-    ko: `체크인할 때 프론트 직원이 웰컴 드링크를 건네주면서 조식 시간이랑 루프탑 바 오픈 시간을 친절하게 안내해줬어요. 방에 들어가니까 킹사이즈 침대 베딩이 정말 뽀송한 느낌이더라고요. 창밖으로 남산타워가 살짝 보여서 괜히 기분이 좋아졌어요. 어메니티가 이솝 제품이라 향도 좋고 쓰기도 좋았어요.`,
+    ko: [
+      // Casual 20s style
+      `체크인하는데 프론트 언니가 웰컴 드링크 주면서 루프탑 바 시간까지 알려주더라고요. 방 들어가자마자 침대에 다이빙했는데 이불이 진짜 뽀송해서 바로 못 일어났어요ㅋㅋ 창밖에 야경 살짝 보이는 것도 기분 좋았고, 욕실 어메니티가 이솝이라 씻고 나니까 몸에서 좋은 향이 났어요. 가격 대비 이 정도면 완전 이득이에요.`,
+      // 30s detailed style
+      `로비 들어서자마자 은은한 디퓨저 향이 나는데 고급스럽되 과하지 않았어요. 체크인 5분도 안 걸렸고, 직원분이 조식 뷔페 시간이랑 주변 맛집 리스트를 프린트해서 주셨어요. 방은 20평 정도 되는데 킹베드 기준으로 넉넉했고, 침구가 400수 코튼인지 감촉이 확실히 달랐어요. 방음도 괜찮은 편이라 복도 소리가 거의 안 들렸어요. 조식은 한식 뷔페인데 갓 지은 밥이랑 된장국이 투숙객 전용치고는 꽤 수준급이었어요.`,
+      // Sensory/emotional style
+      `엘리베이터 문이 열리고 복도를 걸어가는데, 발밑 카펫이 두꺼워서 발소리가 하나도 안 나더라고요. 방문을 열자마자 넓은 창으로 들어오는 저녁 노을빛이 방 전체를 주황색으로 물들이고 있었어요. 침대에 천천히 눕자 몸이 스르르 가라앉는 느낌. 베개에서 은은한 라벤더 향이 나면서 여행의 피로가 녹아내리는 것 같았어요. 밤에 불 끄고 누우니까 창밖으로 도시 불빛이 별처럼 보였어요.`,
+    ],
     en: `Check-in was smooth — the front desk handed me a welcome drink and walked me through breakfast hours and rooftop bar schedule. The king-size bed had that distinctly plush hotel bedding feel. Through the window I caught a partial view of Namsan Tower, which was a nice bonus. The Aesop bathroom amenities were a pleasant surprise.`,
   },
   attraction: {
-    ko: `지하철 3호선 안국역 1번 출구로 나와서 5분쯤 걸었더니 입구가 보였어요. 평일 오전이라 사람이 많지 않아서 여유롭게 둘러볼 수 있었어요. 돌담길을 따라 걷는데 바람이 시원하게 불어오더라고요. 고궁 안쪽 소나무 사이로 보이는 전각들이 진짜 그림 같았어요. 특히 향원정 쪽에서 연못에 반영되는 정자가 너무 예뻤어요.`,
+    ko: [
+      // Casual 20s style
+      `안국역 1번 출구에서 걸어갔는데 5분도 안 걸렸어요. 평일이라 사람 별로 없어서 사진 찍기 완전 좋았고요. 돌담길이 진짜 예뻐서 걸으면서 계속 찍었어요ㅋㅋ 소나무 사이로 보이는 전각이 진짜 멋있었는데 특히 향원정 연못 앞에서 한참 서 있었어요. 여기는 봄에 다시 와야겠다.`,
+      // 30s detailed style
+      `주차는 근처 공영주차장에 했고 10분당 300원이에요. 입장료가 3천원인데 외국인은 한복 입으면 무료라 같이 간 외국인 친구가 좋아하더라고요. 전체 관람 코스는 1시간 반 정도면 충분하고, 경회루 쪽에서 보는 전경이 가장 좋았어요. 화장실은 입구 근처에 하나, 안쪽에 하나 있는데 안쪽이 덜 붐벼요. 출구 나오면 바로 삼청동 카페거리라 코스로 묶기 좋아요.`,
+      // Sensory/emotional style
+      `아침 일찍 갔더니 안개가 낮게 깔려 있었어요. 돌담 위에 이슬이 맺혀 있고, 발밑에 자갈 밟히는 소리가 고요한 공기 속에 또각또각 울리더라고요. 전각 처마 끝에서 아침 햇살이 비스듬하게 내려와 마당에 긴 그림자를 만들고 있었어요. 소나무 사이를 지나는 바람에서 살짝 흙냄새가 섞여 올라왔고, 그 순간만큼은 도심 한가운데라는 게 믿기지 않았어요.`,
+    ],
     en: `From Anguk Station Exit 1, it was just a five-minute walk to the entrance. Going on a weekday morning meant barely any crowds, so I could wander freely. Walking along the stone walls with a cool breeze, I understood why this draws millions yearly. The deeper I went, the more stunning it got — traditional pavilions framed by pine trees, like something straight out of a painting.`,
   },
 };
@@ -222,11 +251,19 @@ function buildPrompt(
   enrichedPlace?: EnrichedPlaceInfo,
   placeInsight?: PlaceInsight,
   photoDescriptions?: PhotoDescription[],
+  editPatterns?: string,
 ): string {
   const cat = place.category;
   const structure = CATEGORY_STRUCTURE[cat] ?? CATEGORY_STRUCTURE.restaurant;
-  const example = CATEGORY_EXAMPLE[cat] ?? CATEGORY_EXAMPLE.restaurant;
+  const examples = CATEGORY_EXAMPLES[cat] ?? CATEGORY_EXAMPLES.restaurant;
   const sensory = SENSORY_FRAMEWORK[cat] ?? SENSORY_FRAMEWORK.restaurant;
+
+  // Randomly select 2 out of 3 Korean examples
+  const koExamples = [...examples.ko];
+  const removeIdx = Math.floor(Math.random() * koExamples.length);
+  koExamples.splice(removeIdx, 1);
+  const exampleKoText = koExamples.map((ex, i) => `예시 ${i + 1}:\n${ex}`).join("\n\n");
+  const exampleEnText = examples.en;
   const ageTone = getAgeToneInstruction(userProfile?.ageGroup ?? "30s");
   const toneDesc = style.analyzedTone;
 
@@ -353,7 +390,7 @@ ${structure.ko}
 ${hookKo}
 
 ### 참고 예시 (이런 톤과 흐름으로 작성하세요)
-${example.ko}
+${exampleKoText}
 
 ${sensory.ko}
 
@@ -370,6 +407,7 @@ ${style.sampleTexts.slice(0, 3).map((s, i) => `- 문체 샘플 ${i + 1}: "${s}"`
 
 ${pastExcerpts ? `### 이전에 작성한 글 (이 문체와 톤을 유지하세요)
 ${pastExcerpts}
+` : ""}${editPatterns ? `${editPatterns}
 ` : ""}### 자연스러운 블로그 글쓰기 (중요!)
 - 절대 번호를 매기지 마세요 (1. 2. 3. 금지)
 - 소제목(##, ###) 사용 금지 — 문단 흐름으로 자연스럽게 전환
@@ -390,6 +428,35 @@ ${pastExcerpts}
 - "다양한", "특별한", "완벽한", "최고의" 같은 의미 없는 형용사 남발
 - "그럼 지금부터", "자 그러면" 같은 방송 진행자식 표현
 
+### AI스러운 표현 → 자연스러운 대체 (이 표를 반드시 참고하세요)
+| ❌ 쓰지 마세요 | ✅ 이렇게 바꾸세요 |
+| "다양한 메뉴" | "메뉴가 꽤 많은데" 또는 구체적으로 나열 |
+| "특별한 경험" | 구체적으로 뭐가 특별했는지 서술 |
+| "완벽한 조화" | "이게 같이 먹으니까 진짜 잘 어울리더라고요" |
+| "분위기를 자아내다" | "~한 느낌이었어요" 또는 구체적 묘사 |
+| "눈길을 사로잡다" | "딱 보자마자 이거다 싶었어요" |
+| "입안 가득 퍼지는" | "한 입 먹으니까 ~맛이 확 올라오더라고요" |
+| "조화롭게 어우러진" | "같이 먹으니까 진짜 찰떡이에요" |
+| "한 폭의 그림 같은" | 구체적 색감/빛 묘사로 대체 |
+| "가히 압권이다" | "이건 진짜 대박이었어요" 또는 구체적 반응 |
+| "미식의 여정" / "맛의 향연" | 쓰지 말 것 — 직접적 맛 묘사로 |
+| "정성이 느껴지는" | "사장님이 직접 ~하시는 게 보였어요" 등 구체적 |
+| "추천드립니다" / "강추합니다" | "여기는 진짜 또 갈 거예요" / "친구한테 바로 공유했어요" |
+| "~의 매력에 빠지다" | 구체적으로 뭐가 좋았는지 |
+| "~를 자랑하다" | 쓰지 말 것 |
+
+### 영어 AI 표현 금지
+- "nestled in" → "tucked away in" or "just off [street name]"
+- "a symphony of flavors" → describe the actual flavors
+- "culinary journey/adventure" → don't use, just describe the meal
+- "hidden gem" → "a place I almost walked past"
+- "tantalizing" → use specific descriptors (smoky, tangy, rich)
+- "delectable" / "delightful" → banned, use concrete descriptions
+- "boasts" / "offers" → "has" / "they have"
+- "bustling" → describe what you actually see/hear
+- "mouth-watering" → describe the actual sensation
+- "authentic" → describe why it feels real
+
 ### SEO 제목
 - 장소명 + 카테고리 키워드 포함
 - 클릭 유도하는 매력적인 제목 (20~40자)
@@ -402,7 +469,7 @@ ${structure.en}
 ${hookEn}
 
 ### English Style Example (write with this tone and flow)
-${example.en}
+${exampleEnText}
 
 ${sensory.en}
 
@@ -620,20 +687,26 @@ async function polishContent(
   content: GeneratedContent,
   apiKey: string,
 ): Promise<GeneratedContent> {
-  const prompt = `블로그 글을 검토하고 품질을 높여주세요.
+  // 2-pass self-critique: first find AI-sounding expressions, then rewrite them
+  const prompt = `아래 블로그 글을 읽고 두 가지 작업을 수행하세요.
 
-## 검토 기준 (이것만 수정)
-1. AI스러운 표현 제거 ("소개해 드리겠습니다", "다양한", "특별한", "완벽한" 등)
-2. 같은 단어/표현이 2번 이상 반복되면 유의어로 교체
-3. 약한 묘사 → 오감을 활용한 구체적 표현으로 강화
-4. 부자연스러운 문단 전환 → 자연스러운 연결
-5. "~것 같아요"가 3회 이상이면 일부를 "~더라고요", "~거든요" 등으로 교체
+## 작업 1: AI 냄새 찾기
+아래 글에서 AI가 쓴 것 같은 표현을 모두 찾으세요:
+- 실제 사람이 안 쓰는 수식어 (다양한, 특별한, 완벽한, 조화로운)
+- 과도한 미사여구 (분위기를 자아내다, 눈길을 사로잡다, 입안 가득 퍼지는)
+- 안내형 도입 (소개해 드리겠습니다, 알아보겠습니다)
+- 뻔한 마무리 (추천드립니다, 강추합니다, 마지막으로)
+- 같은 표현 반복 (같은 단어가 2회 이상)
+- 부자연스러운 존댓말 혼용
+- 영어: "nestled", "symphony of flavors", "culinary journey", "hidden gem", "tantalizing", "delectable", "boasts", "bustling", "mouth-watering"
 
-## 절대 하지 마세요
-- 글의 전체 구조, 문단 수, 길이를 크게 바꾸지 마세요
-- [PHOTO:n] 마커를 절대 제거하거나 이동하지 마세요
-- 새로운 정보를 추가하지 마세요 (없는 메뉴, 없는 경험 등)
-- 해시태그를 수정하지 마세요
+## 작업 2: 자연스럽게 고치기
+찾은 부분만 골라서 실제 블로거처럼 자연스럽게 고쳐쓰세요.
+- 글의 전체 구조, 문단 수, 길이는 유지
+- [PHOTO:n] 마커 절대 제거/이동 금지
+- 새로운 정보 추가 금지
+- 해시태그 수정 금지
+- 약한 묘사는 오감 활용한 구체적 표현으로 강화
 
 ## 한국어 글
 제목: ${content.titleKo}
@@ -645,12 +718,12 @@ ${content.contentKo}
 본문:
 ${content.contentEn}
 
-수정된 글만 JSON으로 반환:
+최종 수정본만 JSON으로 반환:
 {
   "titleKo": "수정된 한국어 제목",
-  "contentKo": "수정된 한국어 본문 (\\n\\n으로 문단 구분)",
-  "titleEn": "Polished English title",
-  "contentEn": "Polished English content (\\n\\n for paragraphs)"
+  "contentKo": "수정된 한국어 본문",
+  "titleEn": "Fixed English title",
+  "contentEn": "Fixed English content"
 }`;
 
   const controller = new AbortController();
@@ -668,7 +741,7 @@ ${content.contentEn}
         messages: [
           {
             role: "system",
-            content: "블로그 편집 전문가입니다. 원문의 톤, 길이, 구조를 유지하면서 표현만 다듬어주세요. [PHOTO:n] 마커는 절대 건드리지 마세요.",
+            content: "블로그 편집 전문가입니다. AI가 쓴 것 같은 표현을 찾아 실제 사람이 쓴 것처럼 고치는 것이 전문입니다. 원문의 톤, 길이, 구조를 유지하면서 어색한 표현만 다듬어주세요.",
           },
           { role: "user", content: prompt },
         ],
@@ -800,9 +873,22 @@ export async function generateBlogPost(
 - 반드시 plan 필드를 먼저 작성한 후 그 계획에 따라 글을 쓰세요`;
 
   onProgress?.("generating", "AI 글 생성 중...");
+
+  // Fetch user edit patterns for personalization
+  let editPatterns: string | undefined;
+  if (userProfile?.userId) {
+    try {
+      const patterns = await getUserEditPatterns(userProfile.userId);
+      if (patterns) editPatterns = patterns;
+    } catch {
+      // Edit pattern fetch failure is non-critical — continue without it
+    }
+  }
+
   const prompt = buildPrompt(
     place, menuItems, photos, style, userProfile, userMemo,
     isRevisit, pastExcerpts, enrichedPlace, placeInsight, photoDescriptions,
+    editPatterns,
   );
 
   let draft: GeneratedContent;
