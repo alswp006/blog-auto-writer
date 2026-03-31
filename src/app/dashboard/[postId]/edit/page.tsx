@@ -233,14 +233,21 @@ export default function PostEditPage({
       return photos
         .map((p) => {
           const alt = getPhotoAlt(p);
-          return `<img src="${p.filePath}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${p.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${p.caption}</p>` : ""}`;
+          const photoUrl = getAbsolutePhotoUrl(p.filePath);
+          return `<img src="${photoUrl}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${p.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${p.caption}</p>` : ""}`;
         })
         .join("\n");
     }
     // markdown
     return photos
-      .map((p) => `![${getPhotoAlt(p)}](${p.filePath})${p.caption ? `\n*${p.caption}*` : ""}`)
+      .map((p) => `![${getPhotoAlt(p)}](${getAbsolutePhotoUrl(p.filePath)})${p.caption ? `\n*${p.caption}*` : ""}`)
       .join("\n\n");
+  };
+
+  const getAbsolutePhotoUrl = (filePath: string): string => {
+    if (filePath.startsWith("http")) return filePath;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}${filePath.startsWith("/") ? "" : "/"}${filePath}`;
   };
 
   const replacePhotoMarkers = (text: string, format: "html" | "markdown"): string => {
@@ -248,11 +255,12 @@ export default function PostEditPage({
       const idx = parseInt(idxStr, 10);
       const photo = photoByIndex.get(idx);
       if (!photo) return "";
+      const photoUrl = getAbsolutePhotoUrl(photo.filePath);
       if (format === "html") {
         const alt = getPhotoAlt(photo);
-        return `<img src="${photo.filePath}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${photo.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${photo.caption}</p>` : ""}`;
+        return `<img src="${photoUrl}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${photo.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${photo.caption}</p>` : ""}`;
       }
-      return `![${getPhotoAlt(photo)}](${photo.filePath})${photo.caption ? `\n*${photo.caption}*` : ""}`;
+      return `![${getPhotoAlt(photo)}](${photoUrl})${photo.caption ? `\n*${photo.caption}*` : ""}`;
     });
   };
 
@@ -320,7 +328,24 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
 
   const handleCopy = async (platform: Platform) => {
     const text = formatForPlatform(platform);
-    await navigator.clipboard.writeText(text);
+    // HTML platforms: copy as rich text so images paste correctly
+    if ((platform === "naver" || platform === "tistory") && typeof ClipboardItem !== "undefined") {
+      try {
+        const blob = new Blob([text], { type: "text/html" });
+        const plainBlob = new Blob([text], { type: "text/plain" });
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": blob,
+            "text/plain": plainBlob,
+          }),
+        ]);
+      } catch {
+        // Fallback to plain text if ClipboardItem not supported
+        await navigator.clipboard.writeText(text);
+      }
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
     showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
     // Record copy in publish history
     if (platform === "naver" || platform === "tistory") {
