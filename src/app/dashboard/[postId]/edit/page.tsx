@@ -227,15 +227,22 @@ export default function PostEditPage({
 
   const getPhotoAlt = (p: Photo) => p.altText ?? p.caption ?? `Photo ${p.orderIndex}`;
 
-  const buildPhotoImgTags = (format: "html" | "markdown", base64Map?: Map<number, string>): string => {
+  const buildPhotoImgTags = (format: "html" | "markdown" | "text"): string => {
     if (photos.length === 0) return "";
     if (format === "html") {
       return photos
         .map((p) => {
           const alt = getPhotoAlt(p);
-          const photoUrl = base64Map?.get(p.orderIndex) ?? getAbsolutePhotoUrl(p.filePath);
+          const photoUrl = getAbsolutePhotoUrl(p.filePath);
           return `<img src="${photoUrl}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${p.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${p.caption}</p>` : ""}`;
         })
+        .join("\n");
+    }
+    if (format === "text") {
+      // For Naver: captions only as placeholders
+      return photos
+        .filter((p) => p.caption)
+        .map((p) => `(${p.caption})`)
         .join("\n");
     }
     // markdown
@@ -250,46 +257,19 @@ export default function PostEditPage({
     return `${origin}${filePath.startsWith("/") ? "" : "/"}${filePath}`;
   };
 
-  // Convert image file to base64 data URI for embedding in clipboard HTML
-  const fetchPhotoAsBase64 = async (filePath: string): Promise<string | null> => {
-    try {
-      const url = getAbsolutePhotoUrl(filePath);
-      const resp = await fetch(url);
-      if (!resp.ok) return null;
-      const blob = await resp.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return null;
-    }
-  };
-
-  // Pre-load all photo base64 data for clipboard copy
-  const buildBase64Map = async (): Promise<Map<number, string>> => {
-    const map = new Map<number, string>();
-    await Promise.all(
-      photos.map(async (p) => {
-        const dataUri = await fetchPhotoAsBase64(p.filePath);
-        if (dataUri) map.set(p.orderIndex, dataUri);
-      }),
-    );
-    return map;
-  };
-
-  const replacePhotoMarkers = (text: string, format: "html" | "markdown", base64Map?: Map<number, string>): string => {
+  const replacePhotoMarkers = (text: string, format: "html" | "markdown" | "text"): string => {
     return text.replace(/\[PHOTO:(\d+)\]/g, (_match, idxStr) => {
       const idx = parseInt(idxStr, 10);
       const photo = photoByIndex.get(idx);
       if (!photo) return "";
-      // Use base64 data URI if available (for clipboard), otherwise absolute URL
-      const photoUrl = base64Map?.get(idx) ?? getAbsolutePhotoUrl(photo.filePath);
+      const photoUrl = getAbsolutePhotoUrl(photo.filePath);
       if (format === "html") {
         const alt = getPhotoAlt(photo);
         return `<img src="${photoUrl}" alt="${alt}" style="max-width:100%;margin:12px 0;" />${photo.caption ? `\n<p style="text-align:center;color:#888;font-size:14px;">${photo.caption}</p>` : ""}`;
+      }
+      if (format === "text") {
+        // For Naver: remove photo markers, user will add images manually
+        return photo.caption ? `\n(${photo.caption})\n` : "\n";
       }
       return `![${getPhotoAlt(photo)}](${photoUrl})${photo.caption ? `\n*${photo.caption}*` : ""}`;
     });
@@ -320,64 +300,58 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
     return `${header}\n\n${body}\n\n${footer}`;
   };
 
-  const formatForPlatform = (platform: Platform, base64Map?: Map<number, string>): string => {
+  const formatForPlatform = (platform: Platform): string => {
     const title = getTitle();
     const content = getContent();
     const tagStr = getTagStr();
     const contentHasMarkers = /\[PHOTO:\d+\]/.test(content);
-    const format = (platform === "naver" || platform === "tistory") ? "html" : "markdown";
 
-    if (contentHasMarkers) {
-      // Replace [PHOTO:n] markers with actual image tags (base64-embedded for HTML)
-      const replaced = replacePhotoMarkers(content, format, base64Map);
-      if (platform === "naver" || platform === "tistory") {
+    // Naver SE ONE: no HTML paste support — use plain text only, user adds images manually
+    if (platform === "naver") {
+      const format = "text";
+      if (contentHasMarkers) {
+        const replaced = replacePhotoMarkers(content, format);
+        return `${title}\n\n${replaced}\n\n${tagStr}${place ? `\n\n📍 ${place.name}${place.category ? ` | ${place.category}` : ""}` : ""}`;
+      }
+      return `${title}\n\n${content}\n\n${tagStr}${place ? `\n\n📍 ${place.name}${place.category ? ` | ${place.category}` : ""}` : ""}`;
+    }
+
+    // Tistory: HTML mode with absolute URL img tags (no base64 — avoids size issues)
+    if (platform === "tistory") {
+      if (contentHasMarkers) {
+        const replaced = replacePhotoMarkers(content, "html");
         const htmlParts = replaced.split("\n\n").map((p) => {
           if (p.startsWith("<img ")) return p;
           return `<p style="font-size:16px;line-height:1.8;margin-bottom:20px;">${p}</p>`;
         });
-        if (platform === "tistory") return formatTistory(title, htmlParts, tagStr);
-        return formatNaver(title, htmlParts, tagStr);
+        return formatTistory(title, htmlParts, tagStr);
       }
-      return `# ${title}\n\n${replaced}\n\n${tagStr}`;
-    }
-
-    // Fallback: insert all photos after first paragraph
-    const contentParagraphs = content.split("\n\n");
-    const photoBlock = buildPhotoImgTags(format, base64Map);
-    const insertIdx = Math.min(1, contentParagraphs.length);
-
-    if (platform === "naver" || platform === "tistory") {
+      const contentParagraphs = content.split("\n\n");
+      const photoBlock = buildPhotoImgTags("html");
+      const insertIdx = Math.min(1, contentParagraphs.length);
       const htmlParts = contentParagraphs.map((p) => `<p style="font-size:16px;line-height:1.8;margin-bottom:20px;">${p}</p>`);
       htmlParts.splice(insertIdx, 0, photoBlock);
-      if (platform === "tistory") return formatTistory(title, htmlParts, tagStr);
-      return formatNaver(title, htmlParts, tagStr);
+      return formatTistory(title, htmlParts, tagStr);
     }
+
+    // Medium / WordPress: markdown with absolute URL images
+    if (contentHasMarkers) {
+      const replaced = replacePhotoMarkers(content, "markdown");
+      return `# ${title}\n\n${replaced}\n\n${tagStr}`;
+    }
+    const contentParagraphs = content.split("\n\n");
+    const photoBlock = buildPhotoImgTags("markdown");
+    const insertIdx = Math.min(1, contentParagraphs.length);
     const mdParts = [...contentParagraphs];
     mdParts.splice(insertIdx, 0, photoBlock);
     return `# ${title}\n\n${mdParts.join("\n\n")}\n\n${tagStr}`;
   };
 
-  const [copying, setCopying] = useState(false);
-
   const handleCopy = async (platform: Platform) => {
-    const isHtml = platform === "naver" || platform === "tistory";
+    const text = formatForPlatform(platform);
 
-    // For HTML platforms with photos: convert images to base64 for reliable paste
-    let base64Map: Map<number, string> | undefined;
-    if (isHtml && photos.length > 0) {
-      setCopying(true);
-      try {
-        base64Map = await buildBase64Map();
-      } catch {
-        // Continue without base64 — will use absolute URLs as fallback
-      }
-      setCopying(false);
-    }
-
-    const text = formatForPlatform(platform, base64Map);
-
-    // HTML platforms: copy as rich text so images paste correctly
-    if (isHtml && typeof ClipboardItem !== "undefined") {
+    // Tistory: copy as rich text (HTML) for paste in HTML mode
+    if (platform === "tistory" && typeof ClipboardItem !== "undefined") {
       try {
         const blob = new Blob([text], { type: "text/html" });
         const plainBlob = new Blob([text], { type: "text/plain" });
@@ -388,13 +362,18 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
           }),
         ]);
       } catch {
-        // Fallback to plain text if ClipboardItem not supported
         await navigator.clipboard.writeText(text);
       }
     } else {
+      // Naver, Medium, WordPress: plain text copy
       await navigator.clipboard.writeText(text);
     }
-    showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
+
+    const platformMsg = platform === "naver" && photos.length > 0
+      ? "네이버 글 복사됨! (이미지는 에디터에서 직접 추가)"
+      : `${PLATFORM_LABELS[platform]} 포맷 복사됨!`;
+    showToast(platformMsg);
+
     // Record copy in publish history
     if (platform === "naver" || platform === "tistory") {
       try {
@@ -403,7 +382,6 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ platform, lang }),
         });
-        // Refresh publish history
         const res = await fetch(`/api/posts/${postId}`);
         if (res.ok) {
           const data = await res.json();
@@ -1259,29 +1237,29 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
               <p className="text-xs text-[var(--text-muted)]">글 + 이미지 + 해시태그가 포함됩니다. 네이버/티스토리는 HTML 모드에서 붙여넣기 하세요.</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full" disabled={copying}>
-                    {copying ? "이미지 준비 중..." : "네이버 복사 (HTML)"}
+                  <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
+                    네이버 복사 (텍스트)
                   </Button>
-                  <p className="text-xs text-[var(--text-muted)] text-center">에디터에 Ctrl+V</p>
+                  <p className="text-xs text-[var(--text-muted)] text-center">에디터에 Ctrl+V 후 이미지 직접 추가</p>
                 </div>
                 <div className="space-y-1">
-                  <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full" disabled={copying}>
-                    {copying ? "이미지 준비 중..." : "티스토리 복사 (HTML)"}
+                  <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full">
+                    티스토리 복사 (HTML)
                   </Button>
                   <p className="text-xs text-[var(--text-muted)] text-center">HTML 모드에서 Ctrl+V</p>
                 </div>
-                <Button variant="outline" onClick={() => handleCopy("medium")} className="w-full" disabled={copying}>
+                <Button variant="outline" onClick={() => handleCopy("medium")} className="w-full">
                   Medium 복사 (MD)
                 </Button>
               </div>
               {photos.length > 0 && (
                 <div className="mt-3 p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)]">
-                  <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">이미지 붙여넣기 안내</p>
+                  <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">플랫폼별 이미지 안내</p>
                   <p className="text-xs text-[var(--text-muted)]">
-                    네이버: 글쓰기 에디터에서 Ctrl+V → 이미지가 자동 삽입됩니다. 안 될 경우 &quot;소스 편집&quot; 모드에서 붙여넣기 하세요.
+                    네이버: 스마트에디터 ONE은 HTML 붙여넣기를 지원하지 않습니다. 글을 먼저 붙여넣기 한 후, &quot;사진&quot; 버튼으로 이미지를 직접 추가하세요.
                   </p>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    티스토리: HTML 모드로 전환 후 붙여넣기 하세요.
+                    티스토리: 에디터 상단 &quot;HTML&quot; 모드로 전환 후 붙여넣기하면 이미지가 자동 삽입됩니다.
                   </p>
                 </div>
               )}
