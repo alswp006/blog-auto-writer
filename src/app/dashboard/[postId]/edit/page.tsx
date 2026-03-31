@@ -286,7 +286,7 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
     return `${header}\n${htmlParts.join("\n\n")}\n\n${footer}`;
   };
 
-  // Build full Naver HTML content for the popup preview
+  // Build full Naver HTML content for preview
   const buildNaverHtml = (): string => {
     const title = getTitle();
     const content = getContent();
@@ -310,10 +310,46 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
     return formatNaver(title, htmlParts, tagStr);
   };
 
-  // Open a popup window with rendered blog content for Naver copy
-  // User does Ctrl+A → Ctrl+C from this page, then pastes into Naver SE ONE
-  // This works because browsers create proper rich-text clipboard data from rendered pages
-  const openNaverCopyPopup = () => {
+  // Naver copy modal state (for mobile inline modal)
+  const [naverCopyModal, setNaverCopyModal] = useState(false);
+  const [naverCopied, setNaverCopied] = useState(false);
+  const naverContentRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    // Auto-select content when modal opens
+    setTimeout(() => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const sel = window.getSelection();
+      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    }, 200);
+  }, []);
+
+  const isMobile = typeof window !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // Copy from the rendered content area using Selection + execCommand
+  // This creates proper rich-text clipboard data (text + images) that Naver SE ONE accepts
+  const handleNaverRichCopy = async () => {
+    const contentEl = document.getElementById("naver-copy-content");
+    if (!contentEl) return;
+    const range = document.createRange();
+    range.selectNodeContents(contentEl);
+    const sel = window.getSelection();
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    // execCommand('copy') on a Selection of rendered HTML creates rich-text clipboard
+    document.execCommand("copy");
+    sel?.removeAllRanges();
+    setNaverCopied(true);
+    showToast("복사 완료! 네이버 에디터에 붙여넣기 하세요");
+  };
+
+  // Open Naver copy: mobile → inline modal, desktop → popup window
+  const openNaverCopy = () => {
+    if (isMobile) {
+      setNaverCopied(false);
+      setNaverCopyModal(true);
+      return;
+    }
+    // Desktop: popup window
     const blogHtml = buildNaverHtml();
     const popupHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>네이버 블로그 복사</title>
@@ -330,7 +366,6 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
 </div>
 <div class="content-area">${blogHtml}</div>
 <script>
-  // Auto-select all content on load for convenience
   window.addEventListener('load', () => {
     setTimeout(() => {
       const range = document.createRange();
@@ -340,10 +375,9 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
       sel.addRange(range);
     }, 300);
   });
-  // When user copies, show confirmation
   document.addEventListener('copy', () => {
     const bar = document.querySelector('.guide-bar');
-    if (bar) { bar.textContent = '✅ 복사 완료! 네이버 에디터에 Ctrl+V로 붙여넣기 하세요'; bar.style.background = '#2563eb'; }
+    if (bar) { bar.textContent = '\\u2705 복사 완료! 네이버 에디터에 Ctrl+V로 붙여넣기 하세요'; bar.style.background = '#2563eb'; }
   });
 </script></body></html>`;
 
@@ -353,10 +387,9 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
       popup.document.close();
       popup.focus();
     } else {
-      // Popup blocked — fallback to plain text copy
-      const text = formatForPlatform("naver");
-      navigator.clipboard.writeText(text);
-      showToast("팝업이 차단되었습니다. 텍스트만 복사되었습니다.");
+      // Popup blocked (likely mobile or strict browser) — fall back to inline modal
+      setNaverCopied(false);
+      setNaverCopyModal(true);
     }
   };
 
@@ -422,9 +455,9 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
   };
 
   const handleCopy = async (platform: Platform) => {
-    // Naver with photos: open popup for rich-text copy (images included)
+    // Naver with photos: open copy preview (popup on desktop, inline modal on mobile)
     if (platform === "naver" && photos.length > 0) {
-      openNaverCopyPopup();
+      openNaverCopy();
       // Record copy
       try {
         await fetch(`/api/posts/${postId}/record-copy`, {
@@ -859,6 +892,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
   };
 
   return (
+    <>
     <section className="w-full py-12">
       <div className="max-w-6xl mx-auto px-4 md:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto space-y-6">
@@ -1323,14 +1357,14 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
           <Card>
             <CardHeader><CardTitle className="text-lg">플랫폼별 복사</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-[var(--text-muted)]">글 + 이미지 + 해시태그가 포함됩니다. 네이버/티스토리는 HTML 모드에서 붙여넣기 하세요.</p>
+              <p className="text-xs text-[var(--text-muted)]">글 + 이미지 + 해시태그가 포함됩니다.</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
                     {photos.length > 0 ? "네이버 복사 (이미지 포함)" : "네이버 복사"}
                   </Button>
                   <p className="text-xs text-[var(--text-muted)] text-center">
-                    {photos.length > 0 ? "팝업에서 Ctrl+A → Ctrl+C" : "에디터에 Ctrl+V"}
+                    {photos.length > 0 ? "미리보기에서 복사" : "에디터에 붙여넣기"}
                   </p>
                 </div>
                 <div className="space-y-1">
@@ -1347,10 +1381,10 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                 <div className="mt-3 p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)]">
                   <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">플랫폼별 이미지 안내</p>
                   <p className="text-xs text-[var(--text-muted)]">
-                    네이버: 팝업 창이 열리면 자동 선택됩니다 → Ctrl+C로 복사 → 네이버 에디터에 Ctrl+V (이미지 포함 붙여넣기)
+                    네이버: 미리보기가 열리면 &quot;복사하기&quot; 버튼을 눌러 이미지 포함 복사 → 네이버 에디터에 붙여넣기
                   </p>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    티스토리: 에디터 상단 &quot;HTML&quot; 모드로 전환 후 Ctrl+V (이미지 URL 자동 삽입)
+                    티스토리: &quot;HTML&quot; 모드 전환 후 붙여넣기 (이미지 URL 자동 삽입)
                   </p>
                 </div>
               )}
@@ -1668,5 +1702,48 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
         </div>
       </div>
     </section>
+
+      {/* Naver Copy Modal — full-screen overlay for mobile, also fallback when popup blocked */}
+      {naverCopyModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex flex-col">
+          {/* Header bar */}
+          <div className="flex-none bg-[#03C75A] px-4 py-3 flex items-center justify-between">
+            <p className="text-white text-sm font-semibold">
+              {naverCopied ? "복사 완료! 네이버에 붙여넣기 하세요" : "아래 내용을 복사하세요"}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={handleNaverRichCopy}
+                className={cn(
+                  "text-xs font-semibold px-4",
+                  naverCopied
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "bg-white hover:bg-gray-100 text-[#03C75A]"
+                )}
+              >
+                {naverCopied ? "다시 복사" : "복사하기"}
+              </Button>
+              <button
+                onClick={() => setNaverCopyModal(false)}
+                className="text-white/80 hover:text-white text-xl leading-none px-1"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto bg-white">
+            <div
+              id="naver-copy-content"
+              ref={naverContentRef}
+              className="p-4 md:p-6 max-w-[720px] mx-auto text-[#333]"
+              style={{ fontFamily: "-apple-system, 'Noto Sans KR', sans-serif" }}
+              dangerouslySetInnerHTML={{ __html: buildNaverHtml() }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
