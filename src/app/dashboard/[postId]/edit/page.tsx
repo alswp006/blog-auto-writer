@@ -286,6 +286,80 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
     return `${header}\n${htmlParts.join("\n\n")}\n\n${footer}`;
   };
 
+  // Build full Naver HTML content for the popup preview
+  const buildNaverHtml = (): string => {
+    const title = getTitle();
+    const content = getContent();
+    const tagStr = getTagStr();
+    const contentHasMarkers = /\[PHOTO:\d+\]/.test(content);
+
+    if (contentHasMarkers) {
+      const replaced = replacePhotoMarkers(content, "html");
+      const htmlParts = replaced.split("\n\n").map((p) => {
+        if (p.startsWith("<img ")) return p;
+        return `<p style="font-size:16px;line-height:1.8;margin-bottom:20px;">${p}</p>`;
+      });
+      return formatNaver(title, htmlParts, tagStr);
+    }
+
+    const contentParagraphs = content.split("\n\n");
+    const photoBlock = buildPhotoImgTags("html");
+    const insertIdx = Math.min(1, contentParagraphs.length);
+    const htmlParts = contentParagraphs.map((p) => `<p style="font-size:16px;line-height:1.8;margin-bottom:20px;">${p}</p>`);
+    htmlParts.splice(insertIdx, 0, photoBlock);
+    return formatNaver(title, htmlParts, tagStr);
+  };
+
+  // Open a popup window with rendered blog content for Naver copy
+  // User does Ctrl+A → Ctrl+C from this page, then pastes into Naver SE ONE
+  // This works because browsers create proper rich-text clipboard data from rendered pages
+  const openNaverCopyPopup = () => {
+    const blogHtml = buildNaverHtml();
+    const popupHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>네이버 블로그 복사</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Noto Sans KR', sans-serif; padding: 24px; max-width: 720px; margin: 0 auto; background: #fff; color: #333; }
+  img { max-width: 100%; height: auto; display: block; margin: 12px auto; border-radius: 4px; }
+  .guide-bar { position: sticky; top: 0; background: #03C75A; color: #fff; padding: 12px 20px; margin: -24px -24px 24px -24px; text-align: center; font-size: 14px; font-weight: 600; z-index: 10; }
+  .guide-bar kbd { background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 4px; font-family: inherit; }
+  .content-area { min-height: 200px; }
+</style></head><body>
+<div class="guide-bar">
+  <kbd>Ctrl+A</kbd> 전체선택 → <kbd>Ctrl+C</kbd> 복사 → 네이버 에디터에 <kbd>Ctrl+V</kbd> 붙여넣기
+</div>
+<div class="content-area">${blogHtml}</div>
+<script>
+  // Auto-select all content on load for convenience
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const range = document.createRange();
+      range.selectNodeContents(document.querySelector('.content-area'));
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }, 300);
+  });
+  // When user copies, show confirmation
+  document.addEventListener('copy', () => {
+    const bar = document.querySelector('.guide-bar');
+    if (bar) { bar.textContent = '✅ 복사 완료! 네이버 에디터에 Ctrl+V로 붙여넣기 하세요'; bar.style.background = '#2563eb'; }
+  });
+</script></body></html>`;
+
+    const popup = window.open("", "naver_copy", "width=780,height=800,scrollbars=yes,resizable=yes");
+    if (popup) {
+      popup.document.write(popupHtml);
+      popup.document.close();
+      popup.focus();
+    } else {
+      // Popup blocked — fallback to plain text copy
+      const text = formatForPlatform("naver");
+      navigator.clipboard.writeText(text);
+      showToast("팝업이 차단되었습니다. 텍스트만 복사되었습니다.");
+    }
+  };
+
   const formatTistory = (title: string, htmlParts: string[], tagStr: string): string => {
     const header = `<h2 style="text-align:center;">${title}</h2>
 <p>&nbsp;</p>`;
@@ -348,6 +422,25 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
   };
 
   const handleCopy = async (platform: Platform) => {
+    // Naver with photos: open popup for rich-text copy (images included)
+    if (platform === "naver" && photos.length > 0) {
+      openNaverCopyPopup();
+      // Record copy
+      try {
+        await fetch(`/api/posts/${postId}/record-copy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform, lang }),
+        });
+        const res = await fetch(`/api/posts/${postId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPublishHistory(data.publishHistory ?? []);
+        }
+      } catch { /* non-critical */ }
+      return;
+    }
+
     const text = formatForPlatform(platform);
 
     // Tistory: copy as rich text (HTML) for paste in HTML mode
@@ -365,14 +458,10 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
         await navigator.clipboard.writeText(text);
       }
     } else {
-      // Naver, Medium, WordPress: plain text copy
       await navigator.clipboard.writeText(text);
     }
 
-    const platformMsg = platform === "naver" && photos.length > 0
-      ? "네이버 글 복사됨! (이미지는 에디터에서 직접 추가)"
-      : `${PLATFORM_LABELS[platform]} 포맷 복사됨!`;
-    showToast(platformMsg);
+    showToast(`${PLATFORM_LABELS[platform]} 포맷 복사됨!`);
 
     // Record copy in publish history
     if (platform === "naver" || platform === "tistory") {
@@ -1238,9 +1327,11 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Button variant="outline" onClick={() => handleCopy("naver")} className="w-full">
-                    네이버 복사 (텍스트)
+                    {photos.length > 0 ? "네이버 복사 (이미지 포함)" : "네이버 복사"}
                   </Button>
-                  <p className="text-xs text-[var(--text-muted)] text-center">에디터에 Ctrl+V 후 이미지 직접 추가</p>
+                  <p className="text-xs text-[var(--text-muted)] text-center">
+                    {photos.length > 0 ? "팝업에서 Ctrl+A → Ctrl+C" : "에디터에 Ctrl+V"}
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Button variant="outline" onClick={() => handleCopy("tistory")} className="w-full">
@@ -1256,10 +1347,10 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                 <div className="mt-3 p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)]">
                   <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">플랫폼별 이미지 안내</p>
                   <p className="text-xs text-[var(--text-muted)]">
-                    네이버: 스마트에디터 ONE은 HTML 붙여넣기를 지원하지 않습니다. 글을 먼저 붙여넣기 한 후, &quot;사진&quot; 버튼으로 이미지를 직접 추가하세요.
+                    네이버: 팝업 창이 열리면 자동 선택됩니다 → Ctrl+C로 복사 → 네이버 에디터에 Ctrl+V (이미지 포함 붙여넣기)
                   </p>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    티스토리: 에디터 상단 &quot;HTML&quot; 모드로 전환 후 붙여넣기하면 이미지가 자동 삽입됩니다.
+                    티스토리: 에디터 상단 &quot;HTML&quot; 모드로 전환 후 Ctrl+V (이미지 URL 자동 삽입)
                   </p>
                 </div>
               )}
