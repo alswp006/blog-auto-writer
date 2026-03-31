@@ -183,8 +183,8 @@ export function DashboardPostList({ posts, publishedPlatforms }: Props) {
                           {post.titleKo ?? "(제목 없음)"}
                         </h3>
                       </Link>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-xs text-[var(--text-muted)]">{post.placeName}</span>
+                      <div className="flex items-center gap-2 mt-1.5 min-w-0">
+                        <span className="text-xs text-[var(--text-muted)] truncate">{post.placeName}</span>
                         <Badge variant="secondary" className="text-[10px] py-0">
                           {CATEGORY_LABEL[post.placeCategory] ?? post.placeCategory}
                         </Badge>

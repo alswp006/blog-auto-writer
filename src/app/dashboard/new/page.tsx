@@ -332,7 +332,8 @@ export default function DashboardNewPage() {
         formData.append("placeId", placeId.toString());
         formData.append("orderIndex", (i + 1).toString());
         if (photo.caption) formData.append("caption", photo.caption);
-        await fetch("/api/photos", { method: "POST", body: formData });
+        const photoRes = await fetch("/api/photos", { method: "POST", body: formData });
+        if (!photoRes.ok) throw new Error(`사진 ${i + 1} 업로드 실패`);
       }
 
       // 3. Create menu items
@@ -340,11 +341,12 @@ export default function DashboardNewPage() {
       if (validMenus.length > 0) {
         setUploadProgress("메뉴 저장 중...");
         for (const item of validMenus) {
-          await fetch("/api/menu-items", {
+          const menuRes = await fetch("/api/menu-items", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ placeId, name: item.name.trim(), priceKrw: parseInt(item.price, 10) || 0 }),
           });
+          if (!menuRes.ok) throw new Error(`메뉴 "${item.name}" 저장 실패`);
         }
       }
 
