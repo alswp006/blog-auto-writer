@@ -310,47 +310,105 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
     return formatNaver(title, htmlParts, tagStr);
   };
 
-  // Naver copy modal state (for mobile inline modal)
+  // Naver copy modal state
   const [naverCopyModal, setNaverCopyModal] = useState(false);
   const [naverCopied, setNaverCopied] = useState(false);
+  const [naverImagesReady, setNaverImagesReady] = useState(false);
+  const [naverImageStats, setNaverImageStats] = useState({ loaded: 0, failed: 0, total: 0 });
+
+  // Track image loading when modal content renders
   const naverContentRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
-    // Auto-select content when modal opens
-    setTimeout(() => {
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      const sel = window.getSelection();
-      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
-    }, 200);
+    const imgs = node.querySelectorAll("img");
+    const total = imgs.length;
+    if (total === 0) { setNaverImagesReady(true); setNaverImageStats({ loaded: 0, failed: 0, total: 0 }); return; }
+    let loaded = 0;
+    let failed = 0;
+    const check = () => {
+      setNaverImageStats({ loaded, failed, total });
+      if (loaded + failed >= total) setNaverImagesReady(true);
+    };
+    imgs.forEach((img) => {
+      if (img.complete && img.naturalWidth > 0) { loaded++; check(); return; }
+      if (img.complete) { failed++; check(); return; }
+      img.addEventListener("load", () => { loaded++; check(); });
+      img.addEventListener("error", () => {
+        failed++;
+        // Visual feedback: dim broken images
+        img.style.opacity = "0.3";
+        img.style.border = "2px dashed #e55";
+        img.alt = `(이미지 로드 실패) ${img.alt}`;
+        check();
+      });
+    });
   }, []);
 
-  const isMobile = typeof window !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  // Detect mobile/touch device via multiple signals (more reliable than UA regex)
+  const getIsMobile = () => {
+    if (typeof window === "undefined") return false;
+    return (
+      "ontouchstart" in window ||
+      navigator.maxTouchPoints > 0 ||
+      window.innerWidth < 768
+    );
+  };
 
-  // Copy from the rendered content area using Selection + execCommand
-  // This creates proper rich-text clipboard data (text + images) that Naver SE ONE accepts
+  // Rich-text copy with multiple fallback strategies
   const handleNaverRichCopy = async () => {
     const contentEl = document.getElementById("naver-copy-content");
     if (!contentEl) return;
+
+    // Strategy 1: Selection + execCommand (creates proper rich-text with images)
     const range = document.createRange();
     range.selectNodeContents(contentEl);
     const sel = window.getSelection();
     if (sel) { sel.removeAllRanges(); sel.addRange(range); }
-    // execCommand('copy') on a Selection of rendered HTML creates rich-text clipboard
-    document.execCommand("copy");
+    const success = document.execCommand("copy");
     sel?.removeAllRanges();
-    setNaverCopied(true);
-    showToast("복사 완료! 네이버 에디터에 붙여넣기 하세요");
+
+    if (success) {
+      setNaverCopied(true);
+      showToast("복사 완료! 네이버 에디터에 붙여넣기 하세요");
+      return;
+    }
+
+    // Strategy 2: Clipboard API with text/html (fallback for newer browsers)
+    try {
+      const html = contentEl.innerHTML;
+      const htmlBlob = new Blob([html], { type: "text/html" });
+      const textBlob = new Blob([contentEl.innerText], { type: "text/plain" });
+      await navigator.clipboard.write([
+        new ClipboardItem({ "text/html": htmlBlob, "text/plain": textBlob }),
+      ]);
+      setNaverCopied(true);
+      showToast("복사 완료! 네이버 에디터에 붙여넣기 하세요");
+      return;
+    } catch { /* continue to fallback */ }
+
+    // Strategy 3: Plain text fallback
+    try {
+      await navigator.clipboard.writeText(contentEl.innerText);
+      setNaverCopied(true);
+      showToast("텍스트만 복사됨 (이미지는 직접 추가해주세요)");
+    } catch {
+      showToast("복사 실패 — 내용을 길게 눌러 직접 선택해주세요");
+    }
   };
 
-  // Open Naver copy: mobile → inline modal, desktop → popup window
+  // Open Naver copy modal (unified for mobile + desktop)
   const openNaverCopy = () => {
+    const isMobile = getIsMobile();
     if (isMobile) {
+      // Mobile: always use inline modal
       setNaverCopied(false);
+      setNaverImagesReady(false);
+      setNaverImageStats({ loaded: 0, failed: 0, total: 0 });
       setNaverCopyModal(true);
       return;
     }
-    // Desktop: popup window
+    // Desktop: try popup, fallback to modal
     const blogHtml = buildNaverHtml();
+    const imgCount = photos.length;
     const popupHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>네이버 블로그 복사</title>
 <style>
@@ -359,25 +417,43 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
   img { max-width: 100%; height: auto; display: block; margin: 12px auto; border-radius: 4px; }
   .guide-bar { position: sticky; top: 0; background: #03C75A; color: #fff; padding: 12px 20px; margin: -24px -24px 24px -24px; text-align: center; font-size: 14px; font-weight: 600; z-index: 10; }
   .guide-bar kbd { background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 4px; font-family: inherit; }
+  .guide-bar .loading { font-size: 13px; opacity: 0.9; }
   .content-area { min-height: 200px; }
 </style></head><body>
 <div class="guide-bar">
-  <kbd>Ctrl+A</kbd> 전체선택 → <kbd>Ctrl+C</kbd> 복사 → 네이버 에디터에 <kbd>Ctrl+V</kbd> 붙여넣기
+  <span class="loading">이미지 로딩 중... (0/${imgCount})</span>
 </div>
 <div class="content-area">${blogHtml}</div>
 <script>
-  window.addEventListener('load', () => {
-    setTimeout(() => {
-      const range = document.createRange();
+  var bar = document.querySelector('.guide-bar');
+  var imgs = document.querySelectorAll('.content-area img');
+  var total = imgs.length, loaded = 0, failed = 0;
+  function check() {
+    if (total === 0 || loaded + failed >= total) {
+      var msg = failed > 0
+        ? '\\u26A0 ' + failed + '장 실패 | Ctrl+A \\u2192 Ctrl+C \\u2192 네이버에 Ctrl+V'
+        : 'Ctrl+A 전체선택 \\u2192 Ctrl+C 복사 \\u2192 네이버 에디터에 Ctrl+V';
+      bar.innerHTML = '<kbd>Ctrl+A</kbd> 전체선택 \\u2192 <kbd>Ctrl+C</kbd> 복사 \\u2192 네이버 에디터에 <kbd>Ctrl+V</kbd>';
+      if (failed > 0) bar.innerHTML = '\\u26A0 이미지 ' + failed + '장 로드 실패 | ' + bar.innerHTML;
+      var range = document.createRange();
       range.selectNodeContents(document.querySelector('.content-area'));
-      const sel = window.getSelection();
+      var sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
-    }, 300);
+    } else {
+      bar.querySelector('.loading').textContent = '이미지 로딩 중... (' + (loaded + failed) + '/' + total + ')';
+    }
+  }
+  imgs.forEach(function(img) {
+    if (img.complete && img.naturalWidth > 0) { loaded++; check(); return; }
+    if (img.complete) { failed++; img.style.opacity='0.3'; img.style.border='2px dashed #e55'; check(); return; }
+    img.addEventListener('load', function() { loaded++; check(); });
+    img.addEventListener('error', function() { failed++; img.style.opacity='0.3'; img.style.border='2px dashed #e55'; check(); });
   });
-  document.addEventListener('copy', () => {
-    const bar = document.querySelector('.guide-bar');
-    if (bar) { bar.textContent = '\\u2705 복사 완료! 네이버 에디터에 Ctrl+V로 붙여넣기 하세요'; bar.style.background = '#2563eb'; }
+  if (total === 0) check();
+  document.addEventListener('copy', function() {
+    bar.textContent = '\\u2705 복사 완료! 네이버 에디터에 Ctrl+V로 붙여넣기 하세요';
+    bar.style.background = '#2563eb';
   });
 </script></body></html>`;
 
@@ -387,8 +463,9 @@ ${place ? `<p style="color:#888;font-size:13px;margin-top:8px;">📍 ${place.nam
       popup.document.close();
       popup.focus();
     } else {
-      // Popup blocked (likely mobile or strict browser) — fall back to inline modal
       setNaverCopied(false);
+      setNaverImagesReady(false);
+      setNaverImageStats({ loaded: 0, failed: 0, total: 0 });
       setNaverCopyModal(true);
     }
   };
@@ -1703,26 +1780,44 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
       </div>
     </section>
 
-      {/* Naver Copy Modal — full-screen overlay for mobile, also fallback when popup blocked */}
+      {/* Naver Copy Modal — full-screen overlay, works on mobile + desktop fallback */}
       {naverCopyModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col">
           {/* Header bar */}
-          <div className="flex-none bg-[#03C75A] px-4 py-3 flex items-center justify-between">
-            <p className="text-white text-sm font-semibold">
-              {naverCopied ? "복사 완료! 네이버에 붙여넣기 하세요" : "아래 내용을 복사하세요"}
-            </p>
-            <div className="flex items-center gap-2">
+          <div className={cn(
+            "flex-none px-4 py-3 flex items-center justify-between",
+            naverCopied ? "bg-blue-600" : "bg-[#03C75A]"
+          )}>
+            <div className="flex-1 min-w-0 mr-3">
+              {naverCopied ? (
+                <p className="text-white text-sm font-semibold">복사 완료! 네이버에 붙여넣기 하세요</p>
+              ) : !naverImagesReady && naverImageStats.total > 0 ? (
+                <p className="text-white/90 text-xs">
+                  이미지 로딩 중... ({naverImageStats.loaded + naverImageStats.failed}/{naverImageStats.total})
+                </p>
+              ) : naverImageStats.failed > 0 ? (
+                <p className="text-yellow-200 text-xs">
+                  {naverImageStats.failed}장 로드 실패 — 나머지 {naverImageStats.loaded}장은 정상
+                </p>
+              ) : (
+                <p className="text-white text-sm font-semibold">복사하기 버튼을 눌러주세요</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-none">
               <Button
                 size="sm"
                 onClick={handleNaverRichCopy}
+                disabled={!naverImagesReady}
                 className={cn(
                   "text-xs font-semibold px-4",
-                  naverCopied
-                    ? "bg-blue-600 hover:bg-blue-700 text-white"
-                    : "bg-white hover:bg-gray-100 text-[#03C75A]"
+                  !naverImagesReady
+                    ? "bg-white/50 text-[#03C75A]/50 cursor-not-allowed"
+                    : naverCopied
+                      ? "bg-white hover:bg-gray-100 text-blue-600"
+                      : "bg-white hover:bg-gray-100 text-[#03C75A]"
                 )}
               >
-                {naverCopied ? "다시 복사" : "복사하기"}
+                {!naverImagesReady ? "로딩 중..." : naverCopied ? "다시 복사" : "복사하기"}
               </Button>
               <button
                 onClick={() => setNaverCopyModal(false)}
