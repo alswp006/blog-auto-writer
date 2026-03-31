@@ -195,6 +195,10 @@ export default function PostEditPage({
 
   // ── Save ──
   const handleSave = async () => {
+    if (!titleKo.trim() && !titleEn.trim()) {
+      showToast("제목을 입력해주세요");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -1121,7 +1125,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                       size="sm"
                       onClick={handleGenerateTitles}
                       disabled={titlesLoading}
-                      className="text-xs h-8 px-3"
+                      className="text-xs h-9 min-h-[44px] px-3"
                     >
                       {titlesLoading ? "생성 중..." : "AI 제목 3개 추천"}
                     </Button>
@@ -1151,7 +1155,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="contentKo" className="text-xs">본문</Label>
-                        <Textarea id="contentKo" value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
+                        <Textarea id="contentKo" value={contentKo} onChange={(e) => setContentKo(e.target.value)} rows={8} className="font-mono text-sm leading-relaxed md:min-h-[350px]" />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="hashtagsKo" className="text-xs">해시태그</Label>
@@ -1167,7 +1171,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="contentEn" className="text-xs">Content</Label>
-                        <Textarea id="contentEn" value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={14} className="font-mono text-sm leading-relaxed" />
+                        <Textarea id="contentEn" value={contentEn} onChange={(e) => setContentEn(e.target.value)} rows={8} className="font-mono text-sm leading-relaxed md:min-h-[350px]" />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="hashtagsEn" className="text-xs">Hashtags</Label>
@@ -1175,10 +1179,42 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                       </div>
                     </div>
                   </div>
+                  {/* Hashtag + AI Keywords — promoted from hidden collapsible */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label>해시태그 (스페이스 구분)</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSuggestKeywords}
+                        disabled={keywordsLoading}
+                        className="text-xs h-9 px-3"
+                      >
+                        {keywordsLoading ? "분석 중..." : "AI 키워드 추천"}
+                      </Button>
+                    </div>
+                    {lang === "ko"
+                      ? <Input value={hashtagsKo} onChange={(e) => setHashtagsKo(e.target.value)} placeholder="#맛집 #서울" />
+                      : <Input value={hashtagsEn} onChange={(e) => setHashtagsEn(e.target.value)} placeholder="#food #seoul" />}
+                    {suggestedKeywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {suggestedKeywords.map((kw) => (
+                          <button
+                            key={kw}
+                            onClick={() => handleAddKeyword(kw)}
+                            className="text-xs px-2.5 py-1.5 rounded-full border border-[var(--accent)]/40 text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                          >
+                            + {kw}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Advanced Tools (collapsible) */}
                   <details className="rounded-lg border border-[var(--border)] overflow-hidden">
                     <summary className="px-4 py-3 text-sm font-medium text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors">
-                      추가 도구 (부분 재생성, 키워드, 버전 히스토리)
+                      부분 재생성 도구
                     </summary>
 
                   {/* Partial Regeneration */}
@@ -1244,36 +1280,6 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label>해시태그 (스페이스 구분)</Label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleSuggestKeywords}
-                        disabled={keywordsLoading}
-                        className="text-xs h-8 px-3"
-                      >
-                        {keywordsLoading ? "분석 중..." : "AI 키워드 추천"}
-                      </Button>
-                    </div>
-                    {lang === "ko"
-                      ? <Input value={hashtagsKo} onChange={(e) => setHashtagsKo(e.target.value)} placeholder="#맛집 #서울" />
-                      : <Input value={hashtagsEn} onChange={(e) => setHashtagsEn(e.target.value)} placeholder="#food #seoul" />}
-                    {suggestedKeywords.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {suggestedKeywords.map((kw) => (
-                          <button
-                            key={kw}
-                            onClick={() => handleAddKeyword(kw)}
-                            className="text-xs px-2 py-1 rounded-full border border-[var(--accent)]/40 text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
-                          >
-                            + {kw}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                   </details>
 
                   <div className="flex gap-2">
@@ -1307,7 +1313,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                               variant="ghost"
                               size="sm"
                               onClick={() => handleRestoreVersion(v.id)}
-                              className="text-xs h-8 px-3 shrink-0 text-[var(--accent)]"
+                              className="text-xs h-9 min-h-[44px] px-3 shrink-0 text-[var(--accent)]"
                             >
                               복원
                             </Button>
@@ -1460,9 +1466,13 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                   <p className="text-xs text-[var(--text-muted)]">
                     네이버: 미리보기가 열리면 &quot;복사하기&quot; 버튼을 눌러 이미지 포함 복사 → 네이버 에디터에 붙여넣기
                   </p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">
-                    티스토리: &quot;HTML&quot; 모드 전환 후 붙여넣기 (이미지 URL 자동 삽입)
-                  </p>
+                  <div className="text-xs text-[var(--text-muted)] mt-1 space-y-0.5">
+                    <p className="font-medium text-[var(--text-secondary)]">티스토리:</p>
+                    <p>1. &quot;티스토리 복사&quot; 클릭</p>
+                    <p>2. 티스토리 에디터 우측 상단 &quot;HTML&quot; 탭 클릭</p>
+                    <p>3. Ctrl+V (또는 길게 눌러 붙여넣기)</p>
+                    <p>4. &quot;기본모드&quot; 탭으로 돌아가면 이미지+글이 보입니다</p>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -1549,7 +1559,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label>날짜</Label>
                         <Input
@@ -1761,7 +1771,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
                         else setContentEn((prev) => prev + linkText);
                         showToast("관련 글 링크가 본문 끝에 추가되었습니다. 저장해주세요.");
                       }}
-                      className="text-xs h-8 px-3 shrink-0"
+                      className="text-xs h-9 min-h-[44px] px-3 shrink-0"
                     >
                       삽입
                     </Button>
@@ -1821,7 +1831,7 @@ ${place ? `<p style="color:#888;font-size:13px;">📍 ${place.name}${place.categ
               </Button>
               <button
                 onClick={() => setNaverCopyModal(false)}
-                className="text-white/80 hover:text-white text-xl leading-none px-1"
+                className="text-white/80 hover:text-white text-2xl leading-none p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
               >
                 &times;
               </button>
