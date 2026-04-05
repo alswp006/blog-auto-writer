@@ -194,6 +194,67 @@ export default function DashboardNewPage() {
     setMenuItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)));
   const removeMenuItem = (i: number) => setMenuItems((prev) => prev.filter((_, idx) => idx !== i));
 
+  // ── Menu OCR ──
+  const menuFileRef = useRef<HTMLInputElement>(null);
+  const [menuOcrLoading, setMenuOcrLoading] = useState(false);
+
+  const handleMenuOcr = async (file: File) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) return;
+    if (file.size > 10 * 1024 * 1024) return; // 10MB max
+
+    setMenuOcrLoading(true);
+    try {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch("/api/menu-items/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64, mimeType: file.type }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const items = (data.items ?? []) as { name: string; price: number }[];
+        if (items.length > 0) {
+          setMenuItems((prev) => [
+            ...prev,
+            ...items.map((item) => ({ name: item.name, price: item.price > 0 ? String(item.price) : "" })),
+          ]);
+        }
+      }
+    } catch { /* non-critical */ }
+    setMenuOcrLoading(false);
+    if (menuFileRef.current) menuFileRef.current.value = "";
+  };
+
+  const handleMenuPaste = useCallback((e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleMenuOcr(file);
+          return;
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("paste", handleMenuPaste);
+    return () => document.removeEventListener("paste", handleMenuPaste);
+  }, [handleMenuPaste]);
+
   // ── Photo helpers ──
   const addFiles = useCallback(
     (files: FileList | File[]) => {
@@ -622,16 +683,41 @@ export default function DashboardNewPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">메뉴 / 가격</CardTitle>
-                  <Button variant="outline" size="sm" onClick={addMenuItem}>
-                    + 메뉴 추가
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => menuFileRef.current?.click()}
+                      disabled={menuOcrLoading}
+                    >
+                      {menuOcrLoading ? "읽는 중..." : "📷 메뉴판 사진"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={addMenuItem}>
+                      + 메뉴 추가
+                    </Button>
+                    <input
+                      ref={menuFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleMenuOcr(file);
+                      }}
+                    />
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {menuItems.length === 0 && (
-                  <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                    메뉴를 추가하면 글에 자동 포함됩니다
-                  </p>
+                  <div className="text-center py-4 space-y-1">
+                    <p className="text-sm text-[var(--text-muted)]">
+                      메뉴를 추가하면 글에 자동 포함됩니다
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      메뉴판 사진을 붙여넣기(Ctrl+V)하거나 &quot;메뉴판 사진&quot; 버튼으로 업로드하세요
+                    </p>
+                  </div>
                 )}
                 {menuItems.map((item, i) => (
                   <div key={i} className="flex gap-2 items-center">
