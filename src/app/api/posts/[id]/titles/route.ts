@@ -38,7 +38,7 @@ export async function POST(
     restaurant: "맛집", cafe: "카페", accommodation: "숙소", attraction: "관광지",
   };
 
-  const prompt = `블로그 글의 제목 후보 3개를 생성해주세요.
+  const prompt = `블로그 글의 제목 후보 5개를 생성해주세요.
 
 ## 장소 정보
 - 장소명: ${place?.name ?? ""}
@@ -52,10 +52,12 @@ export async function POST(
 ${(post.contentKo ?? "").slice(0, 500)}
 
 ## 제목 작성 규칙
-1. 각 제목은 서로 다른 스타일이어야 합니다:
-   - 스타일 A: SEO 키워드 중심 (장소명 + 카테고리 + 지역명)
-   - 스타일 B: 감성/호기심 유발 (클릭을 부르는 매력적 표현)
-   - 스타일 C: 구체적 정보 포함 (메뉴명, 가격, 특징 등)
+1. 각 제목은 서로 다른 스타일 템플릿을 사용하세요:
+   - 숫자형: 숫자가 포함된 리스트형 (예: "3가지 이유", "5번 방문한")
+   - 꿀팁형: 실용 정보를 강조 (예: "웨이팅 없이 먹는 법", "현지인만 아는 꿀팁")
+   - 비포애프터형: 방문 전후 변화/반전 (예: "기대 없이 갔다가 단골 됨", "별점 3점인데 줄 선 이유")
+   - 질문형: 호기심 유발하는 물음 (예: "여기가 진짜 그 맛집?", "왜 아무도 안 알려줬을까")
+   - 비교형: 대상 비교/경쟁 (예: "A vs B, 승자는?", "강남 3대 브런치 비교")
 2. 한국어 제목: 20~40자
 3. 영어 제목: SEO에 맞게 자연스럽게
 4. 현재 제목과 완전히 동일하면 안 됩니다
@@ -63,9 +65,11 @@ ${(post.contentKo ?? "").slice(0, 500)}
 JSON으로 응답:
 {
   "titles": [
-    { "titleKo": "한국어 제목 A", "titleEn": "English Title A", "style": "SEO 키워드형" },
-    { "titleKo": "한국어 제목 B", "titleEn": "English Title B", "style": "감성/호기심형" },
-    { "titleKo": "한국어 제목 C", "titleEn": "English Title C", "style": "구체 정보형" }
+    { "titleKo": "한국어 제목", "titleEn": "English Title", "style": "숫자형" },
+    { "titleKo": "한국어 제목", "titleEn": "English Title", "style": "꿀팁형" },
+    { "titleKo": "한국어 제목", "titleEn": "English Title", "style": "비포애프터형" },
+    { "titleKo": "한국어 제목", "titleEn": "English Title", "style": "질문형" },
+    { "titleKo": "한국어 제목", "titleEn": "English Title", "style": "비교형" }
   ]
 }`;
 

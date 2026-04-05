@@ -120,16 +120,16 @@ export async function GET(
   totalScore += photoScore;
   maxTotal += 15;
 
-  // 6. Hashtags
+  // 6. Hashtags (Naver prefers 10-15 for better indexing)
   const tagCount = hashtags.length;
-  const tagOptimal = lang === "ko" ? (tagCount >= 5 && tagCount <= 10) : (tagCount >= 3 && tagCount <= 7);
-  const tagScore = tagOptimal ? 10 : tagCount > 0 ? 5 : 0;
+  const tagOptimal = lang === "ko" ? (tagCount >= 8 && tagCount <= 15) : (tagCount >= 3 && tagCount <= 7);
+  const tagScore = tagOptimal ? 10 : tagCount >= 5 ? 7 : tagCount > 0 ? 4 : 0;
   breakdown.push({
     category: "해시태그",
     score: tagScore,
     max: 10,
     detail: `${tagCount}개`,
-    tips: tagCount === 0 ? ["해시태그를 추가하세요"] : !tagOptimal ? [lang === "ko" ? "5~10개 최적" : "3~7개 최적"] : [],
+    tips: tagCount === 0 ? ["해시태그를 추가하세요"] : !tagOptimal ? [lang === "ko" ? "네이버는 8~15개가 최적 (롱테일 포함)" : "3~7개 최적"] : [],
   });
   totalScore += tagScore;
   maxTotal += 10;
@@ -164,6 +164,35 @@ export async function GET(
   });
   totalScore += varietyScore;
   maxTotal += 10;
+
+  // 9. Long-tail keywords (2+ word hashtags)
+  const longTailTags = hashtags.filter((t) => {
+    const clean = t.replace(/^#/, "");
+    return clean.length >= 4 && /[가-힣]{2,}[가-힣]{2,}/.test(clean);
+  });
+  const longTailScore = longTailTags.length >= 3 ? 5 : longTailTags.length >= 1 ? 3 : 0;
+  breakdown.push({
+    category: "롱테일 키워드",
+    score: longTailScore,
+    max: 5,
+    detail: `${longTailTags.length}개`,
+    tips: longTailTags.length < 3 ? ["'강남역맛집', '혼밥추천' 같은 복합 키워드를 추가하세요"] : [],
+  });
+  totalScore += longTailScore;
+  maxTotal += 5;
+
+  // 10. Photo in first 800 chars (Naver rewards early visual content)
+  const firstPhotoPos = content.indexOf("[PHOTO:");
+  const earlyPhotoScore = firstPhotoPos >= 0 && firstPhotoPos <= 800 ? 5 : firstPhotoPos >= 0 ? 2 : 0;
+  breakdown.push({
+    category: "첫 사진 위치",
+    score: earlyPhotoScore,
+    max: 5,
+    detail: firstPhotoPos >= 0 ? `${firstPhotoPos}자 위치` : "사진 마커 없음",
+    tips: firstPhotoPos < 0 ? ["본문에 사진을 배치하세요"] : firstPhotoPos > 800 ? ["첫 사진을 800자 이내에 배치하면 체류시간이 늘어납니다"] : [],
+  });
+  totalScore += earlyPhotoScore;
+  maxTotal += 5;
 
   const overallScore = Math.round((totalScore / maxTotal) * 100);
 

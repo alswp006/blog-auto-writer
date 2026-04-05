@@ -21,10 +21,11 @@ async function createTestUser(suffix: string) {
   return { id: lastInsertRowid, email };
 }
 
-async function createTestPlace(name: string, category: string) {
+async function createTestPlace(name: string, category: string, userId: number | bigint) {
   const now = new Date().toISOString();
   const { lastInsertRowid } = await execute(
-    `INSERT INTO places (name, category, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+    `INSERT INTO places (user_id, name, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+    userId,
     name,
     category,
     now,
@@ -89,7 +90,7 @@ describe("posts table schema", () => {
   it("inserts a draft post with JSON defaults", async () => {
     const now = new Date().toISOString();
     const user = await createTestUser("draft");
-    const place = await createTestPlace("Test Place", "cafe");
+    const place = await createTestPlace("Test Place", "cafe", user.id);
     const style = await getSystemStyleProfile();
 
     const { lastInsertRowid } = await execute(
@@ -117,7 +118,7 @@ describe("posts table schema", () => {
   it("rejects invalid status value", async () => {
     const now = new Date().toISOString();
     const user = await createTestUser("invalid-status");
-    const place = await createTestPlace("Test2", "restaurant");
+    const place = await createTestPlace("Test2", "restaurant", user.id);
     const style = await getSystemStyleProfile();
 
     await expect(
@@ -136,7 +137,7 @@ describe("posts table schema", () => {
   it("cascades delete when user is deleted", async () => {
     const now = new Date().toISOString();
     const user = await createTestUser("cascade");
-    const place = await createTestPlace("Test3", "cafe");
+    const place = await createTestPlace("Test3", "cafe", user.id);
     const style = await getSystemStyleProfile();
 
     const { lastInsertRowid } = await execute(
@@ -168,7 +169,7 @@ describe("posts table schema", () => {
   it("stores generated post with content", async () => {
     const now = new Date().toISOString();
     const user = await createTestUser("generated");
-    const place = await createTestPlace("Test4", "cafe");
+    const place = await createTestPlace("Test4", "cafe", user.id);
     const style = await getSystemStyleProfile();
 
     const { lastInsertRowid } = await execute(

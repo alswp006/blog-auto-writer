@@ -26,8 +26,9 @@ beforeEach(async () => {
 afterEach(async () => {
   // Clean up in FK order
   await execute("DELETE FROM posts WHERE user_id = ?", testUserId);
-  await execute("DELETE FROM photos WHERE place_id IN (SELECT id FROM places)");
-  await execute("DELETE FROM menu_items WHERE place_id IN (SELECT id FROM places)");
+  await execute("DELETE FROM photos WHERE place_id IN (SELECT id FROM places WHERE user_id = ?)", testUserId);
+  await execute("DELETE FROM menu_items WHERE place_id IN (SELECT id FROM places WHERE user_id = ?)", testUserId);
+  await execute("DELETE FROM places WHERE user_id = ?", testUserId);
   await execute("DELETE FROM style_profiles WHERE user_id = ?", testUserId);
   await execute("DELETE FROM user_profiles WHERE user_id = ?", testUserId);
   await execute("DELETE FROM sessions WHERE userId = ?", testUserId);
@@ -37,6 +38,7 @@ afterEach(async () => {
 describe("Place model", () => {
   it("creates and retrieves a place", async () => {
     const place = await placeModel.create({
+      userId: testUserId,
       name: "Test Restaurant",
       category: "restaurant",
       address: "Seoul",
@@ -60,6 +62,7 @@ describe("Place model", () => {
 describe("Post model", () => {
   it("creates a draft post and updates with generated content", async () => {
     const place = await placeModel.create({
+      userId: testUserId,
       name: "Test Place",
       category: "cafe",
     });
@@ -96,7 +99,7 @@ describe("Post model", () => {
   });
 
   it("lists posts by user", async () => {
-    const place = await placeModel.create({ name: "Place", category: "restaurant" });
+    const place = await placeModel.create({ userId: testUserId, name: "Place", category: "restaurant" });
     const presets = await styleProfileModel.getSystemPresets();
 
     const post1 = await postModel.create({ userId: testUserId, placeId: place.id, styleProfileId: presets[0].id });
@@ -158,6 +161,7 @@ describe("API: POST /api/posts/generate", () => {
     const { POST } = await import("@/app/api/posts/generate/route");
 
     const place = await placeModel.create({
+      userId: testUserId,
       name: "Fallback Test",
       category: "restaurant",
       rating: 4.5,
@@ -197,7 +201,7 @@ describe("API: PATCH /api/posts/[id]", () => {
   it("updates post content", async () => {
     const { PATCH } = await import("@/app/api/posts/[id]/route");
 
-    const place = await placeModel.create({ name: "Edit Test", category: "cafe" });
+    const place = await placeModel.create({ userId: testUserId, name: "Edit Test", category: "cafe" });
     const presets = await styleProfileModel.getSystemPresets();
     const post = await postModel.create({
       userId: testUserId,

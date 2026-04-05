@@ -13,20 +13,99 @@ export type QualityCheckResult = {
 };
 
 const AI_PATTERNS_KO = [
+  // ── 안내형 도입 ──
   "소개해 드리겠습니다",
   "소개해드리겠습니다",
   "알아보겠습니다",
   "알아볼까요",
   "살펴보겠습니다",
   "다루어 보겠습니다",
+  "그럼 지금부터",
+  "자 그러면",
+  "오늘은 여러분께",
+  "여러분에게 소개",
+  "같이 알아볼까요",
+  "함께 살펴보겠습니다",
+
+  // ── 나열형 구조 ──
   "첫째,",
   "둘째,",
   "셋째,",
+
+  // ── 뻔한 마무리 ──
   "마지막으로,",
   "결론적으로",
   "요약하자면",
-  "그럼 지금부터",
-  "자 그러면",
+  "추천드립니다",
+  "강추합니다",
+  "방문해보시길",
+  "후회하지 않으실",
+  "꼭 한번 방문해",
+  "실망하지 않으실",
+
+  // ── AI 수식어 (실제 블로거가 안 쓰는 표현) ──
+  "다양한 메뉴",
+  "다양한 맛",
+  "특별한 경험",
+  "특별한 맛",
+  "완벽한 조화",
+  "완벽한 맛",
+  "독특한 매력",
+  "독특한 분위기",
+  "풍부한 맛",
+  "조화로운",
+  "조화롭게",
+  "어우러진",
+  "어우러져",
+
+  // ── AI 미사여구 ──
+  "분위기를 자아내",
+  "눈길을 사로잡",
+  "입안 가득 퍼지는",
+  "미각을 자극",
+  "맛의 향연",
+  "미식의 여정",
+  "가히 압권",
+  "정성이 느껴지",
+  "정성이 가득",
+  "매력에 빠지",
+  "매력을 느끼",
+  "자랑하는",
+  "감동을 선사",
+  "감탄을 자아내",
+  "한 편의 그림",
+
+  // ── AI 과장 패턴 ──
+  "그야말로",
+  "가히",
+  "이루 말할 수 없",
+  "한마디로 정의",
+  "두말할 나위 없",
+];
+
+const AI_PATTERNS_EN = [
+  "nestled in",
+  "nestled between",
+  "symphony of flavors",
+  "culinary journey",
+  "culinary adventure",
+  "hidden gem",
+  "tantalizing",
+  "delectable",
+  "boasts",
+  "bustling",
+  "mouth-watering",
+  "mouthwatering",
+  "a testament to",
+  "elevate your",
+  "elevates the",
+  "gastronomic",
+  "embark on",
+  "indulge in",
+  "feast for the eyes",
+  "treat your taste buds",
+  "dining experience",
+  "not to be missed",
 ];
 
 /**
@@ -97,7 +176,7 @@ export function validateContent(
     }
   }
 
-  // ── 3. AI pattern detection ──
+  // ── 3. AI pattern detection (Korean) ──
   const koContent = content.contentKo ?? "";
   const detectedPatterns: string[] = [];
   for (const pattern of AI_PATTERNS_KO) {
@@ -108,6 +187,19 @@ export function validateContent(
   if (detectedPatterns.length > 0) {
     issues.push(`AI스러운 표현 감지: "${detectedPatterns.join('", "')}"`);
     score -= detectedPatterns.length * 5;
+  }
+
+  // ── 3b. AI pattern detection (English) ──
+  const enContent = (content.contentEn ?? "").toLowerCase();
+  const detectedPatternsEn: string[] = [];
+  for (const pattern of AI_PATTERNS_EN) {
+    if (enContent.includes(pattern)) {
+      detectedPatternsEn.push(pattern);
+    }
+  }
+  if (detectedPatternsEn.length > 0) {
+    issues.push(`AI-sounding expressions detected: "${detectedPatternsEn.join('", "')}"`);
+    score -= detectedPatternsEn.length * 5;
   }
 
   // Check for numbered lists (1. 2. 3.)
@@ -122,6 +214,73 @@ export function validateContent(
   if (headingMatch && headingMatch.length > 0) {
     issues.push("소제목(## ###) 패턴이 감지되었습니다");
     score -= 10;
+  }
+
+  // ── 3c. Adjective repetition detection ──
+  const ADJ_REPEAT_KO = ["정말", "너무", "매우", "굉장히", "엄청", "진짜", "아주", "무척"];
+  for (const adj of ADJ_REPEAT_KO) {
+    const adjCount = (koContent.match(new RegExp(adj, "g")) ?? []).length;
+    if (adjCount >= 4) {
+      issues.push(`'${adj}' ${adjCount}회 반복 — 다른 표현으로 바꿔주세요`);
+      score -= 5;
+    }
+  }
+
+  // ── 3d. Sensory overload detection (3+ sensory words in one paragraph) ──
+  const SENSORY_KO = ["향이", "향긋", "바삭", "촉촉", "쫄깃", "부드러운", "부드럽", "달콤", "고소", "짭짤", "새콤", "매콤", "시원한", "따뜻한", "입안", "혀끝", "감칠맛"];
+  const koParagraphs = koContent.split("\n\n");
+  let sensoryOverloadCount = 0;
+  for (const para of koParagraphs) {
+    const sensoryHits = SENSORY_KO.filter((w) => para.includes(w)).length;
+    if (sensoryHits >= 4) sensoryOverloadCount++;
+  }
+  if (sensoryOverloadCount >= 2) {
+    issues.push(`감각 표현 과다 — ${sensoryOverloadCount}개 문단에서 감각어 4개 이상 사용`);
+    score -= 10;
+  }
+
+  // ── 3e. Tone mixing detection (formal vs casual in same text) ──
+  const FORMAL_ENDINGS = ["습니다", "합니다", "됩니다", "입니다", "세요"];
+  const CASUAL_ENDINGS = ["했어요", "같아요", "거든요", "있어요", "됐어요", "봤어요", "먹어요"];
+  let formalCount = 0;
+  let casualCount = 0;
+  for (const ending of FORMAL_ENDINGS) {
+    formalCount += (koContent.match(new RegExp(ending, "g")) ?? []).length;
+  }
+  for (const ending of CASUAL_ENDINGS) {
+    casualCount += (koContent.match(new RegExp(ending, "g")) ?? []).length;
+  }
+  const totalEndings = formalCount + casualCount;
+  if (totalEndings >= 10) {
+    const formalRatio = formalCount / totalEndings;
+    // Mixed if neither style dominates (30-70% range)
+    if (formalRatio > 0.3 && formalRatio < 0.7) {
+      issues.push(`톤 혼합 감지 — 합니다체(${formalCount}회)와 해요체(${casualCount}회) 혼용`);
+      score -= 10;
+    }
+  }
+
+  // ── 3f. Photo placement rules ──
+  if (photoCount > 0) {
+    const markerPositions: number[] = [];
+    const markerRegex = /\[PHOTO:\d+\]/g;
+    let m;
+    while ((m = markerRegex.exec(koContent)) !== null) {
+      markerPositions.push(m.index);
+    }
+    // First photo should be within first 800 chars
+    if (markerPositions.length > 0 && markerPositions[0] > 800) {
+      issues.push(`첫 사진이 ${markerPositions[0]}자 위치 — 800자 이내에 배치 권장`);
+      score -= 5;
+    }
+    // Photos should be at least 200 chars apart
+    for (let i = 1; i < markerPositions.length; i++) {
+      const gap = markerPositions[i] - markerPositions[i - 1];
+      if (gap < 200) {
+        issues.push(`사진 ${i}번과 ${i + 1}번 사이 텍스트가 ${gap}자로 너무 짧음 (최소 200자)`);
+        score -= 3;
+      }
+    }
   }
 
   // ── 4. Place name mention ──
