@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 import type { Post, Photo, Place, PublishHistoryItem, Tab, Lang } from "./types";
 import { getPhotoAlt } from "./format-utils";
 import { NaverCopyModal } from "./NaverCopyModal";
-import { SeoAnalysisCard } from "./SeoAnalysisCard";
 import { CompetitorAnalysisCard } from "./CompetitorAnalysisCard";
 import { PlatformCopyCard } from "./PlatformCopyCard";
 import { PublishScheduleCard } from "./PublishScheduleCard";
@@ -67,8 +66,7 @@ export default function PostEditPage({
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenPreview, setRegenPreview] = useState<string | null>(null);
 
-  // Photo Analysis
-  const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
+  // (photo caption removed — AI handles captions during generation)
 
   // Title candidates
   const [titleCandidates, setTitleCandidates] = useState<{ titleKo: string; titleEn: string; style: string }[]>([]);
@@ -81,6 +79,13 @@ export default function PostEditPage({
 
   // Naver copy modal
   const [naverModalHtml, setNaverModalHtml] = useState<string | null>(null);
+
+  // SEO score (auto-loaded for generated posts)
+  const [seoScore, setSeoScore] = useState<{
+    score: number;
+    grade: string;
+    breakdown: { category: string; score: number; max: number; detail: string; tips: string[] }[];
+  } | null>(null);
 
   useEffect(() => {
     fetch(`/api/posts/${postId}`)
@@ -303,35 +308,14 @@ export default function PostEditPage({
     }
   };
 
-  const handleAnalyzePhotos = async () => {
-    if (photos.length === 0) return;
-    setPhotoAnalyzing(true);
-    try {
-      const res = await fetch("/api/photos/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoIds: photos.map((p) => p.id) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      const results = (data.results ?? []) as { photoId?: number; caption: string }[];
-      const resultMap = new Map<number, string>();
-      for (const r of results) {
-        if (r.photoId && r.caption) resultMap.set(r.photoId, r.caption);
-      }
-      setPhotos((prev) =>
-        prev.map((p) => {
-          const newCaption = resultMap.get(p.id);
-          return newCaption ? { ...p, caption: newCaption } : p;
-        }),
-      );
-      showToast(`AI 캡션 생성 완료! (${resultMap.size}장)`);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "사진 분석 실패");
-    } finally {
-      setPhotoAnalyzing(false);
-    }
-  };
+  // Auto-load SEO score for generated posts
+  useEffect(() => {
+    if (!post || post.status !== "generated") return;
+    fetch(`/api/posts/${postId}/seo-score?lang=${lang}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setSeoScore(data); })
+      .catch(() => {});
+  }, [post?.status, postId, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Loading / Error states ──
   if (loading) {
@@ -679,22 +663,53 @@ export default function PostEditPage({
             </Card>
           )}
 
-          {/* SEO Score */}
-          {post?.status === "generated" && (
-            <SeoAnalysisCard postId={postId} lang={lang} showToast={showToast} />
-          )}
-
-          {/* Photo Analysis */}
-          {photos.length > 0 && (
+          {/* SEO Score (auto-loaded) */}
+          {post?.status === "generated" && seoScore && (
             <Card>
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">AI 사진 분석</p>
-                  <p className="text-xs text-[var(--text-muted)]">Vision AI로 사진 캡션을 자동 생성합니다 ({photos.length}장)</p>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "text-2xl font-bold w-12 h-12 rounded-full flex items-center justify-center border-2",
+                      seoScore.grade === "A" ? "border-green-500 text-green-400" :
+                      seoScore.grade === "B" ? "border-blue-500 text-blue-400" :
+                      seoScore.grade === "C" ? "border-yellow-500 text-yellow-400" :
+                      "border-red-500 text-red-400",
+                    )}>
+                      {seoScore.grade}
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold">SEO {seoScore.score}점</p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {seoScore.score >= 85 ? "검색 노출에 최적화되어 있습니다" :
+                         seoScore.score >= 70 ? "검색 노출이 양호합니다" :
+                         seoScore.score >= 50 ? "검색 노출 개선이 필요합니다" : "검색 최적화가 부족합니다"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleAnalyzePhotos} disabled={photoAnalyzing}>
-                  {photoAnalyzing ? "분석 중..." : "AI 캡션 생성"}
-                </Button>
+                <p className="text-xs text-[var(--text-muted)] bg-[var(--bg-elevated)] rounded-md px-3 py-2">
+                  SEO(검색엔진최적화)는 네이버·구글에서 내 글이 상위에 노출되도록 제목, 키워드, 본문 길이, 사진 배치 등을 최적화하는 것입니다.
+                </p>
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors">
+                    세부 항목 보기
+                  </summary>
+                  <div className="mt-2 space-y-1.5">
+                    {seoScore.breakdown.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <span className="text-[var(--text-secondary)]">{item.category}</span>
+                        <span className={cn(
+                          "text-xs",
+                          item.score / item.max >= 0.8 ? "text-green-400" :
+                          item.score / item.max >= 0.5 ? "text-yellow-400" : "text-red-400",
+                        )}>
+                          {item.score}/{item.max} — {item.detail}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               </CardContent>
             </Card>
           )}
