@@ -39,13 +39,20 @@ export async function POST(
 
   const textSnippet = [title, content?.slice(0, 1000)].filter(Boolean).join("\n\n");
 
+  // Seasonal context for keyword suggestions
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-12
+  const seasonKo = month >= 3 && month <= 5 ? "봄" : month >= 6 && month <= 8 ? "여름" : month >= 9 && month <= 11 ? "가을" : "겨울";
+  const seasonEn = month >= 3 && month <= 5 ? "spring" : month >= 6 && month <= 8 ? "summer" : month >= 9 && month <= 11 ? "fall/autumn" : "winter";
+  const yearStr = now.getFullYear().toString();
+
   const systemPrompt = lang === "ko"
     ? "당신은 블로그 SEO 전문가입니다. 주어진 블로그 글에서 검색 유입에 효과적인 키워드를 추출합니다. 롱테일 키워드를 포함하세요. 응답은 반드시 JSON 배열로만 출력하세요."
     : "You are a blog SEO expert. Extract search-effective keywords from the given blog post. Include long-tail keywords. Respond with a JSON array only.";
 
   const userPrompt = lang === "ko"
-    ? `다음 블로그 글에서 네이버/구글 검색 유입에 효과적인 키워드 8~12개를 추출하세요.\n해시태그 형태(#키워드)로 반환하세요.\n\n---\n${textSnippet}\n---\n\n응답 예시: ["#서울맛집", "#강남카페", "#가성비점심"]\nJSON 배열만 출력하세요.`
-    : `Extract 8-12 SEO-effective keywords from this blog post.\nReturn as hashtags (#keyword).\n\n---\n${textSnippet}\n---\n\nExample: ["#seoulfood", "#koreatravel", "#budgetrestaurant"]\nJSON array only.`;
+    ? `다음 블로그 글에서 네이버/구글 검색 유입에 효과적인 키워드 8~12개를 추출하세요.\n해시태그 형태(#키워드)로 반환하세요.\n현재 계절: ${seasonKo} (${yearStr}년 ${month}월)\n계절 관련 키워드도 1~2개 포함하세요 (예: #${seasonKo}맛집, #${yearStr}${seasonKo}추천).\n\n---\n${textSnippet}\n---\n\n응답 예시: ["#서울맛집", "#강남카페", "#가성비점심", "#${seasonKo}맛집"]\nJSON 배열만 출력하세요.`
+    : `Extract 8-12 SEO-effective keywords from this blog post.\nReturn as hashtags (#keyword).\nCurrent season: ${seasonEn} (${yearStr})\nInclude 1-2 seasonal keywords (e.g., #${seasonEn}food, #${yearStr}${seasonEn}).\n\n---\n${textSnippet}\n---\n\nExample: ["#seoulfood", "#koreatravel", "#budgetrestaurant", "#${seasonEn}dining"]\nJSON array only.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

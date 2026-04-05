@@ -101,7 +101,7 @@ export function DashboardPostList({ posts, publishedPlatforms }: Props) {
             <button
               key={cat}
               onClick={() => { setCategoryFilter(cat); setPage(1); }}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              className={`px-3 py-2 text-xs rounded-lg border transition-colors min-h-[44px] flex items-center ${
                 categoryFilter === cat
                   ? "bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]"
                   : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-hover)]"
@@ -116,7 +116,7 @@ export function DashboardPostList({ posts, publishedPlatforms }: Props) {
             <button
               key={st}
               onClick={() => { setStatusFilter(st); setPage(1); }}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              className={`px-3 py-2 text-xs rounded-lg border transition-colors min-h-[44px] flex items-center ${
                 statusFilter === st
                   ? "bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]"
                   : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-hover)]"

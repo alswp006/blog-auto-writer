@@ -806,40 +806,65 @@ export default function DashboardNewPage() {
             {generating ? uploadProgress || "처리 중..." : "글 생성하기"}
           </Button>
 
-          {generating && currentStep && (
-            <Card className="border-[var(--accent)]/20 bg-[var(--bg-elevated)]">
-              <CardContent className="pt-4 pb-3">
-                <div className="space-y-2">
-                  {[
-                    { key: "preparing", label: "데이터 준비" },
-                    { key: "loading", label: "장소 정보 로딩" },
-                    { key: "enriching", label: "장소 보강 & 사진 분석" },
-                    { key: "generating", label: "AI 글 생성" },
-                    { key: "validating", label: "품질 검증" },
-                    { key: "polishing", label: "글 다듬기" },
-                    { key: "saving", label: "저장" },
-                  ].map(({ key, label }) => {
-                    const isDone = completedSteps.includes(key);
-                    const isCurrent = currentStep === key;
-                    return (
-                      <div key={key} className="flex items-center gap-2 text-sm">
-                        {isDone ? (
-                          <span className="w-5 h-5 rounded-full bg-[var(--success)]/20 text-[var(--success)] flex items-center justify-center text-xs font-bold">✓</span>
-                        ) : isCurrent ? (
-                          <span className="w-5 h-5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
-                        ) : (
-                          <span className="w-5 h-5 rounded-full border border-[var(--border)]" />
-                        )}
-                        <span className={isDone ? "text-[var(--text-muted)]" : isCurrent ? "text-[var(--text)] font-medium" : "text-[var(--text-muted)]"}>
-                          {label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {generating && currentStep && (() => {
+            const STEPS = [
+              { key: "preparing", label: "데이터 준비", weight: 5 },
+              { key: "loading", label: "장소 정보 로딩", weight: 5 },
+              { key: "enriching", label: "장소 보강 & 사진 분석", weight: 15 },
+              { key: "generating", label: "AI 글 생성", weight: 40 },
+              { key: "validating", label: "품질 검증", weight: 10 },
+              { key: "polishing", label: "글 다듬기", weight: 20 },
+              { key: "saving", label: "저장", weight: 5 },
+            ];
+            const currentIdx = STEPS.findIndex((s) => s.key === currentStep);
+            const completedWeight = STEPS.slice(0, currentIdx >= 0 ? currentIdx : 0).reduce((s, st) => s + st.weight, 0);
+            const currentWeight = currentIdx >= 0 ? STEPS[currentIdx].weight / 2 : 0;
+            const progressPct = Math.min(95, completedWeight + currentWeight);
+            const remainingWeight = 100 - progressPct;
+            const etaSeconds = Math.round(remainingWeight * 0.8); // ~0.8s per weight unit avg
+            const etaText = etaSeconds > 60 ? `약 ${Math.ceil(etaSeconds / 60)}분` : `약 ${etaSeconds}초`;
+
+            return (
+              <Card className="border-[var(--accent)]/20 bg-[var(--bg-elevated)]">
+                <CardContent className="pt-4 pb-3 space-y-3">
+                  {/* Progress bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[var(--text-secondary)] font-medium">{Math.round(progressPct)}% 완료</span>
+                      <span className="text-[var(--text-muted)]">남은 시간: {etaText}</span>
+                    </div>
+                    <div className="h-2 bg-[var(--bg-card)] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent)] rounded-full transition-all duration-700 ease-out"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  </div>
+                  {/* Step list */}
+                  <div className="space-y-2">
+                    {STEPS.map(({ key, label }) => {
+                      const isDone = completedSteps.includes(key);
+                      const isCurrent = currentStep === key;
+                      return (
+                        <div key={key} className="flex items-center gap-2 text-sm">
+                          {isDone ? (
+                            <span className="w-5 h-5 rounded-full bg-[var(--success)]/20 text-[var(--success)] flex items-center justify-center text-xs font-bold">✓</span>
+                          ) : isCurrent ? (
+                            <span className="w-5 h-5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+                          ) : (
+                            <span className="w-5 h-5 rounded-full border border-[var(--border)]" />
+                          )}
+                          <span className={isDone ? "text-[var(--text-muted)]" : isCurrent ? "text-[var(--text)] font-medium" : "text-[var(--text-muted)]"}>
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       </div>
     </section>

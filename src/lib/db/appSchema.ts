@@ -4,13 +4,15 @@ export async function applyAppSchema(client: Client): Promise<void> {
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS places (
       id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL,
       name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 80),
       category TEXT NOT NULL CHECK(category IN ('restaurant','cafe','accommodation','attraction')),
       address TEXT NULL CHECK(address IS NULL OR length(address) <= 200),
       rating REAL NULL CHECK(rating IS NULL OR (rating >= 1 AND rating <= 5)),
       memo TEXT NULL CHECK(memo IS NULL OR length(memo) <= 1000),
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS menu_items (
@@ -93,6 +95,7 @@ export async function applyAppSchema(client: Client): Promise<void> {
       scheduled_platform TEXT NULL CHECK(scheduled_platform IS NULL OR scheduled_platform IN ('tistory','medium','wordpress','naver')),
       scheduled_lang TEXT NULL CHECK(scheduled_lang IS NULL OR scheduled_lang IN ('ko','en')),
       is_revisit INTEGER NOT NULL DEFAULT 0 CHECK(is_revisit IN (0,1)),
+      generation_meta TEXT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -150,7 +153,28 @@ export async function applyAppSchema(client: Client): Promise<void> {
       FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_post_versions_post_id ON post_versions(post_id);
+
+    -- Performance indexes for common queries
+    CREATE INDEX IF NOT EXISTS idx_photos_place_id ON photos(place_id);
+    CREATE INDEX IF NOT EXISTS idx_menu_items_place_id ON menu_items(place_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_place_id ON posts(place_id);
+    CREATE INDEX IF NOT EXISTS idx_publish_history_post_id ON publish_history(post_id);
   `);
+
+  // Add user_id column to places (for existing DBs)
+  try {
+    await client.execute("ALTER TABLE places ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0 REFERENCES users(id) ON DELETE CASCADE");
+  } catch {
+    // Column already exists — ignore
+  }
+
+  // Add generation_meta column to posts (for existing DBs)
+  try {
+    await client.execute("ALTER TABLE posts ADD COLUMN generation_meta TEXT NULL");
+  } catch {
+    // Column already exists — ignore
+  }
 
   // Add alt_text column to photos (for existing DBs)
   try {

@@ -216,6 +216,73 @@ export function validateContent(
     score -= 10;
   }
 
+  // ── 3c. Adjective repetition detection ──
+  const ADJ_REPEAT_KO = ["정말", "너무", "매우", "굉장히", "엄청", "진짜", "아주", "무척"];
+  for (const adj of ADJ_REPEAT_KO) {
+    const adjCount = (koContent.match(new RegExp(adj, "g")) ?? []).length;
+    if (adjCount >= 4) {
+      issues.push(`'${adj}' ${adjCount}회 반복 — 다른 표현으로 바꿔주세요`);
+      score -= 5;
+    }
+  }
+
+  // ── 3d. Sensory overload detection (3+ sensory words in one paragraph) ──
+  const SENSORY_KO = ["향이", "향긋", "바삭", "촉촉", "쫄깃", "부드러운", "부드럽", "달콤", "고소", "짭짤", "새콤", "매콤", "시원한", "따뜻한", "입안", "혀끝", "감칠맛"];
+  const koParagraphs = koContent.split("\n\n");
+  let sensoryOverloadCount = 0;
+  for (const para of koParagraphs) {
+    const sensoryHits = SENSORY_KO.filter((w) => para.includes(w)).length;
+    if (sensoryHits >= 4) sensoryOverloadCount++;
+  }
+  if (sensoryOverloadCount >= 2) {
+    issues.push(`감각 표현 과다 — ${sensoryOverloadCount}개 문단에서 감각어 4개 이상 사용`);
+    score -= 10;
+  }
+
+  // ── 3e. Tone mixing detection (formal vs casual in same text) ──
+  const FORMAL_ENDINGS = ["습니다", "합니다", "됩니다", "입니다", "세요"];
+  const CASUAL_ENDINGS = ["했어요", "같아요", "거든요", "있어요", "됐어요", "봤어요", "먹어요"];
+  let formalCount = 0;
+  let casualCount = 0;
+  for (const ending of FORMAL_ENDINGS) {
+    formalCount += (koContent.match(new RegExp(ending, "g")) ?? []).length;
+  }
+  for (const ending of CASUAL_ENDINGS) {
+    casualCount += (koContent.match(new RegExp(ending, "g")) ?? []).length;
+  }
+  const totalEndings = formalCount + casualCount;
+  if (totalEndings >= 10) {
+    const formalRatio = formalCount / totalEndings;
+    // Mixed if neither style dominates (30-70% range)
+    if (formalRatio > 0.3 && formalRatio < 0.7) {
+      issues.push(`톤 혼합 감지 — 합니다체(${formalCount}회)와 해요체(${casualCount}회) 혼용`);
+      score -= 10;
+    }
+  }
+
+  // ── 3f. Photo placement rules ──
+  if (photoCount > 0) {
+    const markerPositions: number[] = [];
+    const markerRegex = /\[PHOTO:\d+\]/g;
+    let m;
+    while ((m = markerRegex.exec(koContent)) !== null) {
+      markerPositions.push(m.index);
+    }
+    // First photo should be within first 800 chars
+    if (markerPositions.length > 0 && markerPositions[0] > 800) {
+      issues.push(`첫 사진이 ${markerPositions[0]}자 위치 — 800자 이내에 배치 권장`);
+      score -= 5;
+    }
+    // Photos should be at least 200 chars apart
+    for (let i = 1; i < markerPositions.length; i++) {
+      const gap = markerPositions[i] - markerPositions[i - 1];
+      if (gap < 200) {
+        issues.push(`사진 ${i}번과 ${i + 1}번 사이 텍스트가 ${gap}자로 너무 짧음 (최소 200자)`);
+        score -= 3;
+      }
+    }
+  }
+
   // ── 4. Place name mention ──
   if (!koContent.includes(placeName)) {
     issues.push("한국어 글에 장소명이 언급되지 않았습니다");

@@ -293,6 +293,11 @@ function buildPrompt(
   const hookKo = OPENING_HOOKS_KO[hookIdxKo];
   const hookEn = OPENING_HOOKS_EN[hookIdxEn];
 
+  // Seasonal context
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const seasonKo = month >= 3 && month <= 5 ? "봄" : month >= 6 && month <= 8 ? "여름" : month >= 9 && month <= 11 ? "가을" : "겨울";
+
   let prompt = `당신은 한국의 인기 블로거입니다. 아래 장소 방문 경험을 바탕으로 한국어 블로그 글과 영어 블로그 글을 각각 작성하세요.
 
 ## 장소 정보
@@ -300,6 +305,7 @@ function buildPrompt(
 - 카테고리: ${cat}
 - 주소: ${place.address ?? "미입력"}
 - 별점: ${place.rating ?? "미입력"}/5
+- 방문 시기: ${now.getFullYear()}년 ${month}월 (${seasonKo})
 `;
 
   if (menuItems.length > 0) {
@@ -313,7 +319,8 @@ function buildPrompt(
     prompt += `\n## 사진 정보 (${photos.length}장)\n`;
     prompt += `아래 사진들을 글의 흐름에 맞는 위치에 자연스럽게 배치하세요.\n`;
     prompt += `사진을 넣을 위치에 [PHOTO:인덱스] 마커를 삽입하세요 (예: [PHOTO:0], [PHOTO:1]).\n`;
-    prompt += `모든 사진을 한 곳에 몰아넣지 말고, 글의 맥락에 맞게 분산 배치하세요.\n\n`;
+    prompt += `모든 사진을 한 곳에 몰아넣지 말고, 글의 맥락에 맞게 분산 배치하세요.\n`;
+    prompt += `배치 규칙: 첫 번째 사진은 글 시작 800자 이내에, 사진 사이에는 최소 200자 이상 텍스트를 넣으세요.\n\n`;
 
     // Build a lookup of rich descriptions by orderIndex
     const descMap = new Map<number, PhotoDescription>();
@@ -888,7 +895,7 @@ ${content.contentEn}
         }
       : content.usage;
 
-    return {
+    const polishedContent: GeneratedContent = {
       titleKo: polished.titleKo || content.titleKo,
       contentKo: polished.contentKo || content.contentKo,
       hashtagsKo: content.hashtagsKo,
@@ -897,6 +904,15 @@ ${content.contentEn}
       hashtagsEn: content.hashtagsEn,
       usage: polishUsage,
     };
+
+    // Polish quality guard: only keep polished version if it's at least as good
+    const originalScore = validateContent(content, originalMarkers.length, "").score;
+    const polishedScore = validateContent(polishedContent, originalMarkers.length, "").score;
+    if (polishedScore < originalScore - 5) {
+      return content; // polish made it worse — keep original
+    }
+
+    return polishedContent;
   } catch {
     return content;
   } finally {
