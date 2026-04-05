@@ -896,10 +896,12 @@ export default function DashboardNewPage() {
             const STEPS = [
               { key: "preparing", label: "데이터 준비", weight: 5 },
               { key: "loading", label: "장소 정보 로딩", weight: 5 },
-              { key: "enriching", label: "장소 보강 & 사진 분석", weight: 15 },
-              { key: "generating", label: "AI 글 생성", weight: 40 },
-              { key: "validating", label: "품질 검증", weight: 10 },
-              { key: "polishing", label: "글 다듬기", weight: 20 },
+              { key: "enriching", label: "장소 보강 & 사진 분석", weight: 12 },
+              { key: "generating", label: "AI 글 생성", weight: 30 },
+              { key: "validating", label: "품질 검증", weight: 8 },
+              { key: "polishing", label: "글 다듬기", weight: 15 },
+              { key: "analyzing", label: "경쟁글 분석", weight: 10 },
+              { key: "improving", label: "경쟁 분석 반영", weight: 10 },
               { key: "saving", label: "저장", weight: 5 },
             ];
             const currentIdx = STEPS.findIndex((s) => s.key === currentStep);

@@ -940,6 +940,205 @@ ${content.contentEn}
 
 // ── Provider-agnostic generation call ──
 
+// ── Competitor analysis + auto-improvement ──
+
+type CompetitorAnalysis = {
+  missing: string[];
+  improvements: string[];
+};
+
+async function analyzeCompetitors(
+  content: GeneratedContent,
+  place: Place,
+  photoCount: number,
+  apiKey: string,
+): Promise<CompetitorAnalysis | null> {
+  const catKo: Record<string, string> = {
+    restaurant: "맛집", cafe: "카페", accommodation: "숙소", attraction: "관광지",
+  };
+  const categoryLabel = catKo[place.category] ?? place.category;
+
+  const prompt = `당신은 네이버/구글 블로그 SEO 전문가입니다. 아래 블로그 글을 "${place.name} ${categoryLabel}" 키워드의 상위 노출 경쟁 글들과 비교 분석해주세요.
+
+## 현재 글 정보
+- 제목: ${content.titleKo}
+- 장소: ${place.name} (${categoryLabel})
+- 주소: ${place.address ?? "미입력"}
+- 본문 길이: ${content.contentKo.length}자
+- 사진 수: ${photoCount}장
+- 해시태그: ${content.hashtagsKo.join(", ")}
+
+## 현재 글 (첫 1000자)
+${content.contentKo.slice(0, 1000)}...
+
+## 분석 요청
+이 글이 상위 노출되려면 부족한 점과 구체적 개선사항을 알려주세요.
+JSON으로 응답:
+{
+  "missing": ["빠져있는 중요 요소 (최대 3개, 구체적으로)"],
+  "improvements": ["실행 가능한 개선 제안 (최대 4개, 본문에 바로 반영 가능한 것만)"]
+}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "블로그 SEO 전문가로서 경쟁 분석을 수행합니다. 한국 블로그 상위 노출 패턴에 정통합니다. 실행 가능한 조언만 하세요." },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 800,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) return null;
+
+    const parsed = JSON.parse(text) as CompetitorAnalysis;
+    if (!parsed.improvements?.length && !parsed.missing?.length) return null;
+    return parsed;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function applyCompetitorInsights(
+  content: GeneratedContent,
+  analysis: CompetitorAnalysis,
+  apiKey: string,
+): Promise<GeneratedContent> {
+  const feedbackList = [
+    ...(analysis.missing ?? []).map((m) => `[빠진 요소] ${m}`),
+    ...(analysis.improvements ?? []).map((i) => `[개선] ${i}`),
+  ].join("\n");
+
+  const prompt = `아래 블로그 글에 대해 경쟁글 분석 결과 다음과 같은 개선점이 나왔습니다. 이 피드백을 반영해서 글을 개선해주세요.
+
+## 개선 피드백
+${feedbackList}
+
+## 수정 규칙
+- 피드백을 자연스럽게 기존 글에 녹여서 반영 (새 문단 추가보다 기존 문단 보강 우선)
+- 글의 전체 구조와 톤 유지
+- [PHOTO:n] 마커 절대 제거/이동 금지
+- 해시태그는 부족한 키워드가 있으면 추가, 기존 것은 유지
+- 영어 글도 같은 방향으로 개선
+- 글 길이를 줄이지 말 것
+
+## 한국어 글
+제목: ${content.titleKo}
+본문:
+${content.contentKo}
+
+해시태그: ${content.hashtagsKo.join(", ")}
+
+## 영어 글
+제목: ${content.titleEn}
+본문:
+${content.contentEn}
+
+해시태그: ${content.hashtagsEn.join(", ")}
+
+수정된 전체 글을 JSON으로 반환:
+{
+  "titleKo": "개선된 한국어 제목",
+  "contentKo": "개선된 한국어 본문",
+  "hashtagsKo": ["#해시태그1", ...],
+  "titleEn": "Improved English title",
+  "contentEn": "Improved English content",
+  "hashtagsEn": ["#hashtag1", ...]
+}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "블로그 편집 전문가입니다. 경쟁 분석 피드백을 반영하여 글의 SEO와 품질을 개선하세요. 기존 글의 톤과 자연스러움은 유지하면서 부족한 요소만 보강하세요.",
+          },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return content;
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) return content;
+
+    let improved: Partial<GeneratedContent>;
+    try {
+      improved = JSON.parse(text) as Partial<GeneratedContent>;
+    } catch {
+      return content;
+    }
+
+    // Validate PHOTO markers preserved
+    const originalMarkers = (content.contentKo?.match(/\[PHOTO:\d+\]/g) ?? []).sort();
+    const improvedMarkers = (improved.contentKo?.match(/\[PHOTO:\d+\]/g) ?? []).sort();
+    const markersIntact = originalMarkers.length === improvedMarkers.length &&
+      originalMarkers.every((m, i) => m === improvedMarkers[i]);
+    if (!markersIntact) return content;
+
+    // Accumulate usage
+    const improvedUsage = data.usage
+      ? {
+          model: data.model ?? "unknown",
+          inputTokens: (content.usage?.inputTokens ?? 0) + (data.usage.prompt_tokens ?? 0),
+          outputTokens: (content.usage?.outputTokens ?? 0) + (data.usage.completion_tokens ?? 0),
+        }
+      : content.usage;
+
+    const result: GeneratedContent = {
+      titleKo: improved.titleKo || content.titleKo,
+      contentKo: improved.contentKo || content.contentKo,
+      hashtagsKo: Array.isArray(improved.hashtagsKo) && improved.hashtagsKo.length > 0 ? improved.hashtagsKo : content.hashtagsKo,
+      titleEn: improved.titleEn || content.titleEn,
+      contentEn: improved.contentEn || content.contentEn,
+      hashtagsEn: Array.isArray(improved.hashtagsEn) && improved.hashtagsEn.length > 0 ? improved.hashtagsEn : content.hashtagsEn,
+      usage: improvedUsage,
+    };
+
+    // Quality guard: reject if improvement made quality worse
+    const originalScore = validateContent(content, originalMarkers.length, "").score;
+    const improvedScore = validateContent(result, originalMarkers.length, "").score;
+    if (improvedScore < originalScore - 5) return content;
+
+    return result;
+  } catch {
+    return content;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function callLLMAndParse(
   systemPrompt: string,
   userPrompt: string,
@@ -1059,7 +1258,15 @@ export async function generateBlogPost(
 
   // Self-refine: polish pass (실패해도 원본 반환)
   onProgress?.("polishing", "글 다듬는 중...");
-  const result = await polishContent(draft, apiKey);
+  let result = await polishContent(draft, apiKey);
+
+  // Competitor analysis + auto-improvement
+  onProgress?.("analyzing", "경쟁글 분석 중...");
+  const competitorAnalysis = await analyzeCompetitors(result, place, photos.length, apiKey);
+  if (competitorAnalysis && (competitorAnalysis.improvements.length > 0 || competitorAnalysis.missing.length > 0)) {
+    onProgress?.("improving", "경쟁 분석 반영 중...");
+    result = await applyCompetitorInsights(result, competitorAnalysis, apiKey);
+  }
 
   onProgress?.("done", "완료!");
   return result;
