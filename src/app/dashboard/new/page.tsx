@@ -256,6 +256,19 @@ export default function DashboardNewPage() {
   }, [handleMenuPaste]);
 
   // ── Photo helpers ──
+  const getFilenameCaption = (file: File): string | null => {
+    const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
+    const strangePatterns = [
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      /^\d+$/,
+      /^(IMG|DSC|DCIM|Photo|image|photo|pic|screenshot|capture)[-_]?\d+$/i,
+      /^\d{8}[-_T]\d{6}$/,
+      /^[0-9a-f]{16,}$/i,
+    ];
+    if (strangePatterns.some((p) => p.test(nameWithoutExt))) return null;
+    return nameWithoutExt;
+  };
+
   const addFiles = useCallback(
     (files: FileList | File[]) => {
       const fileArr = Array.from(files);
@@ -269,7 +282,7 @@ export default function DashboardNewPage() {
           ...toAdd.map((file, i) => ({
             id: -(prev.length + i + 1),
             filePath: URL.createObjectURL(file),
-            caption: null,
+            caption: getFilenameCaption(file),
             orderIndex: prev.length + i + 1,
             _file: file,
           })),
