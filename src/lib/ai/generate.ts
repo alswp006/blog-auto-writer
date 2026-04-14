@@ -143,56 +143,47 @@ const CATEGORY_EXAMPLES: Record<string, { ko: string[]; en: string }> = {
 
 const SENSORY_FRAMEWORK: Record<string, { ko: string; en: string }> = {
   restaurant: {
-    ko: `### 오감 묘사 (반드시 2개 이상 포함)
-- 후각: 가게 들어설 때 맡은 향 (고소한/매콤한/달콤한 등 구체적)
-- 시각: 음식의 색감, 그릇, 플레이팅, 김이 모락모락
-- 미각: 첫 맛, 씹을수록 느껴지는 맛, 식감(바삭/쫄깃/부드러운), 온도감
-- 청각: 고기 굽는 지글지글, 국물 보글보글, 주방의 활기
-- 촉각: 뜨거운 국물그릇, 나무젓가락 감촉`,
-    en: `### Sensory Details (include at least 2)
-- Smell: aroma upon entering (savory, smoky, sweet — be specific)
-- Sight: dish colors, steam rising, plating presentation
-- Taste: first bite, evolving flavors, texture (crispy/chewy/tender), temperature
-- Sound: sizzling, bubbling, kitchen energy
-- Touch: warmth of the bowl, chopstick feel`,
+    ko: `### 감각 묘사 (자연스럽게 1~2개만)
+감각 묘사는 체크리스트가 아니에요. 실제로 기억에 남은 것만 툭 넣으세요.
+- 좋은 예: "들어가자마자 고기 굽는 냄새가 확 나더라고요", "국물이 진짜 뜨거워서 첫 숟가락에 혀를 데일 뻔했어요"
+- 나쁜 예: 냄새→시각→미각→청각→촉각 다 나열 (AI처럼 보여요)
+- 절대 금지: "향이 슬쩍 번져요", "지글지글 소리가 귀를 자극해요" 같은 문학적 포장`,
+    en: `### Sensory Details (1-2 only, feel natural)
+Don't run through a checklist. Just mention what actually stood out.
+- Good: "hit by the smell of grilling meat the second I walked in", "broth was scalding hot, burned my tongue on the first sip"
+- Bad: methodically hitting smell → sight → taste → sound → touch in sequence (reads like AI)`,
   },
   cafe: {
-    ko: `### 오감 묘사 (반드시 2개 이상 포함)
-- 후각: 문 열자마자 퍼지는 원두 향, 베이킹 냄새
-- 시각: 인테리어 색감, 조명 톤, 음료 색상과 라떼아트
-- 미각: 첫 모금의 온도와 맛, 산미/단맛/쓴맛 밸런스, 디저트 식감
-- 청각: 배경 음악 장르, 커피머신 소리, 대화 소리의 크기
-- 촉각: 컵의 질감(도자기/유리), 소파나 의자의 편안함`,
-    en: `### Sensory Details (include at least 2)
-- Smell: coffee aroma upon entering, baking scents
-- Sight: interior colors, lighting mood, latte art, drink presentation
-- Taste: first sip temperature, acidity/sweetness balance, dessert texture
-- Sound: background music genre, espresso machine, ambient chatter
-- Touch: cup material (ceramic/glass), seating comfort`,
+    ko: `### 감각 묘사 (자연스럽게 1~2개만)
+감각 묘사는 체크리스트가 아니에요. 실제로 기억에 남은 것 하나만 툭 넣으세요.
+- 좋은 예: "들어가니까 원두 냄새가 바로 나더라고요", "음악이 생각보다 조용해서 일하기 좋겠다 싶었어요"
+- 나쁜 예: 냄새→시각→소리→촉각 순서대로 다 나열하는 것 (AI처럼 보여요)
+- 절대 금지: "~향이 슬쩍 따라와요", "~소리가 짧게 들리고", "봄바람 타고" 같은 문학적 표현`,
+    en: `### Sensory Details (1-2 only, feel natural)
+Don't run through a checklist. Just mention what actually stood out.
+- Good: "smelled like fresh espresso the second I walked in", "music was low enough to actually think"
+- Bad: methodically hitting smell → sight → sound → touch in sequence (reads like AI)`,
   },
   accommodation: {
-    ko: `### 오감 묘사 (반드시 2개 이상 포함)
-- 촉각: 침구의 감촉(뽀송한/부드러운), 수건 질감, 슬리퍼 착용감
-- 시각: 방 들어갈 때 첫 시야, 창밖 뷰, 조명 분위기
-- 후각: 로비 향, 어메니티 향, 방의 깨끗한 냄새
-- 청각: 방음 상태, 복도 소음, 창밖 소리`,
-    en: `### Sensory Details (include at least 2)
-- Touch: bedding texture, towel quality, slipper comfort
-- Sight: room reveal moment, window view, lighting ambiance
-- Smell: lobby fragrance, amenity scents, room freshness
-- Sound: soundproofing quality, hallway noise, outside sounds`,
+    ko: `### 감각 묘사 (자연스럽게 1~2개만)
+감각 묘사는 체크리스트가 아니에요. 실제로 기억에 남은 것만 툭 넣으세요.
+- 좋은 예: "이불이 생각보다 훨씬 포근해서 체크인하자마자 누웠어요", "방음이 잘 돼서 바깥 소리가 거의 안 들렸어요"
+- 나쁜 예: 촉각→시각→후각→청각 순서대로 다 처리하는 것 (AI처럼 보여요)`,
+    en: `### Sensory Details (1-2 only, feel natural)
+Don't run through a checklist. Just mention what actually stood out.
+- Good: "the bedding was softer than I expected — I was horizontal within 5 minutes", "surprisingly good soundproofing"
+- Bad: systematically covering touch → sight → smell → sound in order`,
   },
   attraction: {
-    ko: `### 오감 묘사 (반드시 2개 이상 포함)
-- 시각: 풍경의 색감, 빛의 방향, 계절감, 인상적인 장면
-- 촉각: 바람의 세기와 온도, 돌담/난간의 감촉, 햇살의 따뜻함
-- 청각: 새소리, 물소리, 발걸음, 주변 사람들 소리
-- 후각: 풀냄새, 꽃향기, 흙냄새 등 자연의 향`,
-    en: `### Sensory Details (include at least 2)
-- Sight: landscape colors, light direction, seasonal feel, standout scenes
-- Touch: wind strength and temperature, stone/railing texture, sunlight warmth
-- Sound: birdsong, water, footsteps, crowd levels
-- Smell: grass, flowers, earth — nature's scents`,
+    ko: `### 감각 묘사 (자연스럽게 1~2개만)
+감각 묘사는 체크리스트가 아니에요. 실제로 기억에 남은 것만 툭 넣으세요.
+- 좋은 예: "바람이 생각보다 세서 사진 찍으면서 계속 머리카락 날렸어요", "이른 아침에 갔더니 사람이 별로 없어서 조용했어요"
+- 나쁜 예: 시각→촉각→청각→후각 다 나열 (AI처럼 보여요)
+- 절대 금지: "바람이 볼을 스치다", "햇살이 발끝을 데우다" 같은 문학적 표현`,
+    en: `### Sensory Details (1-2 only, feel natural)
+Don't run through a checklist. Just mention what actually stood out.
+- Good: "windier than I expected — kept ruining my photos", "went early and basically had the place to myself"
+- Bad: systematically covering sight → touch → sound → smell in order`,
   },
 };
 
@@ -471,6 +462,18 @@ ${pastExcerpts}
 | "추천드립니다" / "강추합니다" | "여기는 진짜 또 갈 거예요" / "친구한테 바로 공유했어요" |
 | "~의 매력에 빠지다" | 구체적으로 뭐가 좋았는지 |
 | "~를 자랑하다" | 쓰지 말 것 |
+
+### 오감 묘사 시 절대 금지 패턴 (이게 있으면 AI 냄새 남)
+실제 블로거는 감각 묘사를 "문학적으로" 포장하지 않아요. 아래 패턴은 전부 금지:
+| ❌ AI식 감각 묘사 | ✅ 사람이 실제로 쓰는 말 |
+| "봄바람 타고 들어갔다가" | "날씨도 좋아서 들어갔는데" |
+| "~냄새가 슬쩍 따라와요" / "~향이 살며시 번져요" | "~냄새도 나더라고요" / "~향도 같이 나고" |
+| "~소리가 짧게 들리고" / "~소리가 잔잔하게 깔려요" | "~소리도 들리고" / "~소리 나더라고요" |
+| "향이 코끝을 스치다" / "냄새가 코를 자극하다" | "들어가니까 ~냄새가 나더라고요" |
+| "~이 온기를 전해주다" | "따뜻한 느낌이었어요" |
+| "감각을 깨우다" / "오감이 살아나다" | 쓰지 말 것 |
+- 핵심 원칙: 감각 묘사는 체크리스트 채우듯 쓰지 마세요. 인상적인 것 1~2개만 자연스럽게 툭 넣으세요.
+- "후각, 시각, 청각 다 언급해야지"라는 생각 자체가 AI스러운 결과물을 만들어요.
 
 ### 영어 AI 표현 금지
 - "nestled in" → "tucked away in" or "just off [street name]"

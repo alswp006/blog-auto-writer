@@ -48,6 +48,20 @@ export function PhotoUploader({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getFilenameCaption = (file: File): string | null => {
+    const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
+    // 이상한 파일명 패턴: UUID, 순수 숫자, 카메라 자동생성명, 타임스탬프
+    const strangePatterns = [
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, // UUID
+      /^\d+$/,                                                               // 순수 숫자
+      /^(IMG|DSC|DCIM|Photo|image|photo|pic|screenshot|capture)[-_]?\d+$/i, // 카메라 자동생성
+      /^\d{8}[-_T]\d{6}$/,                                                   // 타임스탬프 (20240101_120000)
+      /^[0-9a-f]{16,}$/i,                                                    // 긴 hex 문자열
+    ];
+    if (strangePatterns.some((p) => p.test(nameWithoutExt))) return null;
+    return nameWithoutExt;
+  };
+
   const addFiles = useCallback(
     (files: FileList | File[]) => {
       const fileArr = Array.from(files);
@@ -67,7 +81,7 @@ export function PhotoUploader({
           ...toAdd.map((file, i) => ({
             id: -(prev.length + i + 1),
             filePath: URL.createObjectURL(file),
-            caption: null,
+            caption: getFilenameCaption(file),
             orderIndex: prev.length + i + 1,
             _file: file,
           })),
