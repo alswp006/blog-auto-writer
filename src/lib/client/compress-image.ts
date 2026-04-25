@@ -7,15 +7,15 @@ const MAX_WIDTH = 1200;
 const MAX_UPLOAD_SIZE = 3 * 1024 * 1024; // 3MB — safe margin under Vercel 4.5MB with FormData overhead
 
 export async function compressImage(file: File): Promise<File> {
-  // Small enough already
-  if (file.size <= MAX_UPLOAD_SIZE) {
-    return file;
-  }
-
-  // Try canvas compression
-  const compressed = await canvasCompress(file);
-  if (compressed && compressed.size <= MAX_UPLOAD_SIZE) {
-    return compressed;
+  // Always go through canvas to bake in EXIF orientation.
+  // Phones store rotation in EXIF metadata; if we skip canvas the raw pixels
+  // are sideways and viewers that ignore EXIF will show a rotated image.
+  // Canvas draws the <img> after the browser applies EXIF, so the output is
+  // always correctly oriented with EXIF stripped.
+  const quality = file.size <= MAX_UPLOAD_SIZE ? 0.95 : 0.8;
+  const oriented = await canvasCompress(file, quality);
+  if (oriented && oriented.size <= MAX_UPLOAD_SIZE) {
+    return oriented;
   }
 
   // Canvas failed or still too large — try with createImageBitmap (better HEIC support)
@@ -25,7 +25,7 @@ export async function compressImage(file: File): Promise<File> {
   }
 
   // Last resort: return whatever is smallest
-  const smallest = [compressed, bitmapCompressed, file]
+  const smallest = [oriented, bitmapCompressed, file]
     .filter((f): f is File => f !== null)
     .sort((a, b) => a.size - b.size)[0];
 
@@ -36,7 +36,7 @@ export async function compressImage(file: File): Promise<File> {
   return smallest;
 }
 
-function canvasCompress(file: File): Promise<File | null> {
+function canvasCompress(file: File, initialQuality = 0.8): Promise<File | null> {
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -60,10 +60,12 @@ function canvasCompress(file: File): Promise<File | null> {
       const ctx = canvas.getContext("2d");
       if (!ctx) { resolve(null); return; }
 
+      // Browser applies EXIF orientation when rendering <img>,
+      // so drawImage produces correctly-rotated pixels with no EXIF metadata.
       ctx.drawImage(img, 0, 0, width, height);
 
       // Progressive quality reduction
-      let quality = 0.8;
+      let quality = initialQuality;
       const tryBlob = () => {
         canvas.toBlob(
           (blob) => {
@@ -91,7 +93,7 @@ async function bitmapCompress(file: File): Promise<File | null> {
   try {
     if (typeof createImageBitmap === "undefined") return null;
 
-    const bitmap = await createImageBitmap(file);
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     let { width, height } = bitmap;
     if (width > MAX_WIDTH) {
       height = Math.round((height * MAX_WIDTH) / width);
