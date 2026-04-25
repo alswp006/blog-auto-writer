@@ -62,11 +62,18 @@ export default async function DashboardPage() {
             {profile.nickname}<span className="text-[var(--text-muted)] font-normal">님의 블로그</span>
           </h1>
         </div>
-        <Button asChild className="btn-gradient px-6 shrink-0 w-full sm:w-auto">
-          <Link href="/dashboard/new" className="no-underline">
-            + 새 글 쓰기
-          </Link>
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto shrink-0">
+          <Button variant="outline" asChild className="flex-1 sm:flex-none">
+            <Link href="/dashboard/bulk-new" className="no-underline">
+              여러 글 생성
+            </Link>
+          </Button>
+          <Button asChild className="btn-gradient px-6 flex-1 sm:flex-none">
+            <Link href="/dashboard/new" className="no-underline">
+              + 새 글 쓰기
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Stats — hero stat + secondary */}

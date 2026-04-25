@@ -73,6 +73,7 @@ export function Nav() {
   const navItems = [
     { href: "/dashboard", label: "대시보드" },
     { href: "/dashboard/new", label: "새 글" },
+    { href: "/dashboard/bulk-new", label: "여러 글" },
     { href: "/style-profiles", label: "문체" },
     { href: "/dashboard/analytics", label: "분석" },
     { href: "/dashboard/calendar", label: "캘린더" },
