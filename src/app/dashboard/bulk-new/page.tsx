@@ -24,13 +24,25 @@ type SlotPhoto = {
 
 type SlotStatus = "idle" | "creating-place" | "uploading" | "generating" | "done" | "error";
 
+type SearchResult = {
+  title: string;
+  category: string;
+  address: string;
+  roadAddress: string;
+};
+
+type MenuItem = { name: string; price: string };
+
 type PlaceSlot = {
   id: string;
   placeName: string;
   category: PlaceCategory;
+  address: string;
   memo: string;
   photos: SlotPhoto[];
   thumbnailIdx: number;
+  menuItems: MenuItem[];
+  menuOcrLoading: boolean;
   status: SlotStatus;
   progress: string;
   postId: number | null;
@@ -41,6 +53,7 @@ type StyleProfile = {
   id: number;
   name: string;
   isSystemPreset: boolean;
+  analyzedTone?: Record<string, string>;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -76,14 +89,26 @@ function createEmptySlot(): PlaceSlot {
     id: uid(),
     placeName: "",
     category: "cafe",
+    address: "",
     memo: "",
     photos: [],
     thumbnailIdx: 0,
+    menuItems: [],
+    menuOcrLoading: false,
     status: "idle",
     progress: "",
     postId: null,
     error: null,
   };
+}
+
+function mapNaverCategory(naverCat: string): PlaceCategory | null {
+  const cat = naverCat.toLowerCase();
+  if (cat.includes("카페") || cat.includes("coffee") || cat.includes("디저트")) return "cafe";
+  if (cat.includes("음식") || cat.includes("맛집") || cat.includes("한식") || cat.includes("중식") || cat.includes("일식") || cat.includes("양식")) return "restaurant";
+  if (cat.includes("숙박") || cat.includes("호텔") || cat.includes("펜션") || cat.includes("모텔")) return "accommodation";
+  if (cat.includes("관광") || cat.includes("여행") || cat.includes("명소")) return "attraction";
+  return null;
 }
 
 function getFilenameCaption(file: File): string | null {
@@ -130,6 +155,10 @@ export default function BulkNewPage() {
   const slotFileInputRef = useRef<HTMLInputElement>(null);
   const activeSlotIdRef = useRef<string | null>(null);
 
+  // Shared hidden menu file input — tracks which slot is receiving menu OCR
+  const slotMenuFileInputRef = useRef<HTMLInputElement>(null);
+  const activeMenuSlotIdRef = useRef<string | null>(null);
+
   // Global batch upload file input
   const globalFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,11 +167,11 @@ export default function BulkNewPage() {
     fetch("/api/style-profiles")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!data?.profiles) return;
-        setStyleProfiles(data.profiles);
-        // Auto-select first profile
-        if (data.profiles.length > 0 && !styleProfileId) {
-          setStyleProfileId(data.profiles[0].id);
+        if (!data) return;
+        const all: StyleProfile[] = [...(data.presets ?? []), ...(data.customs ?? [])];
+        setStyleProfiles(all);
+        if (all.length > 0 && !styleProfileId) {
+          setStyleProfileId(all[0].id);
         }
       })
       .catch(() => {});
@@ -216,6 +245,116 @@ export default function BulkNewPage() {
     activeSlotIdRef.current = null;
   };
 
+  // ── Menu helpers ──
+  const addMenuItem = (slotId: string) => {
+    setSlots((prev) =>
+      prev.map((s) =>
+        s.id === slotId ? { ...s, menuItems: [...s.menuItems, { name: "", price: "" }] } : s
+      )
+    );
+  };
+
+  const updateMenuItem = (slotId: string, idx: number, field: "name" | "price", value: string) => {
+    setSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== slotId) return s;
+        return {
+          ...s,
+          menuItems: s.menuItems.map((m, i) => (i === idx ? { ...m, [field]: value } : m)),
+        };
+      })
+    );
+  };
+
+  const removeMenuItem = (slotId: string, idx: number) => {
+    setSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== slotId) return s;
+        return { ...s, menuItems: s.menuItems.filter((_, i) => i !== idx) };
+      })
+    );
+  };
+
+  const triggerMenuOcrUpload = (slotId: string) => {
+    activeMenuSlotIdRef.current = slotId;
+    slotMenuFileInputRef.current?.click();
+  };
+
+  const runMenuOcr = useCallback(async (slotId: string, file: File) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) return;
+    if (file.size > 10 * 1024 * 1024) return;
+
+    updateSlot(slotId, { menuOcrLoading: true });
+    try {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch("/api/menu-items/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64, mimeType: file.type }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const items = (data.items ?? []) as { name: string; price: number }[];
+        if (items.length > 0) {
+          setSlots((prev) =>
+            prev.map((s) => {
+              if (s.id !== slotId) return s;
+              return {
+                ...s,
+                menuItems: [
+                  ...s.menuItems,
+                  ...items.map((item) => ({
+                    name: item.name,
+                    price: item.price > 0 ? String(item.price) : "",
+                  })),
+                ],
+              };
+            })
+          );
+        }
+      }
+    } catch { /* non-critical */ }
+    updateSlot(slotId, { menuOcrLoading: false });
+  }, [updateSlot]);
+
+  const handleMenuFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const slotId = activeMenuSlotIdRef.current;
+    const file = e.target.files?.[0];
+    if (file && slotId) runMenuOcr(slotId, file);
+    if (slotMenuFileInputRef.current) slotMenuFileInputRef.current.value = "";
+    activeMenuSlotIdRef.current = null;
+  };
+
+  // ── Place search (per-slot, debounced) ──
+  const updatePlaceNameWithSearch = (slotId: string, value: string) => {
+    updateSlot(slotId, { placeName: value });
+  };
+
+  const applySearchResult = (slotId: string, item: SearchResult) => {
+    const mapped = mapNaverCategory(item.category);
+    setSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== slotId) return s;
+        return {
+          ...s,
+          placeName: item.title,
+          address: item.roadAddress || item.address,
+          category: mapped ?? s.category,
+        };
+      })
+    );
+  };
+
   // ── Global batch drop/upload + EXIF grouping ──
   const handleBatchFiles = useCallback(
     async (files: File[]) => {
@@ -282,6 +421,7 @@ export default function BulkNewPage() {
           body: JSON.stringify({
             name: slot.placeName.trim(),
             category: slot.category,
+            address: slot.address.trim() || undefined,
             memo: slot.memo.trim() || undefined,
           }),
         });
@@ -289,7 +429,25 @@ export default function BulkNewPage() {
         if (!placeRes.ok) throw new Error(placeData.error ?? "장소 저장 실패");
         const placeId: number = placeData.place.id;
 
-        // 2. Upload photos (thumbnail first)
+        // 2. Save menu items (if any)
+        const validMenus = slot.menuItems.filter((m) => m.name.trim());
+        if (validMenus.length > 0) {
+          updateSlot(slotId, { progress: "메뉴 저장 중..." });
+          for (const item of validMenus) {
+            const menuRes = await fetch("/api/menu-items", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                placeId,
+                name: item.name.trim(),
+                priceKrw: parseInt(item.price, 10) || 0,
+              }),
+            });
+            if (!menuRes.ok) throw new Error(`메뉴 "${item.name}" 저장 실패`);
+          }
+        }
+
+        // 3. Upload photos (thumbnail first)
         updateSlot(slotId, { status: "uploading" });
         const ordered = [...slot.photos];
         if (slot.thumbnailIdx > 0 && slot.thumbnailIdx < ordered.length) {
@@ -409,6 +567,13 @@ export default function BulkNewPage() {
         onChange={handleGlobalFileSelect}
         className="hidden"
       />
+      <input
+        ref={slotMenuFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={handleMenuFileSelect}
+        className="hidden"
+      />
 
       <div className="max-w-3xl mx-auto px-4 md:px-6 lg:px-8 space-y-8">
 
@@ -513,13 +678,19 @@ export default function BulkNewPage() {
               slot={slot}
               slotNumber={slotIdx + 1}
               generating={generating}
-              onPlaceNameChange={(v) => updateSlot(slot.id, { placeName: v })}
+              onPlaceNameChange={(v) => updatePlaceNameWithSearch(slot.id, v)}
+              onApplySearchResult={(item) => applySearchResult(slot.id, item)}
               onCategoryChange={(v) => updateSlot(slot.id, { category: v })}
+              onAddressChange={(v) => updateSlot(slot.id, { address: v })}
               onMemoChange={(v) => updateSlot(slot.id, { memo: v })}
               onThumbnailChange={(idx) => updateSlot(slot.id, { thumbnailIdx: idx })}
               onAddPhotos={() => triggerSlotUpload(slot.id)}
               onRemovePhoto={(photoUid) => removePhotoFromSlot(slot.id, photoUid)}
               onCaptionChange={(photoUid, caption) => updateCaption(slot.id, photoUid, caption)}
+              onAddMenuItem={() => addMenuItem(slot.id)}
+              onUpdateMenuItem={(idx, field, value) => updateMenuItem(slot.id, idx, field, value)}
+              onRemoveMenuItem={(idx) => removeMenuItem(slot.id, idx)}
+              onTriggerMenuOcr={() => triggerMenuOcrUpload(slot.id)}
               onRemoveSlot={() => removeSlot(slot.id)}
             />
           ))}
@@ -575,26 +746,69 @@ function SlotCard({
   slotNumber,
   generating,
   onPlaceNameChange,
+  onApplySearchResult,
   onCategoryChange,
+  onAddressChange,
   onMemoChange,
   onThumbnailChange,
   onAddPhotos,
   onRemovePhoto,
   onCaptionChange,
+  onAddMenuItem,
+  onUpdateMenuItem,
+  onRemoveMenuItem,
+  onTriggerMenuOcr,
   onRemoveSlot,
 }: {
   slot: PlaceSlot;
   slotNumber: number;
   generating: boolean;
   onPlaceNameChange: (v: string) => void;
+  onApplySearchResult: (item: SearchResult) => void;
   onCategoryChange: (v: PlaceCategory) => void;
+  onAddressChange: (v: string) => void;
   onMemoChange: (v: string) => void;
   onThumbnailChange: (idx: number) => void;
   onAddPhotos: () => void;
   onRemovePhoto: (uid: string) => void;
   onCaptionChange: (uid: string, caption: string) => void;
+  onAddMenuItem: () => void;
+  onUpdateMenuItem: (idx: number, field: "name" | "price", value: string) => void;
+  onRemoveMenuItem: (idx: number) => void;
+  onTriggerMenuOcr: () => void;
   onRemoveSlot: () => void;
 }) {
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [showResults, setShowResults] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleNameChange = (value: string) => {
+    onPlaceNameChange(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (value.trim().length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/places/search?q=${encodeURIComponent(value.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.items ?? []);
+          setShowResults((data.items ?? []).length > 0);
+        }
+      } catch { /* ignore */ }
+    }, 300);
+  };
+
+  const handleSelectResult = (item: SearchResult) => {
+    onApplySearchResult(item);
+    setShowResults(false);
+    setSearchResults([]);
+  };
+
+  const showMenuSection = slot.category === "restaurant" || slot.category === "cafe";
   const status = STATUS_CONFIG[slot.status];
   const isActive = slot.status !== "idle" && slot.status !== "done" && slot.status !== "error";
   const isDone   = slot.status === "done";
@@ -618,15 +832,37 @@ function SlotCard({
             {slotNumber}
           </span>
 
-          {/* Place name */}
-          <div className="flex-1 min-w-[140px]">
+          {/* Place name + search dropdown */}
+          <div className="flex-1 min-w-[140px] relative">
             <Input
               value={slot.placeName}
-              onChange={(e) => onPlaceNameChange(e.target.value)}
-              placeholder="장소 이름 *"
+              onChange={(e) => handleNameChange(e.target.value)}
+              onFocus={() => { if (searchResults.length > 0) setShowResults(true); }}
+              onBlur={() => setTimeout(() => setShowResults(false), 200)}
+              placeholder="장소 이름 * (자동검색)"
               disabled={isLocked}
+              autoComplete="off"
               className="h-9 text-sm"
             />
+            {showResults && searchResults.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {searchResults.map((item, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelectResult(item)}
+                    className="w-full text-left px-3 py-2.5 hover:bg-[var(--bg-card)] transition-colors border-b border-[var(--border)] last:border-0"
+                  >
+                    <div className="text-sm font-medium text-[var(--text)]">{item.title}</div>
+                    <div className="text-xs text-[var(--text-muted)] mt-0.5">
+                      {item.category && <span className="mr-2">{item.category}</span>}
+                      {item.roadAddress || item.address}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Category */}
@@ -752,6 +988,86 @@ function SlotCard({
             </button>
           )}
         </div>
+
+        {/* Address */}
+        <div>
+          <Input
+            value={slot.address}
+            onChange={(e) => onAddressChange(e.target.value)}
+            placeholder="주소 (선택) — 자동검색으로 채워져요"
+            disabled={isLocked}
+            className="h-9 text-sm"
+          />
+        </div>
+
+        {/* Menu items (restaurants/cafes) */}
+        {showMenuSection && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <Label className="text-sm font-medium">
+                메뉴판 사진이 있으면 넣어주세요!
+              </Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onTriggerMenuOcr}
+                  disabled={isLocked || slot.menuOcrLoading}
+                  className="text-xs h-8"
+                >
+                  {slot.menuOcrLoading ? "읽는 중..." : "📷 메뉴판 사진"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onAddMenuItem}
+                  disabled={isLocked}
+                  className="text-xs h-8"
+                >
+                  + 메뉴 추가
+                </Button>
+              </div>
+            </div>
+
+            {slot.menuItems.length === 0 ? (
+              <p className="text-xs text-[var(--text-muted)]">
+                메뉴판 사진을 업로드하면 자동으로 읽어드려요. 직접 추가할 수도 있어요.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {slot.menuItems.map((item, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      value={item.name}
+                      onChange={(e) => onUpdateMenuItem(i, "name", e.target.value)}
+                      placeholder="메뉴명"
+                      disabled={isLocked}
+                      className="flex-1 h-9 text-sm"
+                    />
+                    <Input
+                      value={item.price}
+                      onChange={(e) => onUpdateMenuItem(i, "price", e.target.value)}
+                      placeholder="가격(원)"
+                      type="number"
+                      disabled={isLocked}
+                      className="w-24 h-9 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveMenuItem(i)}
+                      disabled={isLocked}
+                      className="text-xs text-red-400 hover:text-red-300 px-1 shrink-0 disabled:opacity-40"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Memo */}
         <div>
